@@ -12,6 +12,7 @@
     "build": "tsc -b && node scripts/vite-build.mjs",
     "preview": "vite preview",
     "typecheck": "tsc -b && tsc -p tsconfig.functions.json --noEmit",
+    "panduan:pdf": "node scripts/buat-panduan-pdf.mjs",
     "lint": "eslint .",
     "test": "vitest run",
     "test:watch": "vitest"

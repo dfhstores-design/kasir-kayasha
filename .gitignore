@@ -45,3 +45,6 @@ desktop.ini
 
 # Temp build (esbuild)
 .tmp-esbuild/
+
+# Pratinjau PDF
+.pratinjau/

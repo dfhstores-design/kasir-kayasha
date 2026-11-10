@@ -1,6 +1,6 @@
 # Kasir Kayesha
 
-> **Situs produksi:** <https://kasir-kayesha.pages.dev> · **Panduan pemilik:** [docs/PANDUAN-PEMILIK.md](docs/PANDUAN-PEMILIK.md)
+> **Situs produksi:** <https://kasir-kayesha.pages.dev> · **Panduan pemilik:** [PDF](docs/PANDUAN-PEMILIK.pdf) · [Markdown](docs/PANDUAN-PEMILIK.md)
 
 Aplikasi kasir butik **offline-first untuk pameran**, dibuat untuk **Kayesha Clothing**.
 Dipakai pemilik butik sendiri lewat HP atau tablet Android, dipasang sebagai PWA,

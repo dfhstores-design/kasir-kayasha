@@ -3,11 +3,13 @@
 Panduan ini ditulis untuk **Ibu**, pemilik butik. Tidak perlu pengetahuan teknis.
 Ikuti dari atas ke bawah, sekali saja saat pertama memakai.
 
+**Alamat aplikasi:** `https://kasir-kayesha.pages.dev`
+
 ---
 
 ## 1. Memasang aplikasi di HP
 
-1. Buka tautan aplikasi yang diberikan (alamatnya bertulisan `pages.dev`).
+1. Buka Chrome di HP, ketik alamat di atas pada kotak alamat.
 2. Tunggu sampai halaman tampil sepenuhnya.
 3. Ketuk menu **titik tiga** di kanan atas Chrome.
 4. Pilih **Tambahkan ke layar utama** atau **Instal aplikasi**.
@@ -144,8 +146,10 @@ Lakukan **setiap akhir hari pameran**.
 
 ## 11. Hal yang perlu diketahui
 
-- Data disimpan **di HP ini saja**. Tidak ada di internet (selama Phase 6 belum dikerjakan).
-- Karena itu **cadangan berkala** adalah satu-satunya pelindung bila HP rusak/hilang.
+- Data disimpan **di HP ini**. Bila internet tersedia, data juga dikirim sebagai **salinan**
+  ke server. Salinan itu hanya untuk keamanan; **HP tetap yang utama**.
+- Meskipun begitu, **cadangan berkala** tetap wajib: bila HP rusak atau hilang, cadangan
+  berkas adalah cara paling pasti untuk memulihkan.
 - Printer thermal **belum tersedia**. Resi berupa PDF yang bisa dikirim lewat WhatsApp
   atau dicetak dari aplikasi lain.
 - Aplikasi ini **belum bisa dipakai dua HP** secara bersamaan.
