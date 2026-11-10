@@ -36,20 +36,23 @@ dan tetap bisa dipakai saat internet di lokasi pameran buruk atau tidak ada.
 | Fase | Isi | Status |
 | --- | --- | --- |
 | Phase 0 | Audit repo, workspace lokal, brief proyek, rencana fase | ✅ Selesai — 10 Nov 2026 |
-| Phase 1 | Alur sederhana & wireframe layar utama | ⏳ Berikutnya |
-| Phase 2 | Fondasi proyek (Vite + React + TS), PWA, skema IndexedDB, persiapan Cloudflare/GitHub | ⬜ Belum |
+| Phase 1 | Alur sederhana & wireframe layar utama (5 alur, 14 layar, spesifikasi visual) | ✅ Selesai — 10 Nov 2026 |
+| Phase 2 | Fondasi proyek (Vite + React + TS), PWA, skema IndexedDB, persiapan Cloudflare/GitHub | ⏳ Berikutnya |
 | Phase 3 | Katalog, foto produk, penjualan langsung (lokal/offline) | ⬜ Belum |
 | Phase 4 | Pre-order, DP/pelunasan, status pesanan, ongkir, diskon | ⬜ Belum |
 | Phase 5 | Profil usaha, logo, rekening, resi PDF, berbagi, uji kelayakan printer | ⬜ Belum |
 | Phase 6 | Sinkronisasi D1 + unggah foto R2 | ⬜ Belum |
 | Phase 7 | QA, backup, deployment, panduan pemilik | ⬜ Belum |
 
-**Saat ini repositori baru berisi dokumentasi.** Belum ada kode aplikasi, belum ada
+**Saat ini repositori berisi dokumentasi dan desain.** Belum ada kode aplikasi, belum ada
 deployment, dan belum ada layanan berbayar yang diaktifkan.
 
 Dokumentasi penting:
 
 - [docs/PROJECT-BRIEF.md](docs/PROJECT-BRIEF.md) — ruang lingkup, keputusan, pertanyaan terbuka, rencana fase
+- [docs/design/FLOW.md](docs/design/FLOW.md) — alur pengguna (jual, tambah barang, pesanan, pengaturan, pembatalan)
+- [docs/design/UI-SPEC.md](docs/design/UI-SPEC.md) — **kontrak visual**: warna (kontras terukur), ukuran, tipografi, teks
+- [docs/design/screens/](docs/design/screens/01-beranda.md) — 14 layar MVP, satu berkas per layar
 - [docs/project-history/](docs/project-history/README.md) — catatan serah-terima tiap fase (wajib dibaca agent berikutnya)
 
 ---
@@ -136,10 +139,24 @@ kasir-kayasha/
 ├─ .gitignore
 ├─ docs/
 │  ├─ PROJECT-BRIEF.md           ← ruang lingkup, keputusan, rencana fase
+│  ├─ design/                    ← hasil Phase 1 (alur, spesifikasi, wireframe)
+│  │  ├─ FLOW.md                 ← alur pengguna
+│  │  ├─ UI-SPEC.md              ← kontrak visual (warna, ukuran, teks)
+│  │  ├─ screens/                ← 14 layar, satu berkas per layar
+│  │  ├─ wireframe.src.mjs       ← sumber wireframe
+│  │  └─ tools/build-wireframe.mjs
 │  └─ project-history/           ← catatan serah-terima per fase (jangan ditimpa)
 │     ├─ README.md               ← aturan penulisan catatan
-│     └─ PHASE-00-2026-11-10-1235.md
+│     ├─ PHASE-00-2026-11-10-1235.md
+│     └─ PHASE-01-2026-11-10-1305.md
 └─ (Phase 2 ke atas akan menambahkan: package.json, src/, public/, migrations/, functions/)
+```
+
+Wireframe Phase 1 tidak disimpan di repo; hasilnya berada di workspace lokal
+`Kasir-Butik-Kayasha/artifacts/PHASE-01/wireframe.html` dan dapat dibuat ulang dengan:
+
+```bash
+node docs/design/tools/build-wireframe.mjs <path-keluaran.html>
 ```
 
 Saat Phase 2 selesai, struktur yang ditargetkan:

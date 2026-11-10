@@ -155,13 +155,23 @@ Pertanyaan di atas tidak menghalangi Phase 1 dan Phase 2.
 | Fase | Isi | Status |
 | --- | --- | --- |
 | Phase 0 | Baca repo & perintah utama, tetapkan workspace lokal + repo + Drive, catat ruang lingkup, keputusan, pertanyaan terbuka, rencana fase, kuota resmi | **Selesai — 10 Nov 2026** |
-| Phase 1 | Alur sederhana & wireframe layar utama | Berikutnya |
-| Phase 2 | Fondasi proyek (Vite + React + TS), PWA, skema IndexedDB, persiapan Cloudflare/GitHub | Belum |
+| Phase 1 | Alur sederhana & wireframe layar utama (5 alur, 14 layar, spesifikasi visual) | **Selesai — 10 Nov 2026** |
+| Phase 2 | Fondasi proyek (Vite + React + TS), PWA, skema IndexedDB, persiapan Cloudflare/GitHub | Berikutnya |
 | Phase 3 | Katalog + foto produk + penjualan langsung (lokal/offline) | Belum |
 | Phase 4 | Pre-order, DP/pelunasan, status pesanan, ongkir, diskon | Belum |
 | Phase 5 | Profil usaha, logo, rekening, resi PDF, berbagi, uji kelayakan printer | Belum |
 | Phase 6 | Sinkronisasi D1 + unggah foto R2 | Belum |
 | Phase 7 | QA, backup, deployment, panduan pemilik | Belum |
+
+### Hasil Phase 1 (titik lanjut)
+
+- `docs/design/FLOW.md` — lima alur pengguna dengan keputusan tiap langkah.
+- `docs/design/UI-SPEC.md` — **kontrak visual**: palet (sudah dihitung kontrasnya), ukuran,
+  tipografi, komponen, mikrokopi, aksesibilitas.
+- `docs/design/screens/01-…14-….md` — 14 layar: isi, perilaku, aturan, keadaan.
+- `artifacts/PHASE-01/wireframe.html` — wireframe interaktif untuk dilihat pemilik.
+
+Implementasi Phase 2 ke atas **mengikuti** dokumen di atas.
 
 ## 9. Kriteria penerimaan MVP (13 butir)
 
