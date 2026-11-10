@@ -149,6 +149,13 @@ export interface TransaksiRecord {
   bazarId: UUID | null;
   namaPemesan: string | null;
   kontak: string | null;
+  /** Untuk PO: perkiraan tanggal siap (opsional). */
+  perkiraanSiap: string | null;
+  /** Untuk PO yang dikirim. */
+  alamat: string | null;
+  catatanPesanan: string | null;
+  /** Riwayat perubahan total (mis. ongkir menyusul). */
+  riwayatTotal: Array<{ waktu: string; totalLama: number; totalBaru: number; alasan: string }>;
   ongkirMode: OngkirMode;
   ongkirNominal: number | null;
   subtotalAwal: number;

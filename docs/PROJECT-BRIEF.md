@@ -160,8 +160,8 @@ Pertanyaan di atas tidak menghalangi Phase 1 dan Phase 2.
 | Phase 3 | Katalog + foto + penjualan langsung (lokal/offline) | **Selesai — 10 Nov 2026** |
 | Phase 3B | Bazar (alokasi & tutup), parkir transaksi (maks 3 bernama) | **Selesai — 10 Nov 2026** |
 | **Phase 3C** | **Role admin/kasir (PIN), biaya bazar, hitung ulang sisa, ringkasan laba** | **Selesai — 10 Nov 2026** |
-| Phase 4 | Pre-order, DP/pelunasan, status pesanan, ongkir menyusul | Berikutnya |
-| Phase 5 | Profil usaha, logo, rekening, **resi PDF** (susunan mengikuti contoh), berbagi | Belum |
+| Phase 4 | Pre-order, DP/pelunasan, status pesanan, ongkir menyusul | **Selesai — 10 Nov 2026** |
+| Phase 5 | Profil usaha, logo, rekening, **resi PDF** (susunan mengikuti contoh), berbagi | Berikutnya |
 | Phase 6 | Sinkronisasi D1 + unggah foto R2 | Belum |
 | Phase 7 | QA, backup, deployment, panduan pemilik | Belum |
 | **To be develop** | Cetak **printer thermal 58/80 mm** via Web Bluetooth — belum masuk MVP | Ditunda |

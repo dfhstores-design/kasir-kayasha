@@ -15,6 +15,9 @@ import BiayaBazar from "./screens/BiayaBazar.tsx";
 import Ringkasan from "./screens/Ringkasan.tsx";
 import { AksesAdminSaja } from "./screens/AksesAdmin.tsx";
 import AturPin from "./screens/AturPin.tsx";
+import Pesanan from "./screens/Pesanan.tsx";
+import DetailPesanan from "./screens/DetailPesanan.tsx";
+import FormPesanan from "./screens/FormPesanan.tsx";
 import {
   ambilParkir,
   ambilSettings,
@@ -36,6 +39,10 @@ import { mintaPenyimpananPermanen } from "./pwa/register.ts";
 import type { OngkirMode } from "./lib/ongkir.ts";
 import type { StatusBayar } from "./lib/keranjang.ts";
 import { khususAdmin, type Peran } from "./lib/peran.ts";
+import { ambilPesanan, batalkanTransaksi, catatPembayaran, isiOngkir, ubahStatusPesanan, type PesananLengkap } from "./db/pesananOperasi.ts";
+import { simpanPO } from "./db/pesanan.ts";
+import { pesanKonfirmasiBatal, type RencanaPO, type StatusPesanan } from "./lib/pesanan.ts";
+import type { Ongkir } from "./lib/ongkir.ts";
 import { simpanPenjualan, type JenisBayar, type TransaksiTersimpan } from "./lib/penjualan.ts";
 import { bikinIsiKeranjang, type IsiKeranjang } from "./lib/isiKeranjang.ts";
 import { formatJam } from "./lib/tanggal.ts";
@@ -56,7 +63,9 @@ export type Layar =
   | { nama: "pengaturan" }
   | { nama: "masuk-admin" }
   | { nama: "biaya-bazar"; bazar: BazarRecord }
-  | { nama: "atur-pin" };
+  | { nama: "atur-pin" }
+  | { nama: "detail-pesanan"; id: string }
+  | { nama: "form-pesanan" };
 
 interface NilaiKeranjang {
   diskonTotal: number;
@@ -89,6 +98,13 @@ export default function App() {
   /** Peran aktif. Bawaan kasir; naik ke admin setelah PIN benar. */
   const [peran, setPeran] = useState<Peran>("kasir");
   const [biaya, setBiaya] = useState<BiayaBazarRecord[]>([]);
+  /** Daftar pesanan (PO) + detail yang sedang dibuka. */
+  const [segarkanPesanan, setSegarkanPesanan] = useState(0);
+  /** "jual" = penjualan biasa; "po" = pre-order (keranjang dipakai lalu ke form PO). */
+  const [modeKeranjang, setModeKeranjang] = useState<"jual" | "po">("jual");
+  const [pesananDibuka, setPesananDibuka] = useState<PesananLengkap | null>(null);
+  const [sibukPesanan, setSibukPesanan] = useState(false);
+  const [pesanPesanan, setPesanPesanan] = useState<string | null>(null);
   const [pesanSimpan, setPesanSimpan] = useState<string | null>(null);
 
   /** Bazar aktif + saldo per barang. Saat null, penjualan memakai stok gudang. */
@@ -397,6 +413,7 @@ export default function App() {
               return;
             }
             // Kasir hanya menjual bila ada bazar aktif.
+            if (nama === "pilih-barang") setModeKeranjang("jual");
             if (peran !== "admin" && nama === "pilih-barang" && !bazar) {
               setLayar({ nama: "beranda" });
               return;
@@ -417,8 +434,16 @@ export default function App() {
           />
           {keranjang.length > 0 && (
             <div className="bottombar">
-              <button type="button" className="btn btn--primary" onClick={() => setLayar({ nama: "keranjang" })}>
-                Keranjang ({keranjang.reduce((n, k) => n + k.kuantitas, 0)} barang)
+              <button
+                type="button"
+                className="btn btn--primary"
+                onClick={() =>
+                  modeKeranjang === "po" ? setLayar({ nama: "form-pesanan" }) : setLayar({ nama: "keranjang" })
+                }
+              >
+                {modeKeranjang === "po"
+                  ? `Lanjut Pesanan (${keranjang.reduce((n, k) => n + k.kuantitas, 0)} barang)`
+                  : `Keranjang (${keranjang.reduce((n, k) => n + k.kuantitas, 0)} barang)`}
               </button>
             </div>
           )}
@@ -524,7 +549,7 @@ export default function App() {
         />
       )}
 
-      {(layar.nama === "pesanan" || layar.nama === "pengaturan") && (
+      {(layar.nama === "pengaturan") && (
         <Placeholder nama={layar.nama} settings={settings} storagePermanen={storagePermanen} />
       )}
 
@@ -542,6 +567,116 @@ export default function App() {
         ) : (
           <AksesAdminSaja bazarAktifAda={!!bazar} onMintaAdmin={() => setLayar({ nama: "masuk-admin" })} />
         ))}
+
+      {layar.nama === "pesanan" && (
+        <Pesanan
+          segarkan={segarkanPesanan}
+          onPesananBaru={() => {
+            // PO diawali dengan memilih barang dari katalog; keranjang dikosongkan dulu
+            // agar PO tidak tercampur barang sisa penjualan biasa.
+            setKeranjang([]);
+            setModeKeranjang("po");
+            setLayar({ nama: "pilih-barang" });
+          }}
+          onBuka={(id) => {
+            void ambilPesanan(id).then((p) => {
+              if (p) {
+                setPesananDibuka(p);
+                setLayar({ nama: "detail-pesanan", id });
+              }
+            });
+          }}
+        />
+      )}
+
+      {layar.nama === "form-pesanan" && (
+        <FormPesanan
+          items={keranjang.map((k) => ({
+            produkId: k.produkId,
+            nama: k.nama,
+            hargaSatuan: k.hargaSatuan,
+            kuantitas: k.kuantitas,
+            diskonPerUnit: k.diskonPerUnit,
+          }))}
+          total={keranjang.reduce((n, k) => n + (k.hargaSatuan - k.diskonPerUnit) * k.kuantitas, 0)}
+          bazarId={bazar?.id ?? null}
+          sibuk={sibukPesanan}
+          pesanGalat={pesanPesanan}
+          onBatal={() => setLayar({ nama: "pesanan" })}
+          onSimpan={(rencana: RencanaPO) => {
+            setPesanPesanan(null);
+            setSibukPesanan(true);
+            void simpanPO(rencana, { rekening: settings?.rekening ?? [] }).then(async (h) => {
+              setSibukPesanan(false);
+              if (!h.ok) {
+                setPesanPesanan(h.pesan);
+                return;
+              }
+              setKeranjang([]);
+              setSegarkanPesanan((n) => n + 1);
+              await muat();
+              const p = await ambilPesanan(h.pesanan.id);
+              if (p) setPesananDibuka(p);
+              setLayar({ nama: "detail-pesanan", id: h.pesanan.id });
+            });
+          }}
+        />
+      )}
+
+      {layar.nama === "detail-pesanan" && pesananDibuka && (
+        <DetailPesanan
+          pesanan={pesananDibuka}
+          sibuk={sibukPesanan}
+          onLihatResi={() => setLayar({ nama: "pengaturan" })}
+          onCatatPembayaran={(nominal, metode) => {
+            setSibukPesanan(true);
+            void catatPembayaran(pesananDibuka.transaksi.id, {
+              nominal,
+              waktu: new Date().toISOString(),
+              metode,
+              catatan: null,
+            }).then(async (r) => {
+              setSibukPesanan(false);
+              if (!r.ok) {
+                setPesanPesanan(r.pesan);
+                return;
+              }
+              const p = await ambilPesanan(pesananDibuka.transaksi.id);
+              if (p) setPesananDibuka(p);
+              setSegarkanPesanan((n) => n + 1);
+            });
+          }}
+          onUbahStatus={(ke: StatusPesanan) => {
+            if (ke === "dibatalkan" && !window.confirm(pesanKonfirmasiBatal(pesananDibuka.transaksi.nomorResi))) return;
+            setSibukPesanan(true);
+            const aksi = ke === "dibatalkan" ? batalkanTransaksi(pesananDibuka.transaksi.id) : ubahStatusPesanan(pesananDibuka.transaksi.id, ke);
+            void aksi.then(async (r) => {
+              setSibukPesanan(false);
+              if (!r.ok) {
+                setPesanPesanan(r.pesan);
+                return;
+              }
+              const p = await ambilPesanan(pesananDibuka.transaksi.id);
+              if (p) setPesananDibuka(p);
+              setSegarkanPesanan((n) => n + 1);
+              await muat();
+            });
+          }}
+          onIsiOngkir={(ongkir: Ongkir) => {
+            setSibukPesanan(true);
+            void isiOngkir(pesananDibuka.transaksi.id, ongkir).then(async (r) => {
+              setSibukPesanan(false);
+              if (!r.ok) {
+                setPesanPesanan(r.pesan);
+                return;
+              }
+              const p = await ambilPesanan(pesananDibuka.transaksi.id);
+              if (p) setPesananDibuka(p);
+              setSegarkanPesanan((n) => n + 1);
+            });
+          }}
+        />
+      )}
 
       {layar.nama === "masuk-admin" && (
         <MasukAdmin

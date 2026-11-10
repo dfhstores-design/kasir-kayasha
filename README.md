@@ -41,8 +41,8 @@ dan tetap bisa dipakai saat internet di lokasi pameran buruk atau tidak ada.
 | Phase 3 | Katalog, foto produk (progres wajib, aman >80 MB), penjualan langsung | ✅ Selesai — 10 Nov 2026 |
 | Phase 3B | Bazar (buka/alokasi/tutup) + parkir transaksi maks 3 | ✅ Selesai — 10 Nov 2026 |
 | Phase 3C | Role admin/kasir (PIN), biaya bazar, hitung ulang sisa, ringkasan laba | ✅ Selesai — 10 Nov 2026 |
-| Phase 4 | Pre-order, DP/pelunasan, status pesanan, ongkir menyusul | ⏳ Berikutnya |
-| Phase 5 | Profil usaha, logo, rekening, resi PDF, berbagi | ⬜ Belum |
+| Phase 4 | Pre-order, DP/pelunasan, status pesanan, ongkir menyusul | ✅ Selesai — 10 Nov 2026 |
+| Phase 5 | Profil usaha, logo, rekening, resi PDF, berbagi | ⏳ Berikutnya |
 | Phase 6 | Sinkronisasi D1 + unggah foto R2 | ⬜ Belum |
 | Phase 7 | QA, backup, deployment, panduan pemilik | ⬜ Belum |
 | To be develop | Cetak printer thermal 58/80 mm (Web Bluetooth) | ⏸️ Ditunda |
@@ -237,7 +237,7 @@ Service worker **tidak** aktif saat `npm run dev` — itu disengaja agar hot rel
 | `npm run preview` | Pratinjau hasil build (mengaktifkan service worker) |
 | `npm run lint` | Pemeriksaan kode |
 | `npm run typecheck` | Pemeriksaan tipe TypeScript |
-| `npm test` | Unit test (197 tes per Phase 3C) |
+| `npm test` | Unit test (244 tes per Phase 4) |
 
 ---
 
