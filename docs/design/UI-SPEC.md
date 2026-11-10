@@ -166,6 +166,15 @@ Larangan teks: "error", "failed", "invalid", "sync", "cache", "token", singkatan
 | 12 | Ringkasan Hari Ini | [`screens/12-ringkasan.md`](screens/12-ringkasan.md) |
 | 13 | Riwayat Transaksi | [`screens/13-riwayat.md`](screens/13-riwayat.md) |
 | 14 | Status Simpan & Backup | [`screens/14-status-simpan.md`](screens/14-status-simpan.md) |
+| 15 | Bazar (buka, daftar, tutup) | [`screens/15-bazar.md`](screens/15-bazar.md) |
+| 16 | Alokasi Barang ke Bazar | [`screens/16-alokasi-bazar.md`](screens/16-alokasi-bazar.md) |
+| 17 | Tutup Bazar | [`screens/17-tutup-bazar.md`](screens/17-tutup-bazar.md) |
+
+Layar **15–17** serta perubahan pada layar 1, 4, 5, 6, 9, 10, 11 berasal dari
+[`BAZAR-PARKIR-RESI.md`](BAZAR-PARKIR-RESI.md) (Phase 1 lanjutan, 10 Nov 2026) dan mengikuti
+keputusan pemilik: stok gudang sebagai acuan utama dengan alokasi per bazar, printer thermal
+58/80 mm, parkir maksimal 3 transaksi bernama, jenis transaksi Tunai/Transfer/QRIS, dan status
+Lunas/DP/Belum dibayar.
 
 ## 9. Yang sengaja TIDAK ada di MVP
 

@@ -140,7 +140,6 @@ Simpan → status berubah menjadi Lunas / DP, riwayat pembayaran bertambah
 ---
 
 ## Alur 5 — Pembatalan transaksi
-
 ```
 Riwayat ─ ketuk transaksi ─ Detail transaksi
     │  tombol "Batalkan Transaksi" (warna netral, bukan merah menyala)
@@ -166,3 +165,81 @@ menyimpan riwayat DP-nya.
 | Pesan berhasil/gagal | Menggantikan posisi panel, tidak hilang sendiri, ditutup dengan tombol "Mengerti" |
 | Status internet | Satu kalimat kecil di beranda: *Tersimpan di perangkat* / *Menunggu internet* / *Tersinkron* |
 | Menu admin | Beranda hanya menampilkan 4 tombol tujuan utama; pengaturan di bawah, terpisah garis |
+
+---
+
+# Alur tambahan — Bazar, Parkir, Jenis & Status Transaksi
+
+Ditambahkan 10 November 2026. Rincian teknis: [`BAZAR-PARKIR-RESI.md`](BAZAR-PARKIR-RESI.md).
+
+## Alur 6 — Memarkir transaksi lalu melayani pembeli lain
+
+```
+[1] KERANJANG (pembeli A, barang sudah dipilih)
+    │  isi "Nama pembeli: Bu Dewi"
+    │  ketuk "Parkir"
+    ▼
+[2] Keranjang kosong; Bu Dewi muncul di daftar "Tertahan (1 dari 3)"
+    │  kasir melayani pembeli B → Pilih Barang → Keranjang → Simpan
+    ▼
+[3] Selesai pembeli B, kembali ke Keranjang
+    │  ketuk baris "Bu Dewi · 2 barang · Rp 400.000"
+    ▼
+[4] Keranjang Bu Dewi dimuat ulang
+    │  sistem memeriksa ulang saldo bazar
+    │  bila cukup → Simpan
+    │  bila tidak → pesan, ubah jumlah, isi tidak hilang
+    ▼
+[5] Parkir Bu Dewi hilang dari daftar Tertahan
+```
+
+Keputusan:
+
+| Hal | Keputusan | Alasan |
+| --- | --- | --- |
+| Nama pembeli | **Wajib** saat parkir | Pemilik memintanya agar yakin mana yang dilanjutkan |
+| Batas parkir | **3** | Permintaan pemilik; lebih dari itu layar jadi penuh |
+| Stok saat parkir | **Tidak** dikurangi | Stok hanya berkurang saat transaksi benar-benar disimpan |
+| Parkir saat keranjang berisi | Bertanya sekali sebelum berpindah | Mencegah keranjang lain hilang tanpa sadar |
+| Memberi nomor antrean | Tidak | Nama lebih mudah diingat daripada angka |
+
+## Alur 7 — Menyiapkan bazar
+
+```
+Barang → Bazar → "+ Buka Bazar"
+    │  nama bazar (wajib), tanggal mulai/selesai (opsional)
+    ▼
+Atur Barang Bazar
+    │  tiap barang: "Bawa ke bazar" (maks = stok gudang)
+    │  Simpan → saldo bazar bertambah, stok gudang berkurang
+    ▼
+Beranda menampilkan kartu "Bazar aktif: Pameran Mall Kelapa Gading"
+```
+
+## Alur 8 — Menutup bazar
+
+```
+Beranda → kartu bazar → "Tutup Bazar"
+    │  ringkasan: terjual / dibawa / sisa
+    │  tiap barang: "Kembalikan ke gudang" (bawaan = sisa)
+    ▼
+"Tutup Bazar" → konfirmasi
+    ▼
+Stok gudang bertambah sesuai yang dikembalikan;
+bazar pindah ke daftar selesai dan tidak bisa dibuka lagi
+```
+
+## Alur 9 — Menyimpan dengan status Belum dibayar
+
+```
+Keranjang → Jenis transaksi: Tunai / Transfer / QRIS
+         → Status bayar: Lunas / DP / Belum dibayar
+         → bila DP/Belum dibayar: "Dibayar sekarang" (boleh 0)
+         → Simpan
+Keranjang tertahan hilang; transaksi muncul di Riwayat dengan label status.
+Pelunasan dicatat dari detail transaksi (Alur 3 versi penjualan biasa).
+```
+
+Catatan: status **belum dibayar** berlaku untuk penjualan biasa, bukan hanya PO. Contoh resi
+pemilik menunjukkan hal yang sama (`Belum Dibayar` pada penjualan barang).
+

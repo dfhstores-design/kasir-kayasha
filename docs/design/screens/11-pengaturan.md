@@ -59,3 +59,21 @@ Pesan bila lupa: petunjuk pemulihan (lihat Phase 7).
 - Pengaturan adalah daftar pilihan besar, **bukan** tab kecil atau ikon.
 - Perubahan berlaku untuk transaksi baru; resi lama tidak berubah (menyimpan salinan sendiri).
 - Nomor rekening **tidak pernah** ditampilkan di luar layar Pengaturan dan resi.
+
+---
+
+## Pembaruan Phase 1 lanjutan (resi thermal)
+
+Pilihan baru di daftar Pengaturan:
+
+| Pilihan | Isi |
+| --- | --- |
+| **Sapaan resi** | `Pagi` · `Siang` · `Sore` · `Malam` · `(tanpa sapaan)`, dicetak `- Sore -` |
+| **Rekening tujuan** | Boleh **2 rekening** ditampilkan di resi (contoh: BNI + BCA); satu ditandai **utama** |
+| **Format resi** | `Thermal 58 mm` · `Thermal 80 mm` · `PDF A5` |
+| **Baris tambahan resi** | Sakelar: `Nomor resi` · `Rincian diskon` · `Pembayaran & sisa`. Dimatikan = resi persis seperti contoh |
+| **Uji printer** | Mencetak contoh resi; hasil berhasil/gagal ditampilkan jelas |
+| **Bazar** | Tautan ke layar Bazar (15) |
+
+Alamat resi kini punya kolom terpisah: **alamat (2 baris)**, **kota + kode pos**, dan **telepon**
+(maksimal 2) — mengikuti susunan contoh resi.

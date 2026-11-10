@@ -60,3 +60,15 @@
 - Setelah simpan → kembali ke Daftar Barang dengan barang baru di urutan A–Z.
 - Tidak ada tombol Hapus permanen. Barang tanpa transaksi boleh dihapus **hanya** dari detail
   arsip, dengan konfirmasi dua langkah; barang yang pernah terjual hanya bisa diarsipkan.
+
+---
+
+## Pembaruan Phase 1 lanjutan (stok gudang)
+
+| Kolom | Perubahan |
+| --- | --- |
+| **Stok gudang** | Label diganti dari "Stok siap jual" menjadi **"Stok gudang"**, teks bantu: "Barang yang ada di toko. Yang dibawa ke bazar diatur di menu Bazar." |
+| Alokasi bazar | **Tidak diisi di sini.** Ada baris baca-saja "Bazar sekarang: 12 pcs" bila ada bazar aktif |
+
+Angka yang diketik pemilik di form ini **adalah stok gudang**. Stok bazar hanya berubah lewat
+layar Alokasi (16) dan Tutup Bazar (17), sehingga tidak ada dua tempat yang membingungkan.

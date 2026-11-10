@@ -59,3 +59,17 @@
 | Belum ada pengaturan | panel "Ayo isi nama butik" di atas tombol |
 | Belum ada barang | baris bantuan di bawah tombol Jual Barang |
 | Offline | status "Tersimpan di perangkat · Menunggu internet"; semua tombol tetap aktif |
+
+---
+
+## Pembaruan Phase 1 lanjutan (bazar & parkir)
+
+Panel tambahan di bawah judul butik:
+
+| Keadaan | Tampilan |
+| --- | --- |
+| Ada bazar aktif | kartu: **Bazar aktif** · nama bazar · tanggal · `[Atur Barang]`. Mengetuk kartu → Bazar |
+| Tidak ada bazar aktif | panel: **"Belum ada bazar aktif. Penjualan memakai stok gudang."** + tombol **Buka Bazar** |
+| Ada transaksi tertahan | baris kecil di atas status simpan: **"2 transaksi tertahan"** → Keranjang |
+
+Tombol tujuan **tidak** bertambah menjadi enam; bazar dan parkir masuk lewat panel, bukan tombol baru.

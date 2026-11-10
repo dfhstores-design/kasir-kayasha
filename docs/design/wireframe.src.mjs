@@ -146,13 +146,29 @@ ${appbar("Keranjang")}
     </div>
   </div>
   <div class="card">
-    <span class="label">Metode bayar</span>
+    <span class="label">Jenis transaksi</span>
     <div class="chips"><span class="chip ok">Tunai</span><span class="chip">Transfer</span><span class="chip">QRIS</span></div>
+    <span class="label" style="margin-top:12px">Status bayar</span>
+    <div class="chips"><span class="chip ok">Lunas</span><span class="chip">DP</span><span class="chip">Belum dibayar</span></div>
+  </div>
+  <div class="card">
+    <span class="label">Tertahan (2 dari 3)</span>
+    <div class="listrow" style="padding:8px 10px;margin-bottom:8px">
+      <div style="flex:1"><b>Bu Dewi</b><div class="muted" style="font-size:14px">2 barang · Rp 400.000 · 14:02</div></div>
+      <span class="muted">✕</span>
+    </div>
+    <div class="listrow" style="padding:8px 10px">
+      <div style="flex:1"><b>Bu Rina</b><div class="muted" style="font-size:14px">1 barang · Rp 180.000 · 13:40</div></div>
+      <span class="muted">✕</span>
+    </div>
   </div>
 </div>
 <div class="bottom">
   <div class="row"><span class="h2">TOTAL</span><span class="total" style="font-size:28px">Rp 560.000</span></div>
-  <button class="btn primary">Simpan Transaksi</button>
+  <div class="grid2">
+    <button class="btn ghost small">Parkir</button>
+    <button class="btn primary small">Simpan</button>
+  </div>
 </div>`,
   },
 
@@ -176,36 +192,40 @@ ${appbar("Keranjang")}
 
   {
     no: "06",
-    title: "Resi (pratinjau PDF)",
+    title: "Resi thermal 58 mm",
     body: `
 ${appbar("Resi KYS-0012")}
 <div class="content">
-  <div class="receipt">
-    <div class="logobox"></div>
-    <div class="center"><b>KAYASHA CLOTHING</b><br /><span class="muted" style="font-size:13px">Pameran, Jakarta</span></div>
+  <div class="receipt" style="font-size:13px;line-height:1.5">
+    <div class="logobox" style="width:64px;height:64px"></div>
+    <div class="center"><b style="font-size:15px;letter-spacing:.5px">KAYASHA CLOTHING</b></div>
+    <div class="center muted" style="font-size:12px">Jl. Melati No. 12<br />Kebayoran Baru<br />JAKARTA 12130<br />0812-1111-2222</div>
     <div class="hr"></div>
-    <div class="row"><span>Nomor</span><span>KYS-0012</span></div>
-    <div class="row"><span>Tanggal</span><span>10 Nov 2026, 14:20</span></div>
+    <div class="row" style="font-size:12px"><span>11 Nov 2026 14:20</span><span>#7</span></div>
+    <div class="row" style="font-size:12px"><span>KYS-0012</span></div>
+    <div class="center muted" style="font-size:12px">- Sore -</div>
     <div class="hr"></div>
-    <div><b>Blus Linen</b></div>
-    <div class="row"><span>2 × Rp 180.000</span><span>Rp 360.000</span></div>
-    <div class="row muted"><span>Diskon @ Rp 10.000</span><span>− Rp 20.000</span></div>
-    <div style="margin-top:6px"><b>Rok Plisket</b></div>
-    <div class="row"><span>1 × Rp 220.000</span><span>Rp 220.000</span></div>
+    <div><b>BLUS LINEN</b></div>
+    <div class="row"><span>2x 180.000</span><span>360.000</span></div>
+    <div class="row muted"><span>Diskon @ 10.000 x 2</span><span>-20.000</span></div>
+    <div><b>ROK PLISKET</b></div>
+    <div class="row"><span>1x 220.000</span><span>220.000</span></div>
     <div class="hr"></div>
-    <div class="row"><span>Subtotal</span><span>Rp 580.000</span></div>
-    <div class="row"><span>Diskon barang</span><span>− Rp 20.000</span></div>
-    <div class="row"><span>Diskon total</span><span>− Rp 0</span></div>
-    <div class="hr"></div>
-    <div class="row"><b>TOTAL</b><b>Rp 560.000</b></div>
-    <div class="hr"></div>
-    <div class="row"><span>Pembayaran</span><span>Tunai</span></div>
-    <div class="center muted" style="font-size:13px;margin-top:8px">Terima kasih, sampai jumpa!</div>
+    <div class="row" style="font-weight:700;font-size:15px"><span>Total</span><span>Rp560.000</span></div>
+    <div class="center" style="font-size:12px">Belum Dibayar</div>
+    <div class="row" style="font-size:12px"><span>Bayar (Tunai)</span><span>Rp300.000</span></div>
+    <div class="row" style="font-size:12px"><b>Sisa</b><b>Rp260.000</b></div>
+    <div class="center" style="margin-top:6px"><b>**TERIMA KASIH**</b></div>
+    <div class="center muted" style="font-size:12px">Siti Aminah<br />BNI 0971092588<br />BCA 8810295431</div>
+    <div class="center muted" style="font-size:12px;margin-top:6px">Sore, sampai jumpa!</div>
   </div>
 </div>
 <div class="bottom">
-  <button class="btn primary">Bagikan</button>
-  <button class="btn ghost small">Simpan PDF</button>
+  <button class="btn primary">Cetak</button>
+  <div class="grid2">
+    <button class="btn ghost small">Bagikan PDF</button>
+    <button class="btn ghost small">Simpan PDF</button>
+  </div>
 </div>`,
   },
 
@@ -421,6 +441,120 @@ ${appbar("Simpan & Cadangan")}
     <span class="label">Data tersimpan seperti apa?</span>
     <p class="muted" style="margin:0;font-size:15px">Aplikasi ini bekerja tanpa internet. Semua transaksi disimpan di HP ini lebih dulu. Bila internet tersedia, salinan dikirim ke cloud secara otomatis.</p>
   </div>
+</div>`,
+  },
+
+  {
+    no: "15",
+    title: "Bazar",
+    body: `
+${appbar("Bazar")}
+<div class="content">
+  <div class="card" style="border:2px solid var(--accent)">
+    <span class="label" style="color:var(--accent);font-size:14px">BAZAR AKTIF</span>
+    <p class="h2" style="margin:2px 0">Pameran Mall Kelapa Gading</p>
+    <p class="muted" style="margin:0;font-size:15px">15–20 Nov 2026</p>
+    <p style="margin:6px 0 0"><b>18 barang · 240 pcs</b></p>
+    <div class="grid2" style="margin-top:10px">
+      <button class="btn ghost small">Atur Barang</button>
+      <button class="btn ghost small">Tutup Bazar</button>
+    </div>
+  </div>
+  <span class="label" style="margin-top:4px">Bazar yang sudah selesai</span>
+  <div class="listrow">
+    <div style="flex:1"><b>Pameran Senayan</b>
+      <div class="muted" style="font-size:14px">1–3 Nov 2026 · 96 pcs terjual</div>
+      <div class="muted" style="font-size:14px">Rp 12.400.000</div></div>
+    <span class="chev">›</span>
+  </div>
+  <div class="listrow">
+    <div style="flex:1"><b>Bazar Kantor</b><div class="muted" style="font-size:14px">Okt 2026</div></div>
+    <span class="chev">›</span>
+  </div>
+</div>
+<div class="bottom">
+  <button class="btn primary" disabled style="opacity:.55">+ Buka Bazar</button>
+  <p class="muted" style="font-size:14px;text-align:center;margin:0">Tutup bazar yang sekarang dulu.</p>
+</div>`,
+  },
+
+  {
+    no: "16",
+    title: "Alokasi Barang ke Bazar",
+    body: `
+${appbar("Atur Barang Bazar")}
+<div class="content">
+  <p class="muted" style="margin:0;font-size:15px">Pameran Mall Kelapa Gading</p>
+  <div class="input">🔍 Cari nama barang</div>
+  <div class="card">
+    <b>Blus Linen</b>
+    <div class="muted" style="font-size:15px">Gudang 40 · Bazar 12</div>
+    <div class="grid2" style="margin-top:8px;align-items:center">
+      <span class="muted" style="font-size:15px">Bawa ke bazar</span>
+      <div class="input" style="min-height:48px">10</div>
+    </div>
+  </div>
+  <div class="card">
+    <b>Rok Plisket</b>
+    <div class="muted" style="font-size:15px">Gudang 3 · Bazar 0</div>
+    <div class="grid2" style="margin-top:8px;align-items:center">
+      <span class="muted" style="font-size:15px">Bawa ke bazar</span>
+      <div class="input" style="min-height:48px">3</div>
+    </div>
+  </div>
+  <div class="card">
+    <b>Gamis Abu</b>
+    <div class="muted" style="font-size:15px">Gudang habis · Bazar 4</div>
+    <div class="grid2" style="margin-top:8px;align-items:center">
+      <span class="muted" style="font-size:15px">Bawa ke bazar</span>
+      <div class="input" style="min-height:48px;opacity:.55">0</div>
+    </div>
+  </div>
+</div>
+<div class="bottom">
+  <div class="row"><span class="muted">18 barang · 240 pcs</span></div>
+  <button class="btn primary">Simpan</button>
+</div>`,
+  },
+
+  {
+    no: "17",
+    title: "Tutup Bazar",
+    body: `
+${appbar("Tutup Bazar")}
+<div class="content">
+  <div>
+    <p class="h2" style="margin:0">Pameran Mall Kelapa Gading</p>
+    <p class="muted" style="margin:2px 0 0;font-size:15px">15–20 Nov 2026</p>
+  </div>
+  <div class="card">
+    <div class="row"><span>Terjual</span><span class="money">96 pcs</span></div>
+    <div class="row"><span></span><span class="money">Rp 12.400.000</span></div>
+    <div class="row"><span>Dibawa</span><span class="money">240 pcs</span></div>
+    <div class="hr"></div>
+    <div class="row"><b>Sisa</b><b class="money">144 pcs</b></div>
+  </div>
+  <span class="label">Sisa dibawa kembali ke gudang</span>
+  <div class="card">
+    <b>Blus Linen</b>
+    <div class="muted" style="font-size:15px">Sisa bazar: 8</div>
+    <div class="grid2" style="margin-top:8px;align-items:center">
+      <span class="muted" style="font-size:15px">Kembalikan</span>
+      <div class="input" style="min-height:48px">8</div>
+    </div>
+  </div>
+  <div class="card">
+    <b>Rok Plisket</b>
+    <div class="muted" style="font-size:15px">Sisa bazar: 1</div>
+    <div class="grid2" style="margin-top:8px;align-items:center">
+      <span class="muted" style="font-size:15px">Kembalikan</span>
+      <div class="input" style="min-height:48px">1</div>
+    </div>
+  </div>
+  <div class="warnbox">Barang yang tidak dikembalikan dianggap habis di bazar.</div>
+</div>
+<div class="bottom">
+  <button class="btn primary">Tutup Bazar</button>
 </div>`,
   },
 ];

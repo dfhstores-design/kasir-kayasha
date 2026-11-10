@@ -54,3 +54,16 @@
 | Berhasil | centang, nomor, total, dua tombol |
 | Gagal simpan | panel gagal + "Coba Lagi", tanpa centang |
 | Offline | normal; status "Tersimpan di perangkat · Menunggu internet" |
+
+---
+
+## Pembaruan Phase 1 lanjutan (status bayar & cetak)
+
+| Tambahan | Aturan |
+| --- | --- |
+| Baris status | `Lunas` / `DP — sisa Rp 159.000` / `Belum dibayar` tepat di bawah angka total |
+| Tombol **Cetak** | Muncul di atas "Buat Resi" **hanya bila** printer sudah teruji (Phase 5) |
+| Nomor urut | `#7` hari itu ditampilkan kecil di samping nomor resi |
+
+Bila masih ada transaksi lain yang diparkir, pesan penutup menambahkan:
+**"Masih ada 1 transaksi tertahan."** dengan tautan ke Keranjang.

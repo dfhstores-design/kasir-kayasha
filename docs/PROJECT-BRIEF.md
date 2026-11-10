@@ -157,9 +157,10 @@ Pertanyaan di atas tidak menghalangi Phase 1 dan Phase 2.
 | Phase 0 | Baca repo & perintah utama, tetapkan workspace lokal + repo + Drive, catat ruang lingkup, keputusan, pertanyaan terbuka, rencana fase, kuota resmi | **Selesai — 10 Nov 2026** |
 | Phase 1 | Alur sederhana & wireframe layar utama (5 alur, 14 layar, spesifikasi visual) | **Selesai — 10 Nov 2026** |
 | Phase 2 | Fondasi proyek (Vite + React + TS), PWA, skema IndexedDB, persiapan Cloudflare/GitHub | Berikutnya |
-| Phase 3 | Katalog + foto produk + penjualan langsung (lokal/offline) | Belum |
+| Phase 3 | Katalog + stok gudang + penjualan langsung (lokal/offline) | Belum |
+| **Phase 3B** | **Bazar (alokasi & tutup), parkir transaksi (maks 3)** | Belum |
 | Phase 4 | Pre-order, DP/pelunasan, status pesanan, ongkir, diskon | Belum |
-| Phase 5 | Profil usaha, logo, rekening, resi PDF, berbagi, uji kelayakan printer | Belum |
+| Phase 5 | Profil usaha, logo, rekening, **resi thermal 58/80 mm** + PDF, uji printer | Belum |
 | Phase 6 | Sinkronisasi D1 + unggah foto R2 | Belum |
 | Phase 7 | QA, backup, deployment, panduan pemilik | Belum |
 
@@ -172,6 +173,24 @@ Pertanyaan di atas tidak menghalangi Phase 1 dan Phase 2.
 - `artifacts/PHASE-01/wireframe.html` — wireframe interaktif untuk dilihat pemilik.
 
 Implementasi Phase 2 ke atas **mengikuti** dokumen di atas.
+
+### Tambahan Phase 1 lanjutan (10 Nov 2026, keputusan pemilik)
+
+`docs/design/BAZAR-PARKIR-RESI.md` menambahkan, dan mengalahkan isi sebelumnya untuk topik ini:
+
+| # | Keputusan pemilik |
+| --- | --- |
+| B-01 | **Stok gudang acuan utama; tiap bazar menetapkan alokasi.** Gudang berkurang saat dialokasikan, penjualan mengurangi saldo bazar |
+| B-02 | Printer **thermal 58/80 mm Bluetooth**; PDF sebagai cadangan |
+| B-03 | Resi "DAPUR OPA" = **contoh format** saja; data diganti Kayasha Clothing |
+| B-04 | **Seluruh larangan perintah utama tetap berlaku** (tanpa diskon persen, tanpa hapus permanen, satu perangkat) |
+| B-05 | **Parkir maksimal 3**, tiap parkir **bernama pembeli** |
+| B-06 | Jenis transaksi: **Tunai / Transfer Bank / QRIS** |
+| B-07 | Status transaksi: **Lunas / DP / Belum dibayar** — berlaku juga untuk penjualan biasa |
+| B-08 | **Bazar** dengan stok berbeda dari stok gudang |
+
+Layar bertambah: **15 Bazar**, **16 Alokasi Bazar**, **17 Tutup Bazar**.
+Phase baru: **3B** (bazar + parkir).
 
 ## 9. Kriteria penerimaan MVP (13 butir)
 

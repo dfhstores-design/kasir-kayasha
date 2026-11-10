@@ -56,3 +56,24 @@
 | Kosong | kalimat kosong + tombol tambah |
 | Stok habis | tulisan "Stok habis" menggantikan angka |
 | Diarsipkan | hanya tampil bila kotak arsip dicentang |
+
+---
+
+## Pembaruan Phase 1 lanjutan (stok gudang & stok bazar)
+
+Gudang dan bazar memakai dua angka berbeda, jadi daftar barang menampilkan keduanya:
+
+```
+| [foto] Blus Linen                  |
+|        Rp 180.000 · Gudang 40      |
+|        Bazar 12 · Aktif            |
+|                              ›     |
+```
+
+| Aturan | Perilaku |
+| --- | --- |
+| Tanpa bazar aktif | hanya baris "Gudang 40" |
+| Dengan bazar aktif | dua baris: `Gudang 40` dan `Bazar 12` |
+| Bazar 0 | `Bazar 0 · tidak dibawa` |
+| Stok gudang 0 | `Gudang habis` |
+| Tombol baru | **Bazar** (di atas daftar) → layar 15 |
