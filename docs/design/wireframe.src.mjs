@@ -148,6 +148,8 @@ ${appbar("Keranjang")}
   <div class="card">
     <span class="label">Jenis transaksi</span>
     <div class="chips"><span class="chip ok">Tunai</span><span class="chip">Transfer</span><span class="chip">QRIS</span></div>
+    <span class="label" style="margin-top:12px">Ongkos kirim</span>
+    <div class="chips"><span class="chip ok">Ambil sendiri Rp 0</span><span class="chip">Kirim</span><span class="chip">Dibayar kurir</span><span class="chip">Belum tentu</span></div>
     <span class="label" style="margin-top:12px">Status bayar</span>
     <div class="chips"><span class="chip ok">Lunas</span><span class="chip">DP</span><span class="chip">Belum dibayar</span></div>
   </div>
@@ -192,7 +194,7 @@ ${appbar("Keranjang")}
 
   {
     no: "06",
-    title: "Resi thermal 58 mm",
+    title: "Resi (PDF)",
     body: `
 ${appbar("Resi KYS-0012")}
 <div class="content">
@@ -203,13 +205,15 @@ ${appbar("Resi KYS-0012")}
     <div class="hr"></div>
     <div class="row" style="font-size:12px"><span>11 Nov 2026 14:20</span><span>#7</span></div>
     <div class="row" style="font-size:12px"><span>KYS-0012</span></div>
-    <div class="center muted" style="font-size:12px">- Sore -</div>
+    <div class="center muted" style="font-size:12px">- Sore -  <span style="font-size:11px">(otomatis jam)</span></div>
     <div class="hr"></div>
     <div><b>BLUS LINEN</b></div>
     <div class="row"><span>2x 180.000</span><span>360.000</span></div>
     <div class="row muted"><span>Diskon @ 10.000 x 2</span><span>-20.000</span></div>
     <div><b>ROK PLISKET</b></div>
     <div class="row"><span>1x 220.000</span><span>220.000</span></div>
+    <div class="hr"></div>
+    <div class="row"><span>Ongkos kirim</span><span>Rp25.000</span></div>
     <div class="hr"></div>
     <div class="row" style="font-weight:700;font-size:15px"><span>Total</span><span>Rp560.000</span></div>
     <div class="center" style="font-size:12px">Belum Dibayar</div>
@@ -221,11 +225,8 @@ ${appbar("Resi KYS-0012")}
   </div>
 </div>
 <div class="bottom">
-  <button class="btn primary">Cetak</button>
-  <div class="grid2">
-    <button class="btn ghost small">Bagikan PDF</button>
-    <button class="btn ghost small">Simpan PDF</button>
-  </div>
+  <button class="btn primary">Bagikan PDF</button>
+  <button class="btn ghost small">Simpan PDF</button>
 </div>`,
   },
 
@@ -283,7 +284,8 @@ ${appbar("Pesanan KYS-PO-0003")}
     <div class="row"><span>Gamis Abu · 1 × Rp 450.000</span><span class="money">Rp 450.000</span></div>
     <div class="row"><span>Kebaya · 1 × Rp 400.000</span><span class="money">Rp 400.000</span></div>
     <div class="hr"></div>
-    <div class="row muted" style="font-size:15px"><span>Ongkir dibayar pembeli ke kurir</span><span>Tidak masuk tagihan butik</span></div>
+    <div class="row"><span>Ongkos kirim</span><span class="money">Belum ditentukan</span></div>
+    <button class="btn ghost small" style="width:100%;margin-top:8px">Isi Ongkos Kirim</button>
   </div>
   <div class="warnbox">
     <div class="row"><span>Total pesanan</span><span class="money">Rp 850.000</span></div>
@@ -388,6 +390,7 @@ ${appbar("Ringkasan")}
   <div class="card"><span class="label">Penjualan (setelah diskon)</span><div class="total" style="font-size:28px">Rp 3.240.000</div></div>
   <div class="card"><span class="label">Uang yang diterima</span><div class="total" style="font-size:28px">Rp 3.050.000</div><div class="muted" style="font-size:15px">Termasuk DP pesanan</div></div>
   <div class="card"><span class="label">Sisa pembayaran pesanan</span><div class="total" style="font-size:28px">Rp 950.000</div></div>
+  <div class="warnbox">2 pesanan ongkirnya belum ditentukan — sisa tagihan bisa bertambah.</div>
   <div class="hr"></div>
   <div class="listrow"><span>Transaksi hari ini</span><span class="chev">›</span></div>
   <div class="listrow"><span>Status simpan & cadangan</span><span class="chev">›</span></div>

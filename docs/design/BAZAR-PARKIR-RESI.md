@@ -13,13 +13,15 @@ Bila ada perbedaan, berkas ini yang berlaku untuk ketiga topik di bawah.
 | # | Pertanyaan | Jawaban pemilik |
 | --- | --- | --- |
 | B-01 | Hubungan stok gudang dan stok bazar | **Stok gudang jadi acuan utama; tiap bazar menetapkan alokasi.** Gudang berkurang saat barang dialokasikan ke bazar; penjualan mengurangi saldo bazar. |
-| B-02 | Printer | **Printer thermal 58 mm / 80 mm (Bluetooth).** Tetap ada PDF sebagai cadangan. |
+| B-02 | Printer | **Printer thermal 58 mm / 80 mm (Bluetooth).** Output resi memakai **PDF** lebih dulu; cetak thermal masuk daftar *to be develop*. Tetap ada PDF sebagai cadangan. |
 | B-03 | Usaha bernama "DAPUR OPA" | **Hanya contoh format.** Nama, logo, dan alamat diganti data Kayasha Clothing. Yang ditiru susunannya. |
 | B-04 | Batas dari perintah utama | **Tetap ikut seluruh larangan perintah utama** — tanpa diskon persen, tanpa hapus permanen barang, satu perangkat kasir. |
 | B-05 | Jumlah transaksi parkir | **Maksimal 3**, tiap parkir **diberi nama pembeli**. |
 | B-06 | Jenis transaksi | Tunai / Transfer Bank / QRIS |
 | B-07 | Status transaksi | Lunas / DP / Belum dibayar |
 | B-08 | Fitur bazar | Ada. Stok bazar berbeda dari stok gudang. |
+| B-09 | Sapaan resi | **Otomatis mengikuti jam perangkat** (bukan pilihan manual per transaksi). |
+| B-10 | Ongkir | **Selalu tampil di resi.** Nilainya **Rp 0** (tidak dikirim, atau dibayar langsung oleh penerima), **nominal Rupiah**, atau **belum ditentukan** karena belum dapat nilainya → **boleh dihitung kemudian**. |
 
 ---
 
@@ -153,7 +155,137 @@ Status **pesanan** (Diproses / Siap / Selesai / Dibatalkan) tetap hanya untuk PO
 
 ---
 
-## 5. Resi thermal (format dari contoh)
+## 4a. Ongkos kirim (B-10)
+
+### Empat keadaan, bukan tiga
+
+Perintah utama menyebut tiga pilihan ongkir (ambil sendiri / ditagihkan butik / dibayar ke kurir).
+Keputusan B-10 menambah keadaan keempat: **ongkir belum ditentukan** saat transaksi disimpan.
+
+Nilai ongkir hanya boleh salah satu dari **tiga bentuk**:
+
+| Bentuk | Arti |
+| --- | --- |
+| **Rp 0** | Tidak dikirim, **atau** dibayar langsung oleh penerima ke kurir |
+| **Rp > 0** | Nominal yang ditagihkan butik |
+| **Belum ditentukan** | Belum dapat nilainya (menyusul) |
+
+| Keadaan | `ongkir_mode` | Nominal | Masuk total butik? |
+| --- | --- | --- | --- |
+| Ambil sendiri | `ambil_sendiri` | 0 | Tidak (Rp0) |
+| Ongkir ditagihkan butik | `butik` | ≥ 0 | **Ya** |
+| Dibayar ke kurir | `kurir` | 0 | Tidak |
+| **Belum ditentukan** (ongkir menyusul) | `belum_ditentukan` | **tidak diketahui** | **Belum** |
+
+Catatan penting: pada dataset, `ambil_sendiri` dan `kurir` **sama-sama bernilai Rp 0**. Yang
+membedakan hanya resi dan tampilan — keduanya perlu dua pilihan terpisah supaya resi bisa
+menyebut "Dibayar langsung ke kurir" bila memang begitu. Perhitungan total memperlakukan
+keduanya identik.
+
+### Aturan "ongkir menyusul"
+
+Ini keadaan yang paling rawan. Aturannya dibuat ketat agar uang tidak dihitung dua kali atau hilang.
+
+1. Boleh dipakai pada **PO dan penjualan biasa**, terutama saat bazar.
+2. Saat transaksi disimpan, total **belum** memuat ongkir. Resi dan layar menampilkan
+   **`Ongkos kirim: Belum ditentukan`** — bukan `Rp0`, karena Rp0 berarti sudah pasti gratis.
+3. Transaksi dengan keadaan ini diberi label kecil **`Ongkir menyusul`** di daftar dan detail.
+4. Ongkir ditetapkan kemudian lewat detail pesanan → **`Isi Ongkos Kirim`**:
+   nominal + siapa yang membayar (butik / kurir).
+5. **Total dihitung ulang** saat ongkir diisi, lalu:
+   - bila status **Lunas** → status pembayaran berubah menjadi **DP** (ada sisa tagihan baru),
+     dengan catatan "Total bertambah karena ongkir";
+   - bila **Belum dibayar** → tetap Belum dibayar dengan total baru;
+   - bila **DP** → sisa tagihan bertambah; ditampilkan jelas selisihnya.
+6. Perubahan total **selalu ditampilkan sebagai riwayat**: `Total diubah 12 Nov: Rp 359.000 → Rp 379.000 (ongkir Rp 20.000)`.
+7. Poin 5–6 adalah **satu-satunya pengecualian** dari aturan perintah utama "kunci total setelah
+   pembayaran pertama". Alasannya: ongkir bukan bagian barang, dan pemilik sudah menyatakan ongkir
+   boleh dihitung kemudian. Pengecualian ini **wajib** dicatat dan diuji.
+
+### Konflik dengan rumus perintah utama
+
+Perintah utama: `total = subtotal − diskon_item − diskon_total + ongkir_ditagihkan_butik`.
+
+Rumus ini **tetap dipakai sebagai sumber kebenaran**, dengan penegasan:
+
+```
+ongkir_ditagihkan_butik =
+    0                    bila ambil_sendiri
+    0                    bila kurir        (dibayar ke kurir, bukan ke butik)
+    0                    bila belum_ditentukan   ← selama belum diisi
+    nominal              bila butik
+
+total = subtotal − diskon_item − diskon_total + ongkir_ditagihkan_butik
+```
+
+**Konsekuensi yang harus diterima:** selama `belum_ditentukan`, total yang tercatat **lebih kecil**
+dari tagihan akhir. Karena itu sisa tagihan pada keadaan ini **bukan angka final**, dan resi harus
+mengatakan "belum ditentukan" — bukan menyembunyikannya.
+
+### Tampilan ongkir
+
+| Layar | Perilaku |
+| --- | --- |
+| Keranjang (penjualan biasa) | Baris `Ongkos kirim` tetap tampil. Bawaan `Ambil sendiri Rp 0` |
+| Form Pesanan (PO) | Empat pilihan besar, termasuk **`Belum ditentukan`** |
+| Detail pesanan | Baris ongkir + tombol **`Isi Ongkos Kirim`** bila belum ditentukan |
+| Ringkasan | Sisa tagihan transaksi "ongkir menyusul" **tidak** dihitung sebagai sisa pasti; ditampilkan terpisah: "1 pesanan belum ada ongkir" |
+| Resi | Selalu menampilkan baris ongkir: `Rp0` / `Rp25.000` / `Belum ditentukan` / `Dibayar ke kurir` |
+
+### Format resi untuk ongkir
+
+```
+Ongkos kirim                    Rp25.000      ← ditagihkan butik
+Ongkos kirim                          Rp0      ← ambil sendiri (tetap tampil)
+Ongkos kirim             Belum ditentukan      ← menyusul
+Ongkos kirim      Dibayar langsung ke kurir    ← keadaan kurir
+```
+
+---
+
+## 4b. Sapaan resi otomatis (B-09)
+
+Sapaan ditentukan dari **jam pada saat transaksi disimpan**, disimpan sebagai snapshot sehingga
+resi lama tidak berubah bila dibuka lagi di waktu lain.
+
+| Jam lokal (Asia/Jakarta) | Sapaan |
+| --- | --- |
+| 04:00 – 10:59 | `- Pagi -` |
+| 11:00 – 14:59 | `- Siang -` |
+| 15:00 – 18:29 | `- Sore -` |
+| 18:30 – 03:59 | `- Malam -` |
+
+Aturan:
+
+1. Dipecah di 04:00, 11:00, 15:00, 18:30 — bukan tengah malam, karena transaksi malam hari tetap
+   dirasa "malam" sampai dini hari.
+2. Nilai disimpan di transaksi (bukan dihitung ulang saat mencetak).
+3. Bisa dimatikan seluruhnya lewat Pengaturan (`Tampilkan sapaan: Ya/Tidak`);
+   **tidak** bisa dipilih manual per transaksi — sesuai keputusan B-09.
+4. Fungsi murni `sapaanUntuk(waktu)` dengan unit test (batas pagi/siang/sore/malam).
+
+---
+
+## 4c. Printer thermal — daftar *to be develop* (B-02)
+
+| Hal | Status |
+| --- | --- |
+| Output resi | **PDF** (A5) — satu-satunya output pada MVP |
+| Bagikan PDF | Android share sheet + fallback unduh |
+| Cetak thermal 58/80 mm | **To be develop** — bukan bagian MVP |
+| Tombol Cetak | **Tidak ditampilkan** selama mode PDF. Tidak ada tombol nonaktif di layar utama |
+| Uji printer | Disediakan di Pengaturan sebagai halaman *to be develop* bertanda jelas |
+
+Siapa pun yang melanjutkan: **jangan** menyalakan tombol cetak sebelum pengujian perangkat nyata
+berhasil. Bila nanti diaktifkan, resi PDF dan format thermal **berbagi satu sumber tata letak**
+(susunan baris di bagian 5) agar tidak ada dua kebenaran.
+
+---
+
+## 5. Resi (susunan mengikuti contoh)
+
+**Output MVP: PDF.** Resi tetap dibuat dari susunan baris yang sama, sehingga bila printer thermal
+diaktifkan kelak, tampilannya konsisten.
 
 Mengikuti susunan contoh resi, dengan data butik sendiri.
 
@@ -194,7 +326,7 @@ Total                           Rp359.000
 | `#7` = nomor urut di kanan atas | Ya | Nomor urut hari itu (`#7`), dan nomor resi lengkap `KYS-0012` di bawahnya |
 | Tanggal `11 Mei 2026 15:53` | Ya | Format Indonesia |
 | `- Sore -` sapaan | Ya, **opsional** | Diisi di Pengaturan: *Pagi / Siang / Sore / Malam / kosong* |
-| "Ongkos kirim" | Ya | Hanya tampil bila ada ongkir yang ditagihkan butik |
+| "Ongkos kirim" | Ya | **Selalu tampil**, 4 keadaan (lihat 4a) |
 | "Belum Dibayar" di bawah Total | Ya | Mengikuti status: Lunas (tanpa tulisan) / DP / Belum Dibayar |
 | Nama pemilik + 2 rekening | Ya | Rekening yang ditandai aktif, maksimal 2 ditampilkan |
 | Teks penutup + emoji | Ya, **opsional** | Emoji hanya bila printer mendukung; PDF selalu mendukung |

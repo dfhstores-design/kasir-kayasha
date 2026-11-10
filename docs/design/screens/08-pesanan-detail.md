@@ -8,7 +8,7 @@
 ├──────────────────────────────────────┤
 │  Ibu Sari                            │  ← nama pemesan, 26 px
 │  0812-xxxx-xxxx · WhatsApp           │  ← kontak (bila diisi)
-│  [Diproses]                          │  ← status pemesanan
+│  [Diproses]   [Ongkir menyusul]      │  ← status pesanan + label ongkir
 │                                      │
 │  PRE-ORDER · siap ± 20 Nov 2026      │  ← label PO + perkiraan siap
 │                                      │
@@ -18,8 +18,8 @@
 │  Kebaya                             │
 │  1 × Rp 400.000         Rp 400.000   │
 │                                      │
-│  Ongkir (dibayar pembeli ke kurir)   │  ← keterangan jelas
-│  Tidak masuk tagihan butik           │
+│  Ongkos kirim      Belum ditentukan  │  ← selalu tampil (B-10)
+│  [ Isi Ongkos Kirim ]                │  ← hanya bila belum ditentukan
 │                                      │
 │  ┌────────────────────────────────┐  │
 │  │ Total pesanan     Rp 850.000   │  │
@@ -39,6 +39,40 @@
 │  └──────────────┘ └──────────────┘  │
 └──────────────────────────────────────┘
 ```
+
+## Ongkir (keputusan B-10)
+
+| Keadaan | Yang tampil |
+| --- | --- |
+| Ambil sendiri | `Ongkos kirim  Rp 0` |
+| Ditagihkan butik | `Ongkos kirim  Rp 25.000` + tombol `Ubah` |
+| Dibayar ke kurir | `Ongkos kirim  Dibayar langsung ke kurir` |
+| **Belum ditentukan** | `Ongkos kirim  Belum ditentukan` + tombol **`Isi Ongkos Kirim`** + label **`Ongkir menyusul`** |
+
+### Isi Ongkos Kirim (lembar bawah)
+
+```
+┌──────────────────────────────────────┐
+│  Isi Ongkos Kirim                    │
+│  Nominal  [ Rp 25.000 ]              │
+│  Dibayar  [ Butik ]  [ Kurir ]       │
+│                                      │
+│  Total berubah dari Rp 850.000       │  ← pratinjau WAJIB
+│  menjadi Rp 875.000                  │
+│                                      │
+│  ┌────────────────────────────────┐  │
+│  │          Simpan                │  │
+│  └────────────────────────────────┘  │
+└──────────────────────────────────────┘
+```
+
+| Aturan | Perilaku |
+| --- | --- |
+| Pratinjau total | **Wajib** tampil sebelum simpan — pemilik melihat efek uangnya lebih dulu |
+| Lunas → DP | Bila sebelumnya **Lunas** dan ongkir ditagihkan, status berubah jadi **DP**, catatan "Total bertambah karena ongkir" |
+| Riwayat | Setiap perubahan dicatat: `Total diubah 12 Nov: Rp 850.000 → Rp 875.000 (ongkir Rp 25.000)` |
+| Ongkir ke kurir | Tidak mengubah total butik sama sekali; hanya catatan |
+
 
 ## Catat Pembayaran (lembar bawah dari layar ini)
 

@@ -68,12 +68,18 @@ Pilihan baru di daftar Pengaturan:
 
 | Pilihan | Isi |
 | --- | --- |
-| **Sapaan resi** | `Pagi` · `Siang` · `Sore` · `Malam` · `(tanpa sapaan)`, dicetak `- Sore -` |
+| **Sapaan resi** | **Otomatis dari jam** (Pagi/Siang/Sore/Malam). Hanya sakelar `Tampilkan sapaan: Ya/Tidak` — tidak dipilih manual (B-09) |
 | **Rekening tujuan** | Boleh **2 rekening** ditampilkan di resi (contoh: BNI + BCA); satu ditandai **utama** |
-| **Format resi** | `Thermal 58 mm` · `Thermal 80 mm` · `PDF A5` |
+| **Format resi** | `PDF A5` (satu-satunya output MVP). Pilihan `Thermal 58/80 mm` diberi label **"to be develop"** dan tidak bisa dipilih |
 | **Baris tambahan resi** | Sakelar: `Nomor resi` · `Rincian diskon` · `Pembayaran & sisa`. Dimatikan = resi persis seperti contoh |
-| **Uji printer** | Mencetak contoh resi; hasil berhasil/gagal ditampilkan jelas |
+| **Ongkir** | `Selalu tampilkan baris ongkir: Ya` (bawaan Ya, sesuai B-10) |
 | **Bazar** | Tautan ke layar Bazar (15) |
 
 Alamat resi kini punya kolom terpisah: **alamat (2 baris)**, **kota + kode pos**, dan **telepon**
 (maksimal 2) — mengikuti susunan contoh resi.
+
+### Khusus fitur *to be develop*
+
+Bagian **"Segera hadir"** di bawah Pengaturan, dipisah garis, berisi satu baris:
+**"Cetak printer thermal — sedang disiapkan"**. Tidak ada tombol aktif, tidak ada tautan palsu.
+Ini memberi tahu fitur datang tanpa membuat pengguna menebak.

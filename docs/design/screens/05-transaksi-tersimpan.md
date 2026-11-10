@@ -62,7 +62,7 @@
 | Tambahan | Aturan |
 | --- | --- |
 | Baris status | `Lunas` / `DP — sisa Rp 159.000` / `Belum dibayar` tepat di bawah angka total |
-| Tombol **Cetak** | Muncul di atas "Buat Resi" **hanya bila** printer sudah teruji (Phase 5) |
+| Tombol **Cetak** | **Tidak ada di MVP.** Cetak thermal masuk *to be develop* (B-02); resi berupa PDF |
 | Nomor urut | `#7` hari itu ditampilkan kecil di samping nomor resi |
 
 Bila masih ada transaksi lain yang diparkir, pesan penutup menambahkan:

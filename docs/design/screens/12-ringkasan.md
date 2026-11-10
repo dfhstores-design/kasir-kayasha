@@ -41,6 +41,18 @@
 | Uang yang diterima | Σ pembayaran tercatat hari ini (termasuk DP) |
 | Sisa pembayaran pesanan | Σ sisa tagihan seluruh PO yang belum lunas (tidak dibatasi hari ini) |
 
+## Ongkir menyusul (keputusan B-10)
+
+Pesanan berstatus `belum_ditentukan` **tidak** punya sisa tagihan yang pasti. Karena itu:
+
+- Angka **Sisa pembayaran pesanan** hanya memuat pesanan yang ongkirnya sudah pasti.
+- Di bawahnya ditambahkan satu baris peringatan:
+  **"2 pesanan ongkirnya belum ditentukan — sisa tagihan bisa bertambah."**
+- Bila tidak ada, baris itu tidak tampil.
+
+Alasan: memasukkan pesanan tanpa ongkir ke "sisa pasti" akan membuat pemilik mengira uang yang
+akan diterima sudah tetap, padahal masih bisa bertambah.
+
 ## Aturan
 
 - **Nilai pesanan dan uang masuk dibedakan jelas** — dua kartu berbeda, dengan keterangan kecil.

@@ -160,9 +160,10 @@ Pertanyaan di atas tidak menghalangi Phase 1 dan Phase 2.
 | Phase 3 | Katalog + stok gudang + penjualan langsung (lokal/offline) | Belum |
 | **Phase 3B** | **Bazar (alokasi & tutup), parkir transaksi (maks 3)** | Belum |
 | Phase 4 | Pre-order, DP/pelunasan, status pesanan, ongkir, diskon | Belum |
-| Phase 5 | Profil usaha, logo, rekening, **resi thermal 58/80 mm** + PDF, uji printer | Belum |
+| Phase 5 | Profil usaha, logo, rekening, **resi PDF** (susunan mengikuti contoh), berbagi | Belum |
 | Phase 6 | Sinkronisasi D1 + unggah foto R2 | Belum |
 | Phase 7 | QA, backup, deployment, panduan pemilik | Belum |
+| **To be develop** | Cetak **printer thermal 58/80 mm** via Web Bluetooth — belum masuk MVP | Ditunda |
 
 ### Hasil Phase 1 (titik lanjut)
 
@@ -188,9 +189,20 @@ Implementasi Phase 2 ke atas **mengikuti** dokumen di atas.
 | B-06 | Jenis transaksi: **Tunai / Transfer Bank / QRIS** |
 | B-07 | Status transaksi: **Lunas / DP / Belum dibayar** — berlaku juga untuk penjualan biasa |
 | B-08 | **Bazar** dengan stok berbeda dari stok gudang |
+| B-09 | Sapaan resi **otomatis mengikuti jam** (bukan pilihan manual) |
+| B-10 | **Ongkir selalu tampil** di resi, termasuk Rp0; ongkir **boleh dihitung kemudian** (`Belum ditentukan`) |
+
+### Perubahan keputusan lama
+
+| Keputusan | Sebelumnya | Sekarang | Alasan |
+| --- | --- | --- | --- |
+| B-02 | Printer thermal 58/80 mm sebagai fitur | **PDF dulu; cetak thermal masuk *to be develop*** | Pemilik memutuskan printer dikembangkan kemudian |
+| Resi | Thermal 58 mm format utama | **PDF A5 format utama**; susunan baris tetap sama | Sama |
+| Pengecualian total terkunci | Tidak ada | **Satu pengecualian**: tambah ongkir setelah pembayaran pertama boleh mengubah total, dicatat sebagai riwayat | B-10: ongkir bisa dihitung kemudian setelah bazar |
 
 Layar bertambah: **15 Bazar**, **16 Alokasi Bazar**, **17 Tutup Bazar**.
 Phase baru: **3B** (bazar + parkir).
+Phase 5 kini hanya PDF; **Phase 5B (to be develop)** untuk printer thermal.
 
 ## 9. Kriteria penerimaan MVP (13 butir)
 

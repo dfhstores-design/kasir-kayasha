@@ -51,6 +51,7 @@ Contoh: `PHASE-03-2026-11-12-2035.md`
 | 2026-11-10 12:35 | [PHASE-00-2026-11-10-1235.md](PHASE-00-2026-11-10-1235.md) | Phase 0 — audit repo, penetapan workspace lokal + repo + Drive, brief proyek, kuota resmi |
 | 2026-11-10 13:05 | [PHASE-01-2026-11-10-1305.md](PHASE-01-2026-11-10-1305.md) | Phase 1 — 5 alur pengguna, spesifikasi visual (kontras terukur), 14 layar + wireframe |
 | 2026-11-10 13:45 | [PHASE-01B-2026-11-10-1345.md](PHASE-01B-2026-11-10-1345.md) | Phase 1B — bazar & stok, parkir maks 3, jenis/status transaksi, resi thermal 58/80 mm (+3 layar → 17) |
+| 2026-11-10 13:50 | [PHASE-01C-2026-11-10-1350.md](PHASE-01C-2026-11-10-1350.md) | Phase 1C — PDF sebagai output resi, sapaan otomatis dari jam, ongkir 0/nominal/belum ditentukan |
 
 > **Catatan urutan rilis:** commit Phase 0 yang dipush ke GitHub (10 Nov 12:26 WIB) masih memuat
 > tabel di atas tanpa baris PHASE-01; baris tersebut ditambahkan pada commit Phase 1. Isi catatan

@@ -32,6 +32,11 @@
 │  Jenis transaksi                     │
 │  [ Tunai ] [ Transfer ] [ QRIS ]     │  ← pilih satu
 │                                      │
+│  Ongkos kirim                        │  ← selalu tampil (B-10)
+│  [ Ambil sendiri Rp 0 ] [ Kirim ]    │
+│  [ Dibayar kurir ] [ Belum tentu ]   │
+│  Ongkir  [ Rp      0 ]               │  ← hanya bila "Kirim"
+│                                      │
 │  Status bayar                        │
 │  [ Lunas ] [ DP ] [ Belum dibayar ]  │  ← pilih satu
 │  Dibayar sekarang  [ Rp 560.000 ]    │  ← hanya bila DP/Belum dibayar
