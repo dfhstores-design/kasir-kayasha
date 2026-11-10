@@ -6,13 +6,13 @@
  * - transaksi + item + pembayaran + pengurangan stok ditulis dalam SATU transaksi DB
  * - tidak ada operasi hapus permanen untuk transaksi
  */
-import { getDB, type BazarItemRecord, type BazarRecord, type FotoRecord, type KeranjangTertahanRecord, type PembayaranRecord, type ProdukRecord, type SettingsRecord, type TransaksiRecord, type ItemTransaksiRecord, type UUID } from "./schema.ts";
+import { getDB, type BazarItemRecord, type BazarRecord, type BiayaBazarRecord, type KategoriBiaya, type FotoRecord, type KeranjangTertahanRecord, type PembayaranRecord, type ProdukRecord, type SettingsRecord, type TransaksiRecord, type ItemTransaksiRecord, type UUID } from "./schema.ts";
 import { hitungSaldoBazar } from "../lib/stok.ts";
 import { pesanStok, validasiSumberStok, type SumberStok } from "../lib/sumberStok.ts";
 import type { Rupiah } from "../lib/money.ts";
 
 // Tipe dipakai ulang oleh layar; diekspor ulang agar konsumen cukup mengimpor dari sini.
-export type { BazarRecord, FotoRecord, KeranjangTertahanRecord, ProdukRecord, SettingsRecord, TransaksiRecord, UUID };
+export type { BazarRecord, BiayaBazarRecord, KategoriBiaya, FotoRecord, KeranjangTertahanRecord, ProdukRecord, SettingsRecord, TransaksiRecord, UUID };
 
 export const SETTINGS_KOSONG: SettingsRecord = {
   id: "utama",
@@ -127,7 +127,12 @@ export async function daftarBazar(): Promise<BazarRecord[]> {
   return semua.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
 }
 
-export async function buatBazar(nama: string, mulai: string | null, selesai: string | null): Promise<BazarRecord> {
+export async function buatBazar(
+  nama: string,
+  mulai: string | null,
+  selesai: string | null,
+  detail: { lokasi?: string | null; catatan?: string | null } = {},
+): Promise<BazarRecord> {
   const db = await getDB();
   const tx = db.transaction("bazars", "readwrite");
   const sudahAktif = await tx.store.index("by-status").getAll("aktif");
@@ -140,6 +145,8 @@ export async function buatBazar(nama: string, mulai: string | null, selesai: str
     nama,
     mulai,
     selesai,
+    lokasi: detail.lokasi ?? null,
+    catatan: detail.catatan ?? null,
     status: "aktif",
     ringkasanTerjual: null,
     ringkasanDibawa: null,
@@ -150,6 +157,50 @@ export async function buatBazar(nama: string, mulai: string | null, selesai: str
   await tx.store.put(bazar);
   await tx.done;
   return bazar;
+}
+
+/* ------------------------------------------------------------ biaya bazar */
+
+export async function daftarBiaya(bazarId: UUID): Promise<BiayaBazarRecord[]> {
+  const db = await getDB();
+  const semua = await db.getAllFromIndex("bazar_biaya", "by-bazar", bazarId);
+  return semua.sort((a, b) => (a.tanggal === b.tanggal ? a.createdAt.localeCompare(b.createdAt) : a.tanggal.localeCompare(b.tanggal)));
+}
+
+export type HasilBiaya =
+  | { ok: true; biaya: BiayaBazarRecord }
+  | { ok: false; pesan: string };
+
+/** Mencatat pengeluaran bazar. Nominal wajib integer > 0. */
+export async function tambahBiaya(
+  bazarId: UUID,
+  nilai: { kategori: KategoriBiaya; judul: string; nominal: number; tanggal: string; catatan: string | null },
+): Promise<HasilBiaya> {
+  if (nilai.judul.trim().length < 2) return { ok: false, pesan: "Isi judul biaya." };
+  if (!Number.isInteger(nilai.nominal) || nilai.nominal <= 0) {
+    return { ok: false, pesan: "Nominal harus lebih dari 0." };
+  }
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(nilai.tanggal)) {
+    return { ok: false, pesan: "Tanggal tidak valid." };
+  }
+  const db = await getDB();
+  const biaya: BiayaBazarRecord = {
+    id: buatId(),
+    bazarId,
+    kategori: nilai.kategori,
+    judul: nilai.judul.trim(),
+    nominal: nilai.nominal,
+    tanggal: nilai.tanggal,
+    catatan: nilai.catatan?.trim() || null,
+    createdAt: new Date().toISOString(),
+  };
+  await db.put("bazar_biaya", biaya);
+  return { ok: true, biaya };
+}
+
+export async function hapusBiaya(id: UUID): Promise<void> {
+  const db = await getDB();
+  await db.delete("bazar_biaya", id);
 }
 
 export async function itemBazar(bazarId: UUID): Promise<BazarItemRecord[]> {
@@ -208,7 +259,7 @@ export async function adaParkirUntukBazar(bazarId: UUID): Promise<boolean> {
 }
 
 export type HasilTutupBazar =
-  | { ok: true; dikembalikan: number; hilang: number }
+  | { ok: true; dikembalikan: number; hilang: number; selisih: number }
   | { ok: false; pesan: string };
 
 /**
@@ -235,11 +286,11 @@ export async function tutupBazar(
   for (const item of items) {
     const sisa = hitungSaldoBazar(item);
     const kembali = dikembalikanPerProduk.get(item.produkId) ?? sisa;
-    if (!Number.isInteger(kembali) || kembali < 0 || kembali > sisa) {
-      return { ok: false, pesan: "Jumlah yang dikembalikan melebihi sisa bazar." };
+    if (!Number.isInteger(kembali) || kembali < 0) {
+      return { ok: false, pesan: "Jumlah yang dikembalikan tidak valid." };
     }
     totalDikembalikan += kembali;
-    totalHilang += sisa - kembali;
+    totalHilang += Math.max(0, sisa - kembali);
 
     const produk = produkSemua.find((p) => p.id === item.produkId);
     if (produk) perubahan.push({ produkId: produk.id, stokGudangBaru: produk.stokGudang + kembali });
@@ -249,6 +300,8 @@ export async function tutupBazar(
   if (!bazar) return { ok: false, pesan: "Bazar tidak ditemukan." };
 
   const ringkas = await ringkasanBazar(bazarId);
+
+  let totalSelisih = 0;
 
   const tx = db.transaction(["products", "bazar_items", "bazars"], "readwrite");
   for (const p of perubahan) {
@@ -260,11 +313,16 @@ export async function tutupBazar(
   for (const item of items) {
     const sisa = hitungSaldoBazar(item);
     const kembali = dikembalikanPerProduk.get(item.produkId) ?? sisa;
+    // Selisih = jumlah yang tidak kembali (termasuk beda hitung fisik).
+    const selisih = sisa - kembali;
+    totalSelisih += Math.abs(selisih);
     await tx.objectStore("bazar_items").put({
       ...item,
       ditarik: item.ditarik + kembali,
       // Sisa yang tidak dikembalikan dianggap terjual habis di lokasi bazar.
-      terjual: item.terjual + (sisa - kembali),
+      terjual: item.terjual + Math.max(0, selisih),
+      // Bila fisik lebih banyak dari tercatat, selisihnya negatif (barang lebih).
+      selisih: selisih,
       updatedAt: waktu,
     });
   }
@@ -278,7 +336,7 @@ export async function tutupBazar(
   });
   await tx.done;
 
-  return { ok: true, dikembalikan: totalDikembalikan, hilang: totalHilang };
+  return { ok: true, dikembalikan: totalDikembalikan, hilang: totalHilang, selisih: totalSelisih };
 }
 
 /** Menarik sebagian barang dari bazar kembali ke gudang (tanpa menutup bazar). */
@@ -341,6 +399,7 @@ export async function alokasikanKeBazar(
       dibawa: jumlah,
       terjual: 0,
       ditarik: 0,
+      selisih: null,
       updatedAt: now,
     });
   }

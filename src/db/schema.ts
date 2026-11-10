@@ -22,7 +22,7 @@ import type { Sapaan } from "../lib/sapaan.ts";
 import type { StatusBayar } from "../lib/keranjang.ts";
 
 export const DB_NAME = "kasir-kayasha";
-export const DB_VERSION = 1;
+export const DB_VERSION = 2;
 
 export type UUID = string;
 
@@ -83,12 +83,46 @@ export interface BazarRecord {
   nama: string;
   mulai: string | null;
   selesai: string | null;
+  /** Lokasi/tempat bazar (opsional). */
+  lokasi: string | null;
+  /** Catatan bebas (opsional). */
+  catatan: string | null;
   /** "aktif" atau "selesai". Hanya satu yang aktif. */
   status: "aktif" | "selesai";
   ringkasanTerjual: number | null;
   ringkasanDibawa: number | null;
   ringkasanSisa: number | null;
   ditutupPada: string | null;
+  createdAt: string;
+}
+
+/** Kategori biaya bazar (daftar tetap, sesuai keputusan pemilik). */
+export type KategoriBiaya =
+  | "sewa_booth"
+  | "transport"
+  | "konsumsi"
+  | "perlengkapan"
+  | "lainnya";
+
+export const KATEGORI_BIAYA: readonly KategoriBiaya[] = [
+  "sewa_booth",
+  "transport",
+  "konsumsi",
+  "perlengkapan",
+  "lainnya",
+] as const;
+
+/** Satu pengeluaran untuk sebuah bazar. Tidak memengaruhi total transaksi pelanggan. */
+export interface BiayaBazarRecord {
+  id: UUID;
+  bazarId: UUID;
+  kategori: KategoriBiaya;
+  judul: string;
+  /** Integer Rupiah, selalu > 0. */
+  nominal: number;
+  /** Tanggal lokal "YYYY-MM-DD". */
+  tanggal: string;
+  catatan: string | null;
   createdAt: string;
 }
 
@@ -99,6 +133,8 @@ export interface BazarItemRecord {
   dibawa: number;
   terjual: number;
   ditarik: number;
+  /** Selisih hasil hitung fisik saat penutupan (fisik − sisa tercatat). */
+  selisih: number | null;
   updatedAt: string;
 }
 
@@ -201,6 +237,11 @@ export interface KasirDB extends DBSchema {
     value: BazarItemRecord;
     indexes: { "by-bazar": UUID; "by-produk": UUID };
   };
+  bazar_biaya: {
+    key: UUID;
+    value: BiayaBazarRecord;
+    indexes: { "by-bazar": UUID; "by-tanggal": string };
+  };
   transactions: {
     key: UUID;
     value: TransaksiRecord;
@@ -258,6 +299,12 @@ export function getDB(): Promise<IDBPDatabase<KasirDB>> {
           const s = db.createObjectStore("bazar_items", { keyPath: "id" });
           s.createIndex("by-bazar", "bazarId");
           s.createIndex("by-produk", "produkId");
+        }
+
+        if (!db.objectStoreNames.contains("bazar_biaya")) {
+          const s = db.createObjectStore("bazar_biaya", { keyPath: "id" });
+          s.createIndex("by-bazar", "bazarId");
+          s.createIndex("by-tanggal", "tanggal");
         }
 
         if (!db.objectStoreNames.contains("transactions")) {

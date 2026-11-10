@@ -130,7 +130,7 @@ describe("tutupBazar", () => {
     // sisa 7, semua dikembalikan
     const h = await tutupBazar(b.id, new Map());
 
-    expect(h).toEqual({ ok: true, dikembalikan: 7, hilang: 0 });
+    expect(h).toEqual({ ok: true, dikembalikan: 7, hilang: 0, selisih: 0 });
     expect(await stokGudang(p.id)).toBe(37); // 40 − 10 + 7
     expect(await saldoBazarProduk(b.id, p.id)).toBe(0);
 
@@ -147,21 +147,38 @@ describe("tutupBazar", () => {
     const b = await buatBazar("Pameran", null, null);
     await alokasikanKeBazar(b.id, p.id, 10);
 
-    // hanya 4 dari 10 yang kembali
+    // hanya 4 dari 10 yang kembali → selisih 6 tercatat
     const h = await tutupBazar(b.id, new Map([[p.id, 4]]));
 
-    expect(h).toEqual({ ok: true, dikembalikan: 4, hilang: 6 });
+    expect(h).toEqual({ ok: true, dikembalikan: 4, hilang: 6, selisih: 6 });
     expect(await stokGudang(p.id)).toBe(34);
     expect(await saldoBazarProduk(b.id, p.id)).toBe(0);
+
+    const item = (await itemBazar(b.id))[0];
+    expect(item?.selisih).toBe(6);
   });
 
-  it("menolak mengembalikan lebih dari sisa", async () => {
+  it("hitung ulang fisik LEBIH banyak dikembalikan apa adanya dan selisih negatif", async () => {
+    const p = await produkBaru("Blus", 40);
+    const b = await buatBazar("Pameran", null, null);
+    await alokasikanKeBazar(b.id, p.id, 10);
+
+    // fisik 12 (lebih 2) → gudang bertambah 12
+    const h = await tutupBazar(b.id, new Map([[p.id, 12]]));
+
+    expect(h).toEqual({ ok: true, dikembalikan: 12, hilang: 0, selisih: 2 });
+    expect(await stokGudang(p.id)).toBe(42);
+    const item = (await itemBazar(b.id))[0];
+    expect(item?.selisih).toBe(-2);
+  });
+
+  it("menolak angka pengembalian negatif", async () => {
     const p = await produkBaru("Blus", 40);
     const b = await buatBazar("Pameran", null, null);
     await alokasikanKeBazar(b.id, p.id, 5);
 
-    const h = await tutupBazar(b.id, new Map([[p.id, 6]]));
-    expect(h).toEqual({ ok: false, pesan: "Jumlah yang dikembalikan melebihi sisa bazar." });
+    const h = await tutupBazar(b.id, new Map([[p.id, -1]]));
+    expect(h.ok).toBe(false);
     expect(await stokGudang(p.id)).toBe(35);
   });
 

@@ -56,6 +56,7 @@ Contoh: `PHASE-03-2026-11-12-2035.md`
 | 2026-11-10 14:45 | [PHASE-02B-2026-11-10-1445.md](PHASE-02B-2026-11-10-1445.md) | Phase 2B — aturan stok gudang vs bazar dipaksa oleh tipe & repository (+14 tes → 93) |
 | 2026-11-10 15:10 | [PHASE-03-2026-11-10-1510.md](PHASE-03-2026-11-10-1510.md) | Phase 3 — katalog + foto (progres wajib, aman >80 MB) + penjualan langsung (156 tes) |
 | 2026-11-10 16:00 | [PHASE-03B-2026-11-10-1600.md](PHASE-03B-2026-11-10-1600.md) | Phase 3B — bazar (buka/alokasi/tutup) + parkir maks 3 bernama (165 tes) |
+| 2026-11-10 17:00 | [PHASE-03C-2026-11-10-1700.md](PHASE-03C-2026-11-10-1700.md) | Phase 3C — role admin/kasir (PIN), biaya bazar, hitung ulang sisa, ringkasan laba (197 tes) — **merevisi perintah utama** |
 
 > **Catatan urutan rilis:** commit Phase 0 yang dipush ke GitHub (10 Nov 12:26 WIB) masih memuat
 > tabel di atas tanpa baris PHASE-01; baris tersebut ditambahkan pada commit Phase 1. Isi catatan

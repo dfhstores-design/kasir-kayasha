@@ -9,14 +9,21 @@ interface Props {
   storagePermanen: boolean | null;
   /** Bazar yang sedang aktif (null = penjualan memakai stok gudang). */
   bazar: BazarRecord | null;
-  buka: (nama: Layar["nama"]) => void;
+  /** Peran aktif: kasir dibatasi pada transaksi bazar aktif saja. */
+  peran: "kasir" | "admin";
+  onMintaAdmin: () => void;
+  onKeluarAdmin: () => void;
+  /** Membuka Biaya Bazar; App yang menyertakan objek bazar aktif. */
+  onBiayaBazar: () => void;
+  /** Layar tanpa parameter saja; layar yang butuh objek dibuat di App. */
+  buka: (nama: Exclude<Layar["nama"], "biaya-bazar" | "detail-barang" | "form-barang" | "alokasi-bazar" | "tutup-bazar" | "tersimpan">) => void;
 }
 
 /**
  * Beranda — docs/design/screens/01-beranda.md.
  * Lima tujuan besar, panel bazar, dan status simpan. Tidak ada menu tersembunyi.
  */
-export default function Beranda({ settings, storagePermanen, bazar, buka }: Props) {
+export default function Beranda({ settings, storagePermanen, bazar, peran, onMintaAdmin, onKeluarAdmin, onBiayaBazar, buka }: Props) {
   const [jumlahBarang, setJumlahBarang] = useState<number | null>(null);
   const [parkir, setParkir] = useState(0);
 
@@ -58,9 +65,11 @@ export default function Beranda({ settings, storagePermanen, bazar, buka }: Prop
             BAZAR AKTIF
           </span>
           <div className="h2">{bazar.nama}</div>
-          <span className="soft">Ketuk untuk mengatur barang bazar</span>
+          <span className="soft">
+            {peran === "admin" ? "Ketuk untuk mengatur barang & biaya bazar" : "Ketuk untuk melihat bazar"}
+          </span>
         </button>
-      ) : (
+      ) : peran === "admin" ? (
         <button
           type="button"
           className="card"
@@ -72,25 +81,74 @@ export default function Beranda({ settings, storagePermanen, bazar, buka }: Prop
             Buka Bazar
           </div>
         </button>
+      ) : (
+        <div className="panel panel--warn" role="status">
+          <strong>Belum ada bazar aktif.</strong>
+          <p style={{ margin: "0.25rem 0 0" }}>Minta admin membuka bazar.</p>
+        </div>
       )}
 
       <div className="tiles">
-        <button type="button" className="tile tile--hero" onClick={() => buka("pilih-barang")}>
-          Jual Barang
-        </button>
+        {peran === "admin" || bazar ? (
+          <button type="button" className="tile tile--hero" onClick={() => buka("pilih-barang")}>
+            Jual Barang
+          </button>
+        ) : (
+          <button type="button" className="tile tile--hero" disabled aria-describedby="alasan-jual">
+            Jual Barang
+          </button>
+        )}
         <button type="button" className="tile" onClick={() => buka("pesanan")}>
           Pesanan
         </button>
-        <button type="button" className="tile" onClick={() => buka("barang")}>
-          Barang
-        </button>
-        <button type="button" className="tile" onClick={() => buka("ringkasan")}>
-          Ringkasan
-        </button>
-        <button type="button" className="tile" onClick={() => buka("pengaturan")}>
-          Pengaturan
-        </button>
+
+        {peran === "admin" ? (
+          <>
+            <button type="button" className="tile" onClick={() => buka("barang")}>
+              Barang
+            </button>
+            <button type="button" className="tile" onClick={() => buka("ringkasan")}>
+              Ringkasan
+            </button>
+            <button type="button" className="tile" onClick={() => buka("pengaturan")}>
+              Pengaturan
+            </button>
+          </>
+        ) : (
+          <button type="button" className="tile" onClick={onMintaAdmin}>
+            Masuk Admin
+          </button>
+        )}
       </div>
+
+      {peran === "kasir" && !bazar && (
+        <p className="hint" id="alasan-jual" style={{ margin: 0 }}>
+          Kasir hanya mencatat transaksi saat ada bazar aktif.
+        </p>
+      )}
+
+      {peran === "admin" && (
+        <>
+          {bazar && (
+            <button
+              type="button"
+              className="btn btn--ghost btn--small"
+              onClick={onBiayaBazar}
+            >
+              Biaya Bazar
+            </button>
+          )}
+          <button type="button" className="btn btn--ghost btn--small" onClick={() => buka("atur-pin")}>
+            Atur PIN Admin
+          </button>
+          <p className="soft" style={{ margin: 0 }}>
+            Masuk sebagai admin.
+          </p>
+          <button type="button" className="btn btn--ghost btn--small" onClick={onKeluarAdmin}>
+            Keluar ke mode kasir
+          </button>
+        </>
+      )}
 
       {jumlahBarang === 0 && (
         <p className="soft" style={{ margin: 0 }}>

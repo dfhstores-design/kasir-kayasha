@@ -10,23 +10,32 @@ import TransaksiTersimpanLayar from "./screens/TransaksiTersimpan.tsx";
 import Bazar from "./screens/Bazar.tsx";
 import AlokasiBazar from "./screens/AlokasiBazar.tsx";
 import TutupBazar from "./screens/TutupBazar.tsx";
+import MasukAdmin from "./screens/MasukAdmin.tsx";
+import BiayaBazar from "./screens/BiayaBazar.tsx";
+import Ringkasan from "./screens/Ringkasan.tsx";
+import { AksesAdminSaja } from "./screens/AksesAdmin.tsx";
+import AturPin from "./screens/AturPin.tsx";
 import {
   ambilParkir,
   ambilSettings,
   bazarAktif,
   buatId,
+  daftarBiaya,
   daftarParkir,
   hapusParkir,
   saldoSemuaBazar,
   simpanParkir,
   simpanProduk,
+  simpanSettings,
   type BazarRecord,
+  type BiayaBazarRecord,
   type ProdukRecord,
   type SettingsRecord,
 } from "./db/repositori.ts";
 import { mintaPenyimpananPermanen } from "./pwa/register.ts";
 import type { OngkirMode } from "./lib/ongkir.ts";
 import type { StatusBayar } from "./lib/keranjang.ts";
+import { khususAdmin, type Peran } from "./lib/peran.ts";
 import { simpanPenjualan, type JenisBayar, type TransaksiTersimpan } from "./lib/penjualan.ts";
 import { bikinIsiKeranjang, type IsiKeranjang } from "./lib/isiKeranjang.ts";
 import { formatJam } from "./lib/tanggal.ts";
@@ -44,7 +53,10 @@ export type Layar =
   | { nama: "alokasi-bazar"; bazar: BazarRecord }
   | { nama: "tutup-bazar"; bazar: BazarRecord }
   | { nama: "ringkasan" }
-  | { nama: "pengaturan" };
+  | { nama: "pengaturan" }
+  | { nama: "masuk-admin" }
+  | { nama: "biaya-bazar"; bazar: BazarRecord }
+  | { nama: "atur-pin" };
 
 interface NilaiKeranjang {
   diskonTotal: number;
@@ -74,6 +86,9 @@ export default function App() {
   const [namaPembeli, setNamaPembeli] = useState("");
   const [parkir, setParkir] = useState<ParkirRingkas[]>([]);
   const [sedangMenyimpan, setSedangMenyimpan] = useState(false);
+  /** Peran aktif. Bawaan kasir; naik ke admin setelah PIN benar. */
+  const [peran, setPeran] = useState<Peran>("kasir");
+  const [biaya, setBiaya] = useState<BiayaBazarRecord[]>([]);
   const [pesanSimpan, setPesanSimpan] = useState<string | null>(null);
 
   /** Bazar aktif + saldo per barang. Saat null, penjualan memakai stok gudang. */
@@ -110,10 +125,12 @@ export default function App() {
       const b = await bazarAktif().catch(() => undefined);
       const saldo = b ? await saldoSemuaBazar(b.id).catch(() => new Map<string, number>()) : new Map<string, number>();
       const daftar = await daftarParkir().catch(() => []);
+      const daftarBiayaBazar = b ? await daftarBiaya(b.id).catch(() => []) : [];
       if (!hidup) return;
       setSettings(s);
       setBazar(b ?? null);
       setSaldoBazar(saldo);
+      setBiaya(daftarBiayaBazar);
       setParkir(
         daftar.map((p) => ({
           id: p.id,
@@ -333,6 +350,7 @@ export default function App() {
 
   const tampilAppbar = layar.nama !== "beranda" && layar.nama !== "tersimpan";
 
+
   return (
     <div className="app">
       {tampilAppbar && (
@@ -363,7 +381,28 @@ export default function App() {
           settings={settings}
           storagePermanen={storagePermanen}
           bazar={bazar}
-          buka={(nama) => setLayar({ nama } as Layar)}
+          peran={peran}
+          onMintaAdmin={() => setLayar({ nama: "masuk-admin" })}
+          onBiayaBazar={() => {
+            if (bazar) setLayar({ nama: "biaya-bazar", bazar });
+          }}
+          onKeluarAdmin={() => {
+            setPeran("kasir");
+            setLayar({ nama: "beranda" });
+          }}
+          buka={(nama) => {
+            // Kasir tidak boleh membuka layar admin.
+            if (peran !== "admin" && khususAdmin(nama)) {
+              setLayar({ nama: "masuk-admin" });
+              return;
+            }
+            // Kasir hanya menjual bila ada bazar aktif.
+            if (peran !== "admin" && nama === "pilih-barang" && !bazar) {
+              setLayar({ nama: "beranda" });
+              return;
+            }
+            setLayar({ nama } as Layar);
+          }}
         />
       )}
 
@@ -485,8 +524,55 @@ export default function App() {
         />
       )}
 
-      {(layar.nama === "pesanan" || layar.nama === "ringkasan" || layar.nama === "pengaturan") && (
+      {(layar.nama === "pesanan" || layar.nama === "pengaturan") && (
         <Placeholder nama={layar.nama} settings={settings} storagePermanen={storagePermanen} />
+      )}
+
+      {layar.nama === "atur-pin" &&
+        (peran === "admin" ? (
+          <AturPin
+            pinAda={!!settings?.pinHash}
+            onSimpan={async (hash) => {
+              if (!settings) return;
+              await simpanSettings({ ...settings, pinHash: hash });
+              const s = await ambilSettings();
+              setSettings(s);
+            }}
+          />
+        ) : (
+          <AksesAdminSaja bazarAktifAda={!!bazar} onMintaAdmin={() => setLayar({ nama: "masuk-admin" })} />
+        ))}
+
+      {layar.nama === "masuk-admin" && (
+        <MasukAdmin
+          pinHash={settings?.pinHash ?? null}
+          onMasukAdmin={() => {
+            setPeran("admin");
+            setLayar({ nama: "beranda" });
+          }}
+          onBatal={() => setLayar({ nama: "beranda" })}
+        />
+      )}
+
+      {layar.nama === "ringkasan" &&
+        (peran === "admin" ? (
+          <Ringkasan bazar={bazar} />
+        ) : (
+          <AksesAdminSaja bazarAktifAda={!!bazar} onMintaAdmin={() => setLayar({ nama: "masuk-admin" })} />
+        ))}
+
+      {layar.nama === "biaya-bazar" && (
+        <BiayaBazar
+          bazar={layar.bazar}
+          biaya={biaya}
+          peran={peran}
+          onUbah={() => {
+            // Muat ulang HANYA daftar biaya agar layar langsung menampilkan hasil simpan.
+            daftarBiaya(layar.bazar.id)
+              .then(setBiaya)
+              .catch(() => undefined);
+          }}
+        />
       )}
     </div>
   );

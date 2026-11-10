@@ -159,7 +159,8 @@ Pertanyaan di atas tidak menghalangi Phase 1 dan Phase 2.
 | Phase 2 | Fondasi proyek (Vite + React + TS), PWA, skema IndexedDB, persiapan Cloudflare/GitHub | **Selesai — 10 Nov 2026** |
 | Phase 3 | Katalog + foto + penjualan langsung (lokal/offline) | **Selesai — 10 Nov 2026** |
 | Phase 3B | Bazar (alokasi & tutup), parkir transaksi (maks 3 bernama) | **Selesai — 10 Nov 2026** |
-| Phase 4 | Pre-order, DP/pelunasan, status pesanan, ongkir menyusul, ringkasan | Berikutnya |
+| **Phase 3C** | **Role admin/kasir (PIN), biaya bazar, hitung ulang sisa, ringkasan laba** | **Selesai — 10 Nov 2026** |
+| Phase 4 | Pre-order, DP/pelunasan, status pesanan, ongkir menyusul | Berikutnya |
 | Phase 5 | Profil usaha, logo, rekening, **resi PDF** (susunan mengikuti contoh), berbagi | Belum |
 | Phase 6 | Sinkronisasi D1 + unggah foto R2 | Belum |
 | Phase 7 | QA, backup, deployment, panduan pemilik | Belum |
@@ -191,6 +192,13 @@ Implementasi Phase 2 ke atas **mengikuti** dokumen di atas.
 | B-08 | **Bazar** dengan stok berbeda dari stok gudang |
 | B-09 | Sapaan resi **otomatis mengikuti jam** (bukan pilihan manual) |
 | B-10 | **Ongkir selalu tampil** di resi, termasuk Rp0; ongkir **boleh dihitung kemudian** (`Belum ditentukan`) |
+
+### Revisi perintah utama — Phase 3C (10 Nov 2026)
+
+Pemilik menyetujui revisi: **dua peran (admin & kasir)** dengan PIN lokal, serta **biaya bazar**
+dan **ringkasan laba**. Ini mengganti larangan "akun banyak pegawai / role bertingkat" pada
+perintah utama. Larangan lain (diskon persen, hapus permanen, billing, analitik) **tetap**.
+Rincian: [`docs/design/ROLE-BIAYA-RINGKASAN.md`](design/ROLE-BIAYA-RINGKASAN.md).
 
 ### Perubahan keputusan lama
 
