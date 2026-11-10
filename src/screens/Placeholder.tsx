@@ -1,11 +1,10 @@
 import type { SettingsRecord } from "../db/schema.ts";
 
 /** Layar yang masih berupa penanda fase (bukan salinan lengkap Layar App). */
-export type LayarPenanda = "pesanan" | "bazar" | "ringkasan" | "pengaturan";
+export type LayarPenanda = "pesanan" | "ringkasan" | "pengaturan";
 
 const KETERANGAN: Record<LayarPenanda, string> = {
   pesanan: "Pre-order dan pembayaran akan tersedia di Phase 4.",
-  bazar: "Bazar dan alokasi stok akan tersedia di Phase 3B.",
   ringkasan: "Ringkasan penjualan akan tersedia di Phase 4.",
   pengaturan: "Pengaturan butik dan logo akan tersedia di Phase 5.",
 };

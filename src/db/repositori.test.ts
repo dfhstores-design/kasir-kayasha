@@ -137,6 +137,7 @@ describe("parkir", () => {
     ongkirMode: "ambil_sendiri" as const,
     ongkirNominal: 0,
     jenisBayar: "tunai" as const,
+    bazarId: null,
   };
 
   it("menyimpan parkir beserta nama pembeli", async () => {

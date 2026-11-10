@@ -28,7 +28,25 @@ interface Props {
   onUbahDiskon: (produkId: UUID, diskonPerUnit: number) => void;
   onSimpan: () => void;
   sedangMenyimpan: boolean;
+  /** Nama pembeli, dipakai saat memarkir transaksi. */
+  namaPembeli: string;
+  onUbahNamaPembeli: (nama: string) => void;
+  /** Daftar transaksi tertahan (maks 3). */
+  parkir: ParkirRingkas[];
+  onParkir: () => void;
+  onLanjutkanParkir: (id: UUID) => void;
+  onHapusParkir: (id: UUID) => void;
 }
+
+export interface ParkirRingkas {
+  id: UUID;
+  namaPembeli: string;
+  jumlahBarang: number;
+  total: number;
+  jam: string;
+}
+
+export const MAKS_PARKIR_TAMPIL = 3;
 
 /**
  * Layar 4 — Keranjang (docs/design/screens/04-keranjang.md).
@@ -45,6 +63,12 @@ export default function Keranjang({
   onUbahDiskon,
   onSimpan,
   sedangMenyimpan,
+  namaPembeli,
+  onUbahNamaPembeli,
+  parkir,
+  onParkir,
+  onLanjutkanParkir,
+  onHapusParkir,
 }: Props) {
   // Nilai teks diturunkan dari state (bukan sinkron lewat efek) agar tidak ada
   // render berantai. `null` berarti "belum diketik" → tampilkan nilai dari state.
@@ -96,6 +120,30 @@ export default function Keranjang({
           <strong>Keranjang belum ada barang.</strong>
           <p style={{ margin: "0.25rem 0 0" }}>Pilih barang lewat tombol Jual Barang di beranda.</p>
         </div>
+
+        {parkir.length > 0 && (
+          <>
+            <span className="label">Tertahan ({parkir.length} dari {MAKS_PARKIR_TAMPIL})</span>
+            {parkir.map((p) => (
+              <div key={p.id} className="listrow">
+                <div style={{ flex: 1 }}>
+                  <strong>{p.namaPembeli}</strong>
+                  <div className="soft" style={{ fontSize: "0.95rem" }}>
+                    {p.jumlahBarang} barang · {formatRupiah(p.total)} · {p.jam}
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  className="btn btn--ghost btn--small"
+                  onClick={() => onLanjutkanParkir(p.id)}
+                  aria-label={`Lanjutkan keranjang ${p.namaPembeli}`}
+                >
+                  Lanjutkan
+                </button>
+              </div>
+            ))}
+          </>
+        )}
       </div>
     );
   }
@@ -117,6 +165,18 @@ export default function Keranjang({
   return (
     <>
       <div className="content">
+        <div>
+          <label htmlFor="nama-pembeli">Nama pembeli</label>
+          <input
+            id="nama-pembeli"
+            value={namaPembeli}
+            onChange={(e) => onUbahNamaPembeli(e.target.value)}
+            placeholder="Dipakai bila transaksi ditahan"
+            maxLength={20}
+            autoComplete="off"
+          />
+        </div>
+
         {keranjang.map((k) => {
           const subtotalBaris = k.hargaSatuan * k.kuantitas;
           const diskonBaris = k.diskonPerUnit * k.kuantitas;
@@ -315,6 +375,42 @@ export default function Keranjang({
             </div>
           )}
         </div>
+
+        {parkir.length > 0 && (
+          <div className="card">
+            <span className="label">
+              Tertahan ({parkir.length} dari {MAKS_PARKIR_TAMPIL})
+            </span>
+            {parkir.map((p) => (
+              <div key={p.id} className="listrow" style={{ marginBottom: "0.5rem", padding: "0.625rem" }}>
+                <div style={{ flex: 1 }}>
+                  <strong>{p.namaPembeli}</strong>
+                  <div className="soft" style={{ fontSize: "0.95rem" }}>
+                    {p.jumlahBarang} barang · {formatRupiah(p.total)} · {p.jam}
+                  </div>
+                </div>
+                <div style={{ display: "flex", gap: "0.25rem" }}>
+                  <button
+                    type="button"
+                    className="btn btn--ghost btn--small"
+                    onClick={() => onLanjutkanParkir(p.id)}
+                    aria-label={`Lanjutkan keranjang ${p.namaPembeli}`}
+                  >
+                    Lanjutkan
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn--ghost btn--small"
+                    onClick={() => onHapusParkir(p.id)}
+                    aria-label={`Hapus parkir ${p.namaPembeli}`}
+                  >
+                    ✕
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       <div className="bottombar">
@@ -334,9 +430,24 @@ export default function Keranjang({
             Sisa tagihan {formatRupiahResi(bayar.ringkasan.sisa)}
           </p>
         )}
-        <button type="button" className="btn btn--primary" onClick={onSimpan} disabled={!bisaSimpan}>
-          {sedangMenyimpan ? "Menyimpan…" : "Simpan Transaksi"}
-        </button>
+        {parkir.length >= MAKS_PARKIR_TAMPIL && (
+          <p className="hint" style={{ margin: 0 }}>
+            Sudah ada 3 transaksi tertahan. Selesaikan salah satu dulu.
+          </p>
+        )}
+        <div className="grid2">
+          <button
+            type="button"
+            className="btn btn--ghost"
+            onClick={onParkir}
+            disabled={parkir.length >= MAKS_PARKIR_TAMPIL}
+          >
+            Parkir
+          </button>
+          <button type="button" className="btn btn--primary" onClick={onSimpan} disabled={!bisaSimpan}>
+            {sedangMenyimpan ? "Menyimpan…" : "Simpan"}
+          </button>
+        </div>
       </div>
     </>
   );

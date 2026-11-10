@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { bazarAktif, daftarParkir, daftarProduk, profilTerisi, type ProdukRecord } from "../db/repositori.ts";
+import { daftarParkir, daftarProduk, profilTerisi, type ProdukRecord } from "../db/repositori.ts";
 import type { SettingsRecord } from "../db/schema.ts";
 import type { BazarRecord } from "../db/schema.ts";
 import type { Layar } from "../App.tsx";
@@ -7,6 +7,8 @@ import type { Layar } from "../App.tsx";
 interface Props {
   settings: SettingsRecord | null;
   storagePermanen: boolean | null;
+  /** Bazar yang sedang aktif (null = penjualan memakai stok gudang). */
+  bazar: BazarRecord | null;
   buka: (nama: Layar["nama"]) => void;
 }
 
@@ -14,18 +16,14 @@ interface Props {
  * Beranda — docs/design/screens/01-beranda.md.
  * Lima tujuan besar, panel bazar, dan status simpan. Tidak ada menu tersembunyi.
  */
-export default function Beranda({ settings, storagePermanen, buka }: Props) {
+export default function Beranda({ settings, storagePermanen, bazar, buka }: Props) {
   const [jumlahBarang, setJumlahBarang] = useState<number | null>(null);
-  const [bazar, setBazar] = useState<BazarRecord | null>(null);
   const [parkir, setParkir] = useState(0);
 
   useEffect(() => {
     daftarProduk()
       .then((p: ProdukRecord[]) => setJumlahBarang(p.length))
       .catch(() => setJumlahBarang(null));
-    bazarAktif()
-      .then((b) => setBazar(b ?? null))
-      .catch(() => setBazar(null));
     daftarParkir()
       .then((p) => setParkir(p.length))
       .catch(() => setParkir(0));
@@ -49,10 +47,30 @@ export default function Beranda({ settings, storagePermanen, buka }: Props) {
         </div>
       )}
 
-      {bazar && (
-        <button type="button" className="card" style={{ textAlign: "left", font: "inherit", color: "inherit", cursor: "pointer" }} onClick={() => buka("bazar")}>
-          <span className="soft" style={{ fontWeight: 700 }}>BAZAR AKTIF</span>
+      {bazar ? (
+        <button
+          type="button"
+          className="card"
+          style={{ textAlign: "left", font: "inherit", color: "inherit", cursor: "pointer" }}
+          onClick={() => buka("bazar")}
+        >
+          <span className="soft" style={{ fontWeight: 700, color: "var(--accent-ink)" }}>
+            BAZAR AKTIF
+          </span>
           <div className="h2">{bazar.nama}</div>
+          <span className="soft">Ketuk untuk mengatur barang bazar</span>
+        </button>
+      ) : (
+        <button
+          type="button"
+          className="card"
+          style={{ textAlign: "left", font: "inherit", color: "inherit", cursor: "pointer" }}
+          onClick={() => buka("bazar")}
+        >
+          <span className="soft">Belum ada bazar aktif. Penjualan memakai stok gudang.</span>
+          <div className="h2" style={{ color: "var(--primary)" }}>
+            Buka Bazar
+          </div>
         </button>
       )}
 

@@ -3,23 +3,33 @@ import Beranda from "./screens/Beranda.tsx";
 import Placeholder from "./screens/Placeholder.tsx";
 import PilihBarang from "./screens/PilihBarang.tsx";
 import DetailBarang from "./screens/DetailBarang.tsx";
-import Keranjang from "./screens/Keranjang.tsx";
-import { bikinIsiKeranjang, type IsiKeranjang } from "./lib/isiKeranjang.ts";
+import Keranjang, { MAKS_PARKIR_TAMPIL, type ParkirRingkas } from "./screens/Keranjang.tsx";
 import DaftarBarang from "./screens/DaftarBarang.tsx";
 import FormBarang from "./screens/FormBarang.tsx";
 import TransaksiTersimpanLayar from "./screens/TransaksiTersimpan.tsx";
+import Bazar from "./screens/Bazar.tsx";
+import AlokasiBazar from "./screens/AlokasiBazar.tsx";
+import TutupBazar from "./screens/TutupBazar.tsx";
 import {
+  ambilParkir,
   ambilSettings,
   bazarAktif,
+  buatId,
+  daftarParkir,
+  hapusParkir,
+  saldoSemuaBazar,
+  simpanParkir,
   simpanProduk,
+  type BazarRecord,
   type ProdukRecord,
   type SettingsRecord,
 } from "./db/repositori.ts";
-import { buatId } from "./db/repositori.ts";
 import { mintaPenyimpananPermanen } from "./pwa/register.ts";
 import type { OngkirMode } from "./lib/ongkir.ts";
 import type { StatusBayar } from "./lib/keranjang.ts";
 import { simpanPenjualan, type JenisBayar, type TransaksiTersimpan } from "./lib/penjualan.ts";
+import { bikinIsiKeranjang, type IsiKeranjang } from "./lib/isiKeranjang.ts";
+import { formatJam } from "./lib/tanggal.ts";
 
 export type Layar =
   | { nama: "beranda" }
@@ -31,6 +41,8 @@ export type Layar =
   | { nama: "barang" }
   | { nama: "form-barang"; produk: ProdukRecord | null }
   | { nama: "bazar" }
+  | { nama: "alokasi-bazar"; bazar: BazarRecord }
+  | { nama: "tutup-bazar"; bazar: BazarRecord }
   | { nama: "ringkasan" }
   | { nama: "pengaturan" };
 
@@ -52,10 +64,6 @@ const KERANJANG_AWAL: NilaiKeranjang = {
   ongkirNominal: 0,
 };
 
-/**
- * Kerangka aplikasi. Navigasi memakai state (bukan router) — MVP punya sedikit layar
- * dan satu perangkat.
- */
 export default function App() {
   const [layar, setLayar] = useState<Layar>({ nama: "beranda" });
   const [settings, setSettings] = useState<SettingsRecord | null>(null);
@@ -63,46 +71,104 @@ export default function App() {
 
   const [keranjang, setKeranjang] = useState<IsiKeranjang[]>([]);
   const [nilaiKeranjang, setNilaiKeranjang] = useState<NilaiKeranjang>(KERANJANG_AWAL);
+  const [namaPembeli, setNamaPembeli] = useState("");
+  const [parkir, setParkir] = useState<ParkirRingkas[]>([]);
   const [sedangMenyimpan, setSedangMenyimpan] = useState(false);
   const [pesanSimpan, setPesanSimpan] = useState<string | null>(null);
-  const [bazarId, setBazarId] = useState<string | null>(null);
 
-  const muat = useCallback(() => {
+  /** Bazar aktif + saldo per barang. Saat null, penjualan memakai stok gudang. */
+  const [bazar, setBazar] = useState<BazarRecord | null>(null);
+  const [saldoBazar, setSaldoBazar] = useState<Map<string, number>>(new Map());
+
+  const muatParkir = useCallback(async () => {
+    const daftar = await daftarParkir();
+    setParkir(
+      daftar.map((p) => ({
+        id: p.id,
+        namaPembeli: p.namaPembeli,
+        jumlahBarang: p.isi.reduce((n, i) => n + i.kuantitas, 0),
+        total: p.isi.reduce((n, i) => n + i.hargaSatuan * i.kuantitas - i.diskonPerUnit * i.kuantitas, 0),
+        jam: formatJam(p.dibuatPada),
+      })),
+    );
+  }, []);
+
+  const muat = useCallback(async () => {
     ambilSettings()
       .then(setSettings)
       .catch(() => setSettings(null));
-    bazarAktif()
-      .then((b) => setBazarId(b?.id ?? null))
-      .catch(() => setBazarId(null));
-  }, []);
+    const b = await bazarAktif();
+    setBazar(b ?? null);
+    setSaldoBazar(b ? await saldoSemuaBazar(b.id) : new Map());
+    await muatParkir();
+  }, [muatParkir]);
 
   useEffect(() => {
-    muat();
+    let hidup = true;
+    (async () => {
+      const s = await ambilSettings().catch(() => null);
+      const b = await bazarAktif().catch(() => undefined);
+      const saldo = b ? await saldoSemuaBazar(b.id).catch(() => new Map<string, number>()) : new Map<string, number>();
+      const daftar = await daftarParkir().catch(() => []);
+      if (!hidup) return;
+      setSettings(s);
+      setBazar(b ?? null);
+      setSaldoBazar(saldo);
+      setParkir(
+        daftar.map((p) => ({
+          id: p.id,
+          namaPembeli: p.namaPembeli,
+          jumlahBarang: p.isi.reduce((n, i) => n + i.kuantitas, 0),
+          total: p.isi.reduce((n, i) => n + i.hargaSatuan * i.kuantitas - i.diskonPerUnit * i.kuantitas, 0),
+          jam: formatJam(p.dibuatPada),
+        })),
+      );
+    })();
     mintaPenyimpananPermanen()
-      .then(setStoragePermanen)
-      .catch(() => setStoragePermanen(false));
-  }, [muat]);
+      .then((v) => {
+        if (hidup) setStoragePermanen(v);
+      })
+      .catch(() => {
+        if (hidup) setStoragePermanen(false);
+      });
+    return () => {
+      hidup = false;
+    };
+  }, []);
 
   const kembali = useCallback(() => {
-    if (layar.nama === "detail-barang") return setLayar({ nama: "pilih-barang" });
-    if (layar.nama === "keranjang") {
+    const n = layar.nama;
+    if (n === "detail-barang") return setLayar({ nama: "pilih-barang" });
+    if (n === "keranjang") {
       if (keranjang.length > 0 && !window.confirm("Barang di keranjang belum disimpan. Mau kembali?")) return;
       return setLayar({ nama: "pilih-barang" });
     }
-    if (layar.nama === "form-barang") return setLayar({ nama: "barang" });
+    if (n === "form-barang") return setLayar({ nama: "barang" });
+    if (n === "alokasi-bazar" || n === "tutup-bazar") return setLayar({ nama: "bazar" });
     setLayar({ nama: "beranda" });
   }, [layar, keranjang.length]);
 
-  const tambahKeKeranjang = useCallback((p: ProdukRecord, kuantitas = 1) => {
-    setKeranjang((daftar) => {
-      const ada = daftar.find((k) => k.produkId === p.id);
-      if (ada) {
-        const baru = Math.min(ada.kuantitas + kuantitas, ada.stokTersedia);
-        return daftar.map((k) => (k.produkId === p.id ? { ...k, kuantitas: baru } : k));
-      }
-      return [...daftar, bikinIsiKeranjang(p, Math.min(kuantitas, p.stokGudang))];
-    });
-  }, []);
+  /** Stok tersedia untuk satu barang: saldo bazar bila bazar aktif, selain itu gudang. */
+  const stokTersedia = useCallback(
+    (p: ProdukRecord) => (bazar ? (saldoBazar.get(p.id) ?? 0) : p.stokGudang),
+    [bazar, saldoBazar],
+  );
+
+  const tambahKeKeranjang = useCallback(
+    (p: ProdukRecord, kuantitas = 1) => {
+      const batas = bazar ? (saldoBazar.get(p.id) ?? 0) : p.stokGudang;
+      setKeranjang((daftar) => {
+        const ada = daftar.find((k) => k.produkId === p.id);
+        if (ada) {
+          const baru = Math.min(ada.kuantitas + kuantitas, batas);
+          return daftar.map((k) => (k.produkId === p.id ? { ...k, kuantitas: baru, stokTersedia: batas } : k));
+        }
+        const baris = bikinIsiKeranjang(p, Math.min(kuantitas, batas));
+        return [...daftar, { ...baris, stokTersedia: batas }];
+      });
+    },
+    [bazar, saldoBazar],
+  );
 
   const simpanTransaksiSekarang = useCallback(async () => {
     setPesanSimpan(null);
@@ -124,7 +190,7 @@ export default function App() {
         jenisBayar: nilaiKeranjang.jenisBayar,
         statusBayar: nilaiKeranjang.statusBayar,
         dibayarSekarang: nilaiKeranjang.dibayarSekarang,
-        bazarId,
+        bazarId: bazar?.id ?? null,
       },
       { rekening: settings?.rekening ?? [] },
     );
@@ -137,8 +203,88 @@ export default function App() {
 
     setKeranjang([]);
     setNilaiKeranjang(KERANJANG_AWAL);
+    setNamaPembeli("");
+    await muat();
     setLayar({ nama: "tersimpan", transaksi: hasil.transaksi });
-  }, [keranjang, nilaiKeranjang, settings, bazarId]);
+  }, [keranjang, nilaiKeranjang, settings, bazar, muat]);
+
+  /** Memarkir keranjang sekarang; butuh nama pembeli (maks 3 parkir). */
+  const parkirSekarang = useCallback(async () => {
+    if (namaPembeli.trim().length < 2) {
+      setPesanSimpan("Isi nama pembeli dulu supaya tidak tertukar.");
+      return;
+    }
+    setPesanSimpan(null);
+    const h = await simpanParkir({
+      namaPembeli: namaPembeli.trim().slice(0, 20),
+      isi: keranjang.map((k) => ({
+        produkId: k.produkId,
+        nama: k.nama,
+        hargaSatuan: k.hargaSatuan,
+        kuantitas: k.kuantitas,
+        diskonPerUnit: k.diskonPerUnit,
+      })),
+      diskonTotal: nilaiKeranjang.diskonTotal,
+      ongkirMode: nilaiKeranjang.ongkirMode,
+      ongkirNominal: nilaiKeranjang.ongkirNominal,
+      jenisBayar: nilaiKeranjang.jenisBayar,
+      bazarId: bazar?.id ?? null,
+    });
+    if (!h.ok) {
+      setPesanSimpan(`Sudah ada ${MAKS_PARKIR_TAMPIL} transaksi tertahan. Selesaikan salah satu dulu.`);
+      return;
+    }
+    setKeranjang([]);
+    setNilaiKeranjang(KERANJANG_AWAL);
+    setNamaPembeli("");
+    await muatParkir();
+    setLayar({ nama: "pilih-barang" });
+  }, [namaPembeli, keranjang, nilaiKeranjang, bazar, muatParkir]);
+
+  const lanjutkanParkir = useCallback(
+    async (id: string) => {
+      if (keranjang.length > 0) {
+        const lanjut = window.confirm(
+          `Keranjang sekarang akan diparkir juga. Lanjutkan ke keranjang ${parkir.find((p) => p.id === id)?.namaPembeli ?? ""}?`,
+        );
+        if (!lanjut) return;
+      }
+      const p = await ambilParkir(id);
+      if (!p) return;
+      setKeranjang(
+        p.isi.map((i) => ({
+          produkId: i.produkId,
+          nama: i.nama,
+          hargaSatuan: i.hargaSatuan,
+          kuantitas: i.kuantitas,
+          diskonPerUnit: i.diskonPerUnit,
+          stokTersedia: 9999,
+        })),
+      );
+      setNilaiKeranjang({
+        diskonTotal: p.diskonTotal,
+        jenisBayar: p.jenisBayar,
+        statusBayar: "lunas",
+        dibayarSekarang: 0,
+        ongkirMode: p.ongkirMode,
+        ongkirNominal: p.ongkirNominal,
+      });
+      setNamaPembeli(p.namaPembeli);
+      await hapusParkir(id);
+      await muatParkir();
+      setLayar({ nama: "keranjang" });
+    },
+    [keranjang.length, parkir, muatParkir],
+  );
+
+  const hapusParkirId = useCallback(
+    async (id: string) => {
+      if (!window.confirm("Hapus transaksi tertahan ini?")) return;
+      await hapusParkir(id);
+      await muatParkir();
+    },
+    [muatParkir],
+  );
 
   const simpanBarang = useCallback(
     async (nilai: { nama: string; hargaJual: number; stokGudang: number; kode: string; catatan: string }) => {
@@ -179,6 +325,8 @@ export default function App() {
     barang: "Barang",
     "form-barang": layar.nama === "form-barang" && layar.produk ? "Ubah Barang" : "Barang Baru",
     bazar: "Bazar",
+    "alokasi-bazar": "Atur Barang Bazar",
+    "tutup-bazar": "Tutup Bazar",
     ringkasan: "Ringkasan",
     pengaturan: "Pengaturan",
   };
@@ -196,6 +344,12 @@ export default function App() {
         </header>
       )}
 
+      {bazar && layar.nama === "pilih-barang" && (
+        <div className="content" style={{ paddingBottom: 0 }}>
+          <div className="panel panel--ok">Bazar aktif: {bazar.nama}</div>
+        </div>
+      )}
+
       {pesanSimpan && (
         <div className="content" style={{ paddingBottom: 0 }}>
           <div className="panel panel--warn" role="alert">
@@ -208,6 +362,7 @@ export default function App() {
         <Beranda
           settings={settings}
           storagePermanen={storagePermanen}
+          bazar={bazar}
           buka={(nama) => setLayar({ nama } as Layar)}
         />
       )}
@@ -216,6 +371,7 @@ export default function App() {
         <>
           <PilihBarang
             onPilih={() => {}}
+            stokUntuk={(p) => stokTersedia(p)}
             onTambah={(p) => tambahKeKeranjang(p, 1)}
             onBukaDetail={(p) => setLayar({ nama: "detail-barang", produk: p })}
             diKeranjang={Object.fromEntries(keranjang.map((k) => [k.produkId, k.kuantitas]))}
@@ -233,6 +389,7 @@ export default function App() {
       {layar.nama === "detail-barang" && (
         <DetailBarang
           produk={layar.produk}
+          stokTersedia={stokTersedia(layar.produk)}
           onTambah={(jumlah) => {
             tambahKeKeranjang(layar.produk, jumlah);
             setLayar({ nama: "pilih-barang" });
@@ -260,6 +417,12 @@ export default function App() {
           }
           onSimpan={simpanTransaksiSekarang}
           sedangMenyimpan={sedangMenyimpan}
+          namaPembeli={namaPembeli}
+          onUbahNamaPembeli={setNamaPembeli}
+          parkir={parkir}
+          onParkir={parkirSekarang}
+          onLanjutkanParkir={lanjutkanParkir}
+          onHapusParkir={hapusParkirId}
         />
       )}
 
@@ -295,10 +458,34 @@ export default function App() {
         />
       )}
 
-      {(layar.nama === "pesanan" ||
-        layar.nama === "bazar" ||
-        layar.nama === "ringkasan" ||
-        layar.nama === "pengaturan") && (
+      {layar.nama === "bazar" && (
+        <Bazar
+          onAturBarang={(b) => setLayar({ nama: "alokasi-bazar", bazar: b })}
+          onTutupBazar={(b) => setLayar({ nama: "tutup-bazar", bazar: b })}
+          onUbah={() => void muat()}
+        />
+      )}
+
+      {layar.nama === "alokasi-bazar" && (
+        <AlokasiBazar
+          bazar={layar.bazar}
+          onSelesai={() => {
+            void muat();
+          }}
+        />
+      )}
+
+      {layar.nama === "tutup-bazar" && (
+        <TutupBazar
+          bazar={layar.bazar}
+          onSelesai={async () => {
+            await muat();
+            setLayar({ nama: "bazar" });
+          }}
+        />
+      )}
+
+      {(layar.nama === "pesanan" || layar.nama === "ringkasan" || layar.nama === "pengaturan") && (
         <Placeholder nama={layar.nama} settings={settings} storagePermanen={storagePermanen} />
       )}
     </div>

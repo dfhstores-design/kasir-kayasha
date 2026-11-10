@@ -39,8 +39,8 @@ dan tetap bisa dipakai saat internet di lokasi pameran buruk atau tidak ada.
 | Phase 1 | Alur & wireframe (5 alur, 17 layar) + keputusan bazar/parkir/ongkir/resi | ✅ Selesai — 10 Nov 2026 |
 | Phase 2 | Fondasi Vite + React + TS, PWA offline, skema IndexedDB, 79 unit test | ✅ Selesai — 10 Nov 2026 |
 | Phase 3 | Katalog, foto produk (progres wajib, aman >80 MB), penjualan langsung | ✅ Selesai — 10 Nov 2026 |
-| Phase 3B | Bazar (alokasi & tutup) + parkir transaksi | ⏳ Berikutnya |
-| Phase 4 | Pre-order, DP/pelunasan, status pesanan, ongkir, diskon | ⬜ Belum |
+| Phase 3B | Bazar (buka/alokasi/tutup) + parkir transaksi maks 3 | ✅ Selesai — 10 Nov 2026 |
+| Phase 4 | Pre-order, DP/pelunasan, status pesanan, ongkir menyusul, ringkasan | ⏳ Berikutnya |
 | Phase 5 | Profil usaha, logo, rekening, resi PDF, berbagi | ⬜ Belum |
 | Phase 6 | Sinkronisasi D1 + unggah foto R2 | ⬜ Belum |
 | Phase 7 | QA, backup, deployment, panduan pemilik | ⬜ Belum |
@@ -48,7 +48,8 @@ dan tetap bisa dipakai saat internet di lokasi pameran buruk atau tidak ada.
 
 **Status saat ini:** barang dapat ditambahkan dengan foto, dijual, dan tersimpan menjadi
 transaksi nyata di perangkat. Aplikasi **terbukti tetap terbuka saat internet dimatikan**.
-Resi PDF, bazar, dan parkir transaksi belum ada; belum deploy; belum ada layanan berbayar.
+Bazar (stok terpisah dari gudang) dan parkir transaksi sudah ada. Resi PDF belum ada;
+belum deploy; belum ada layanan berbayar.
 
 Dokumentasi penting:
 
@@ -235,7 +236,7 @@ Service worker **tidak** aktif saat `npm run dev` — itu disengaja agar hot rel
 | `npm run preview` | Pratinjau hasil build (mengaktifkan service worker) |
 | `npm run lint` | Pemeriksaan kode |
 | `npm run typecheck` | Pemeriksaan tipe TypeScript |
-| `npm test` | Unit test (156 tes per Phase 3) |
+| `npm test` | Unit test (165 tes per Phase 3B) |
 
 ---
 

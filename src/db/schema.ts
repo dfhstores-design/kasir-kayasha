@@ -164,6 +164,8 @@ export interface KeranjangTertahanRecord {
   ongkirMode: OngkirMode;
   ongkirNominal: number | null;
   jenisBayar: "tunai" | "transfer" | "qris" | null;
+  /** Bazar tempat keranjang dibuat; null = penjualan dari gudang. */
+  bazarId: UUID | null;
   dibuatPada: string;
 }
 

@@ -7,6 +7,8 @@ interface Props {
   onPilih: (p: ProdukRecord) => void;
   onTambah: (p: ProdukRecord) => void;
   onBukaDetail: (p: ProdukRecord) => void;
+  /** Stok yang berlaku: saldo bazar bila bazar aktif, selain itu stok gudang. */
+  stokUntuk: (p: ProdukRecord) => number;
   /** Jumlah di keranjang untuk badge, opsional. */
   diKeranjang?: Record<string, number>;
 }
@@ -14,16 +16,18 @@ interface Props {
 function KartuBarang({
   produk,
   jumlah,
+  stok,
   onTambah,
   onBukaDetail,
 }: {
   produk: ProdukRecord;
   jumlah: number;
+  stok: number;
   onTambah: () => void;
   onBukaDetail: () => void;
 }) {
   const thumb = useThumbnail(produk.id);
-  const habis = produk.stokGudang <= 0;
+  const habis = stok <= 0;
 
   return (
     <div className="card" style={{ padding: "0.5rem", display: "flex", flexDirection: "column" }}>
@@ -39,7 +43,7 @@ function KartuBarang({
         <div className="prodname">{produk.nama}</div>
         <div className="money">{formatRupiah(produk.hargaJual)}</div>
         <div className="soft" style={{ fontSize: "0.9rem" }}>
-          {habis ? "Stok habis" : `Stok ${produk.stokGudang}`}
+          {habis ? "Stok habis" : `Stok ${stok}`}
         </div>
       </button>
       <button
@@ -60,7 +64,7 @@ function KartuBarang({
  * Layar 2 — Pilih Barang (docs/design/screens/02-pilih-barang.md).
  * Grid 2 kolom, kolom cari, tombol + Tambah langsung di kartu.
  */
-export default function PilihBarang({ onTambah, onBukaDetail, diKeranjang = {} }: Props) {
+export default function PilihBarang({ onTambah, onBukaDetail, stokUntuk, diKeranjang = {} }: Props) {
   const [produk, setProduk] = useState<ProdukRecord[] | null>(null);
   const [cari, setCari] = useState("");
   const [galat, setGalat] = useState<string | null>(null);
@@ -121,6 +125,7 @@ export default function PilihBarang({ onTambah, onBukaDetail, diKeranjang = {} }
               key={p.id}
               produk={p}
               jumlah={diKeranjang[p.id] ?? 0}
+              stok={stokUntuk(p)}
               onTambah={() => onTambah(p)}
               onBukaDetail={() => onBukaDetail(p)}
             />

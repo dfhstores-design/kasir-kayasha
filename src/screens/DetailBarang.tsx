@@ -5,6 +5,8 @@ import { useFotoBarang } from "./useFoto.ts";
 
 interface Props {
   produk: ProdukRecord;
+  /** Stok yang berlaku: saldo bazar bila bazar aktif, selain itu stok gudang. */
+  stokTersedia: number;
   onTambah: (kuantitas: number) => void;
 }
 
@@ -12,13 +14,13 @@ interface Props {
  * Layar 3 — Detail Barang (docs/design/screens/03-detail-barang.md).
  * Foto besar bisa diketuk untuk melihat sisi lain (maksimal 3 foto).
  */
-export default function DetailBarang({ produk, onTambah }: Props) {
+export default function DetailBarang({ produk, stokTersedia, onTambah }: Props) {
   const foto = useFotoBarang(produk.id);
   const [indeks, setIndeks] = useState(0);
   const [jumlah, setJumlah] = useState(1);
 
-  const habis = produk.stokGudang <= 0;
-  const batas = produk.stokGudang;
+  const habis = stokTersedia <= 0;
+  const batas = stokTersedia;
   const urlSekarang = foto[indeks];
 
   return (
@@ -48,7 +50,7 @@ export default function DetailBarang({ produk, onTambah }: Props) {
             {formatRupiah(produk.hargaJual)}
           </p>
           <p className="soft" style={{ margin: 0 }}>
-            {habis ? "Stok habis" : `Stok ${produk.stokGudang}`}
+            {habis ? "Stok habis" : `Stok ${stokTersedia}`}
           </p>
           {produk.catatan && (
             <p className="soft" style={{ margin: "0.25rem 0 0" }}>

@@ -9,6 +9,7 @@
 import { getDB, type BazarItemRecord, type BazarRecord, type FotoRecord, type KeranjangTertahanRecord, type PembayaranRecord, type ProdukRecord, type SettingsRecord, type TransaksiRecord, type ItemTransaksiRecord, type UUID } from "./schema.ts";
 import { hitungSaldoBazar } from "../lib/stok.ts";
 import { pesanStok, validasiSumberStok, type SumberStok } from "../lib/sumberStok.ts";
+import type { Rupiah } from "../lib/money.ts";
 
 // Tipe dipakai ulang oleh layar; diekspor ulang agar konsumen cukup mengimpor dari sini.
 export type { BazarRecord, FotoRecord, KeranjangTertahanRecord, ProdukRecord, SettingsRecord, TransaksiRecord, UUID };
@@ -167,6 +168,144 @@ export async function saldoBazarProduk(bazarId: UUID, produkId: UUID): Promise<n
 export async function saldoSemuaBazar(bazarId: UUID): Promise<Map<UUID, number>> {
   const items = await itemBazar(bazarId);
   return new Map(items.map((i) => [i.produkId, hitungSaldoBazar(i)]));
+}
+
+/** Ringkasan bazar untuk layar: dibawa, terjual, sisa, uang masuk. */
+export interface RingkasanBazar {
+  dibawa: number;
+  terjualPcs: number;
+  sisaPcs: number;
+  uangMasuk: Rupiah;
+  jumlahBarang: number;
+}
+
+export async function ringkasanBazar(bazarId: UUID): Promise<RingkasanBazar> {
+  const items = await itemBazar(bazarId);
+  const trx = await db_transaksiBazar(bazarId);
+  const uangMasuk = trx
+    .filter((t) => !t.dibatalkanPada)
+    .reduce((n, t) => n + t.total, 0);
+
+  return {
+    dibawa: items.reduce((n, i) => n + i.dibawa, 0),
+    terjualPcs: items.reduce((n, i) => n + i.terjual, 0),
+    sisaPcs: items.reduce((n, i) => n + hitungSaldoBazar(i), 0),
+    uangMasuk,
+    jumlahBarang: items.length,
+  };
+}
+
+async function db_transaksiBazar(bazarId: UUID): Promise<TransaksiRecord[]> {
+  const db = await getDB();
+  return db.getAllFromIndex("transactions", "by-bazar", bazarId);
+}
+
+/** Apakah bazar masih punya transaksi tertahan (parkir) miliknya. */
+export async function adaParkirUntukBazar(bazarId: UUID): Promise<boolean> {
+  const db = await getDB();
+  const semua = await db.getAll("parked_carts");
+  return semua.some((p) => p.bazarId === bazarId);
+}
+
+export type HasilTutupBazar =
+  | { ok: true; dikembalikan: number; hilang: number }
+  | { ok: false; pesan: string };
+
+/**
+ * Menutup bazar: sisa yang dikembalikan menambah stok gudang, sisanya dianggap habis.
+ * Ditolak bila masih ada parkir milik bazar ini (supaya tidak ada keranjang menggantung).
+ */
+export async function tutupBazar(
+  bazarId: UUID,
+  dikembalikanPerProduk: ReadonlyMap<UUID, number>,
+): Promise<HasilTutupBazar> {
+  if (await adaParkirUntukBazar(bazarId)) {
+    return { ok: false, pesan: "Selesaikan atau hapus transaksi tertahan dulu." };
+  }
+
+  const db = await getDB();
+  const items = await itemBazar(bazarId);
+  const produkSemua = await db.getAll("products");
+  const waktu = new Date().toISOString();
+
+  let totalDikembalikan = 0;
+  let totalHilang = 0;
+  const perubahan: Array<{ produkId: UUID; stokGudangBaru: number }> = [];
+
+  for (const item of items) {
+    const sisa = hitungSaldoBazar(item);
+    const kembali = dikembalikanPerProduk.get(item.produkId) ?? sisa;
+    if (!Number.isInteger(kembali) || kembali < 0 || kembali > sisa) {
+      return { ok: false, pesan: "Jumlah yang dikembalikan melebihi sisa bazar." };
+    }
+    totalDikembalikan += kembali;
+    totalHilang += sisa - kembali;
+
+    const produk = produkSemua.find((p) => p.id === item.produkId);
+    if (produk) perubahan.push({ produkId: produk.id, stokGudangBaru: produk.stokGudang + kembali });
+  }
+
+  const bazar = await db.get("bazars", bazarId);
+  if (!bazar) return { ok: false, pesan: "Bazar tidak ditemukan." };
+
+  const ringkas = await ringkasanBazar(bazarId);
+
+  const tx = db.transaction(["products", "bazar_items", "bazars"], "readwrite");
+  for (const p of perubahan) {
+    const produk = await tx.objectStore("products").get(p.produkId);
+    if (produk) {
+      await tx.objectStore("products").put({ ...produk, stokGudang: p.stokGudangBaru, updatedAt: waktu });
+    }
+  }
+  for (const item of items) {
+    const sisa = hitungSaldoBazar(item);
+    const kembali = dikembalikanPerProduk.get(item.produkId) ?? sisa;
+    await tx.objectStore("bazar_items").put({
+      ...item,
+      ditarik: item.ditarik + kembali,
+      // Sisa yang tidak dikembalikan dianggap terjual habis di lokasi bazar.
+      terjual: item.terjual + (sisa - kembali),
+      updatedAt: waktu,
+    });
+  }
+  await tx.objectStore("bazars").put({
+    ...bazar,
+    status: "selesai",
+    ringkasanDibawa: ringkas.dibawa,
+    ringkasanTerjual: ringkas.terjualPcs,
+    ringkasanSisa: totalDikembalikan,
+    ditutupPada: waktu,
+  });
+  await tx.done;
+
+  return { ok: true, dikembalikan: totalDikembalikan, hilang: totalHilang };
+}
+
+/** Menarik sebagian barang dari bazar kembali ke gudang (tanpa menutup bazar). */
+export async function tarikDariBazar(bazarId: UUID, produkId: UUID, jumlah: number): Promise<void> {
+  const db = await getDB();
+  const tx = db.transaction(["products", "bazar_items"], "readwrite");
+  const items = await tx.objectStore("bazar_items").index("by-bazar").getAll(bazarId);
+  const item = items.find((i) => i.produkId === produkId);
+  if (!item) throw new RangeError("Barang belum dibawa ke bazar.");
+
+  const sisa = hitungSaldoBazar(item);
+  if (!Number.isInteger(jumlah) || jumlah < 0 || jumlah > sisa) {
+    await tx.done;
+    throw new RangeError("Jumlah melebihi sisa bazar.");
+  }
+
+  const produk = await tx.objectStore("products").get(produkId);
+  const waktu = new Date().toISOString();
+  if (produk) {
+    await tx.objectStore("products").put({
+      ...produk,
+      stokGudang: produk.stokGudang + jumlah,
+      updatedAt: waktu,
+    });
+  }
+  await tx.objectStore("bazar_items").put({ ...item, ditarik: item.ditarik + jumlah, updatedAt: waktu });
+  await tx.done;
 }
 
 /**
