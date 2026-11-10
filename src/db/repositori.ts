@@ -8,6 +8,7 @@
  */
 import { getDB, type BazarItemRecord, type BazarRecord, type FotoRecord, type KeranjangTertahanRecord, type PembayaranRecord, type ProdukRecord, type SettingsRecord, type TransaksiRecord, type ItemTransaksiRecord, type UUID } from "./schema.ts";
 import { hitungSaldoBazar } from "../lib/stok.ts";
+import { pesanStok, validasiSumberStok, type SumberStok } from "../lib/sumberStok.ts";
 
 // Tipe dipakai ulang oleh layar; diekspor ulang agar konsumen cukup mengimpor dari sini.
 export type { BazarRecord, FotoRecord, KeranjangTertahanRecord, ProdukRecord, SettingsRecord, TransaksiRecord, UUID };
@@ -264,14 +265,40 @@ export interface TransaksiLengkap {
 /**
  * Menyimpan transaksi + item + pembayaran + pengurangan stok dalam SATU transaksi DB.
  * Idempoten oleh `id` (UUID dibuat di perangkat): menekan simpan dua kali tidak menggandakan.
+ *
+ * Aturan stok ditegakkan di sini (bukan hanya di UI):
+ *  - transaksi bazar WAJIB memakai `tipe: "bazar"`; memakai "gudang" akan DITOLAK
+ *  - transaksi tanpa bazar WAJIB memakai `tipe: "gudang"`
+ *  - saldo bazar tidak boleh negatif; stok gudang tidak boleh negatif
+ * Semua sumber divalidasi SEBELUM satu pun baris ditulis.
  */
 export async function simpanTransaksi(
   trx: TransaksiRecord,
   items: ItemTransaksiRecord[],
   pembayaran: PembayaranRecord[],
-  stokBaru: Array<{ produkId: UUID; tipe: "gudang" | "bazar"; bazarId: UUID | null; jumlah: number }>,
+  stokBaru: readonly SumberStok[],
 ): Promise<void> {
+  const bazarIdTransaksi = trx.bazarId;
+
+  // 1) Validasi bentuk aturan.
+  const cek = validasiSumberStok(stokBaru, bazarIdTransaksi);
+  if (!cek.ok) throw new RangeError(pesanStok(cek.kode));
+
+  // 2) Validasi kecukupan stok.
   const db = await getDB();
+  for (const s of stokBaru) {
+    if (s.tipe === "gudang") {
+      const produk = await db.get("products", s.produkId);
+      if (!produk) throw new RangeError("Barang tidak ditemukan.");
+      if (produk.stokGudang < s.jumlah) throw new RangeError(pesanStok("stok_gudang_tidak_cukup"));
+    } else {
+      const items2 = await db.getAllFromIndex("bazar_items", "by-bazar", s.bazarId);
+      const item = items2.find((i) => i.produkId === s.produkId);
+      const saldo = item ? hitungSaldoBazar(item) : 0;
+      if (saldo < s.jumlah) throw new RangeError(pesanStok("saldo_bazar_tidak_cukup"));
+    }
+  }
+
   const tx = db.transaction(
     ["transactions", "transaction_items", "payments", "products", "bazar_items"],
     "readwrite",
@@ -292,16 +319,15 @@ export async function simpanTransaksi(
           updatedAt: now,
         });
       }
-    } else if (s.bazarId) {
+    } else {
       const items2 = await tx.objectStore("bazar_items").index("by-bazar").getAll(s.bazarId);
       const item = items2.find((i) => i.produkId === s.produkId);
-      if (item) {
-        await tx.objectStore("bazar_items").put({
-          ...item,
-          terjual: item.terjual + s.jumlah,
-          updatedAt: now,
-        });
-      }
+      if (!item) throw new RangeError(pesanStok("saldo_bazar_tidak_cukup"));
+      await tx.objectStore("bazar_items").put({
+        ...item,
+        terjual: item.terjual + s.jumlah,
+        updatedAt: now,
+      });
     }
   }
 

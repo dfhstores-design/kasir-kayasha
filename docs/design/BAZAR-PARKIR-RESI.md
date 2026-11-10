@@ -47,6 +47,28 @@ Aturan yang dijaga ketat:
    berubah saat bazar diarsipkan.
 6. Barang yang tidak dialokasikan ke bazar yang sedang aktif **tidak muncul** di katalog bazar.
 
+### 2.1a Kapan stok berubah — ditegaskan pemilik (10 Nov 2026)
+
+Ini rumusan pemilik, dan menjadi aturan baku:
+
+| Kejadian | Stok gudang | Stok bazar |
+| --- | --- | --- |
+| Barang **dibawa** ke bazar (alokasi) | **berkurang** | bertambah |
+| Terjadi **penjualan** di bazar | **tidak berubah** | **berkurang** |
+| Penjualan di luar bazar (toko) | berkurang | tidak berubah |
+| Tutup bazar, sisa dikembalikan | bertambah | berkurang |
+
+**Penegakan di kode (Phase 2):** aturan tidak hanya ditulis di dokumen, tetapi **dipaksa oleh tipe
+dan repository**:
+
+- `src/lib/sumberStok.ts` — `sumberStokUntuk(items, bazarId)` menghasilkan sumber stok yang benar;
+  `validasiSumberStok` menolak kombinasi salah.
+- `src/db/repositori.ts` → `simpanTransaksi` **melempar error** bila transaksi bazar mencoba
+  memakai `tipe: "gudang"` (`penjualan_bazar_tidak_boleh_mengurangi_gudang`), bila penjualan
+  melebihi saldo bazar, atau bila tidak ada bazar aktif.
+- Tes: `src/db/alurStok.test.ts` (7 tes) membuktikan ketiga aturan **end-to-end lewat database**,
+  termasuk bahwa pemanggilan yang salah **ditolak** dan tidak meninggalkan perubahan stok.
+
 ### 2.2 Satu bazar aktif
 
 Master prompt menetapkan **satu perangkat dan satu alur kerja**. Karena itu:
