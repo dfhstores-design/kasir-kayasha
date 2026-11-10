@@ -54,6 +54,7 @@ Contoh: `PHASE-03-2026-11-12-2035.md`
 | 2026-11-10 13:50 | [PHASE-01C-2026-11-10-1350.md](PHASE-01C-2026-11-10-1350.md) | Phase 1C — PDF sebagai output resi, sapaan otomatis dari jam, ongkir 0/nominal/belum ditentukan |
 | 2026-11-10 14:00 | [PHASE-02-2026-11-10-1400.md](PHASE-02-2026-11-10-1400.md) | Phase 2 — fondasi Vite+React+TS, PWA offline terbukti, skema IndexedDB 10 store, 79 unit test lulus |
 | 2026-11-10 14:45 | [PHASE-02B-2026-11-10-1445.md](PHASE-02B-2026-11-10-1445.md) | Phase 2B — aturan stok gudang vs bazar dipaksa oleh tipe & repository (+14 tes → 93) |
+| 2026-11-10 15:10 | [PHASE-03-2026-11-10-1510.md](PHASE-03-2026-11-10-1510.md) | Phase 3 — katalog + foto (progres wajib, aman >80 MB) + penjualan langsung (156 tes) |
 
 > **Catatan urutan rilis:** commit Phase 0 yang dipush ke GitHub (10 Nov 12:26 WIB) masih memuat
 > tabel di atas tanpa baris PHASE-01; baris tersebut ditambahkan pada commit Phase 1. Isi catatan

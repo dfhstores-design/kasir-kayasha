@@ -72,3 +72,86 @@
 
 Angka yang diketik pemilik di form ini **adalah stok gudang**. Stok bazar hanya berubah lewat
 layar Alokasi (16) dan Tutup Bazar (17), sehingga tidak ada dua tempat yang membingungkan.
+
+---
+
+## Pembaruan Phase 3 — indikator progres foto **WAJIB**
+
+Permintaan pemilik (10 Nov 2026): *"wajib ada indikator progress ketika upload foto"*.
+
+Saat foto diproses, layar **selalu** menampilkan indikator progres. Tidak ada pemrosesan diam-diam.
+
+| Tahap | Tulisan | Persen |
+| --- | --- | --- |
+| Membaca berkas | `Membaca foto…` | 0 |
+| Mengecilkan | `Mengecilkan foto…` | 15 |
+| Mengompres | `Mengompres foto…` | 40 |
+| Menyimpan | `Menyimpan foto…` | 85 |
+| Selesai | `Foto siap` | 100 |
+| Gagal | pesan galat (mis. `Foto tidak dapat dibaca.`) | tanpa batang |
+
+```
+┌──────────────────────────────────────┐
+│ Mengompres foto…                  40%│
+│ ███████████░░░░░░░░░░░░░░░░░░░░░░░░░ │
+└──────────────────────────────────────┘
+```
+
+Aturan:
+
+1. **Tulisan + angka persen selalu ada**, bukan hanya batang warna.
+2. Memakai `role="progressbar"` + `aria-valuenow`, dan `aria-live="polite"` agar pembaca layar
+   mengumumkan tahapnya.
+3. Persen **tidak** mencapai 100 sebelum benar-benar selesai (maksimal 99 selama berjalan).
+4. Keadaan gagal jelas bertekstur khusus (latar peringatan) dan **tidak** menampilkan `0%` —
+   menampilkan pesan galat saja.
+5. **Unggah ke cloud** (Phase 6) memakai indikator terpisah dengan teks `Mengunggah 1 dari 3 foto…`.
+   Pada Phase 3 baris itu berbunyi **`Tersimpan di perangkat`** — jujur menyebut foto belum dikirim,
+   bukan berpura-pura selesai mengunggah.
+6. Foto tetap bisa diambil **saat offline**; progresnya tetap berjalan karena semua di perangkat.
+
+Kode: `src/lib/progresFoto.ts` (logika, 14 tes) dan `src/components/IndikatorProgres.tsx` (tampilan).
+
+---
+
+## Pembaruan Phase 3 — foto resolusi tinggi (>80 MB)
+
+Permintaan pemilik: *"perlu antisipasi ukuran foto yang diupload memiliki resolusi tinggi dengan
+ukuran 1 file >80MB"*.
+
+Melakukan decode foto 108 MP sekaligus bisa memakai **±400 MB RAM** dan membuat tab Android
+**crash** (bukan error yang bisa ditangkap). Karena itu berkas disaring berlapis:
+
+| Lapis | Pemeriksaan | Batas |
+| --- | --- | --- |
+| 1. Sebelum decode | tipe berkas harus gambar | JPEG · PNG · WebP · HEIC/HEIF (type kosong juga diterima) |
+| 1. Sebelum decode | ukuran berkas | ditolak di atas **150 MB** |
+| 1. Sebelum decode | berkas > **10 MB** → tandai "besar" | memakai jalur decode hemat memori |
+| 2. Saat decode | berkas besar didecode dengan `createImageBitmap(file, { resizeWidth: 1600 })` | memori puncak jauh lebih kecil |
+| 3. Setelah decode | resolusi maksimum | ditolak di atas **150 MP** |
+| 4. Mengecilkan | pengecilan **bertahap** (maks 2× per langkah) lewat kanvas perantara | memori puncak terkendali |
+| 5. Kompres | kualitas 0,82 → 0,50 sampai ≤ 400 KB | sesuai target |
+
+Pesan galat ditampilkan **satu kali** di panel progres (mode gagal), bukan diulang di tempat lain:
+
+- `Foto terlalu besar (160.0 MB). Maksimal 150 MB.`
+- `Berkas ini bukan foto.`
+- `Foto terlalu besar resolusinya (300 megapiksel). Maksimal 150 megapiksel.`
+- `Foto tidak dapat dibaca. Coba foto lain.`
+
+Bila foto besar sedang diproses, muncul keterangan
+`Foto besar — sedang dikecilkan. Mohon tunggu sebentar.` di atas indikator progres.
+
+### Hasil uji nyata (Chrome, 10 Nov 2026)
+
+| Foto masukan | Hasil |
+| --- | --- |
+| 48 MP, **43,9 MB** JPEG (noise) | ✅ **1600×1200 WebP, 329 KB** — masuk target 250–400 KB |
+| 160 MB JPEG | ✅ ditolak sebelum decode, pesan jelas, **jumlah foto tidak berubah**, tidak ada batang progres |
+| 3000×2000, 104 KB | ✅ 1600×1067 WebP, 6 KB |
+
+Bila `createImageBitmap` tidak tersedia (browser lama) atau gagal (mis. HEIC), dipakai `<img>`
+lalu pengecilan bertahap dengan jalur yang sama.
+
+Kode: `src/lib/kompresiFoto.ts` — `periksaBerkasFoto`, `periksaResolusi`, `jalurPengecilan`
+(33 tes, termasuk pemeriksaan bahwa `createImageBitmap` **tidak dipanggil** untuk berkas 200 MB).

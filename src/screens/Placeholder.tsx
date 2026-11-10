@@ -1,18 +1,17 @@
-import type { Layar } from "../App.tsx";
 import type { SettingsRecord } from "../db/schema.ts";
 
-const KETERANGAN: Record<Exclude<Layar["nama"], "beranda">, string> = {
-  "pilih-barang": "Daftar barang untuk dipilih akan tersedia di Phase 3.",
-  keranjang: "Keranjang dan parkir transaksi akan tersedia di Phase 3.",
+/** Layar yang masih berupa penanda fase (bukan salinan lengkap Layar App). */
+export type LayarPenanda = "pesanan" | "bazar" | "ringkasan" | "pengaturan";
+
+const KETERANGAN: Record<LayarPenanda, string> = {
   pesanan: "Pre-order dan pembayaran akan tersedia di Phase 4.",
-  barang: "Admin barang dan foto produk akan tersedia di Phase 3.",
   bazar: "Bazar dan alokasi stok akan tersedia di Phase 3B.",
   ringkasan: "Ringkasan penjualan akan tersedia di Phase 4.",
   pengaturan: "Pengaturan butik dan logo akan tersedia di Phase 5.",
 };
 
 interface Props {
-  nama: Exclude<Layar["nama"], "beranda">;
+  nama: LayarPenanda;
   settings: SettingsRecord | null;
   storagePermanen: boolean | null;
 }

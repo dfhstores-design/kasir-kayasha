@@ -38,17 +38,17 @@ dan tetap bisa dipakai saat internet di lokasi pameran buruk atau tidak ada.
 | Phase 0 | Audit repo, workspace lokal, brief proyek, rencana fase | ✅ Selesai — 10 Nov 2026 |
 | Phase 1 | Alur & wireframe (5 alur, 17 layar) + keputusan bazar/parkir/ongkir/resi | ✅ Selesai — 10 Nov 2026 |
 | Phase 2 | Fondasi Vite + React + TS, PWA offline, skema IndexedDB, 79 unit test | ✅ Selesai — 10 Nov 2026 |
-| Phase 3 | Katalog, foto produk, penjualan langsung (lokal/offline) | ⏳ Berikutnya |
-| Phase 3B | Bazar (alokasi & tutup) + parkir transaksi | ⬜ Belum |
+| Phase 3 | Katalog, foto produk (progres wajib, aman >80 MB), penjualan langsung | ✅ Selesai — 10 Nov 2026 |
+| Phase 3B | Bazar (alokasi & tutup) + parkir transaksi | ⏳ Berikutnya |
 | Phase 4 | Pre-order, DP/pelunasan, status pesanan, ongkir, diskon | ⬜ Belum |
 | Phase 5 | Profil usaha, logo, rekening, resi PDF, berbagi | ⬜ Belum |
 | Phase 6 | Sinkronisasi D1 + unggah foto R2 | ⬜ Belum |
 | Phase 7 | QA, backup, deployment, panduan pemilik | ⬜ Belum |
 | To be develop | Cetak printer thermal 58/80 mm (Web Bluetooth) | ⏸️ Ditunda |
 
-**Status saat ini:** kerangka aplikasi sudah berjalan, dapat dipasang sebagai PWA, dan
-**terbukti tetap terbuka saat internet dimatikan**. Layar fitur penjualan masih berupa
-penanda fase — belum ada penjualan nyata, belum deploy, dan belum ada layanan berbayar.
+**Status saat ini:** barang dapat ditambahkan dengan foto, dijual, dan tersimpan menjadi
+transaksi nyata di perangkat. Aplikasi **terbukti tetap terbuka saat internet dimatikan**.
+Resi PDF, bazar, dan parkir transaksi belum ada; belum deploy; belum ada layanan berbayar.
 
 Dokumentasi penting:
 
@@ -235,7 +235,7 @@ Service worker **tidak** aktif saat `npm run dev` — itu disengaja agar hot rel
 | `npm run preview` | Pratinjau hasil build (mengaktifkan service worker) |
 | `npm run lint` | Pemeriksaan kode |
 | `npm run typecheck` | Pemeriksaan tipe TypeScript |
-| `npm test` | Unit test (79 tes per Phase 2) |
+| `npm test` | Unit test (156 tes per Phase 3) |
 
 ---
 
