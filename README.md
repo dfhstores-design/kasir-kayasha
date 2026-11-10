@@ -36,23 +36,27 @@ dan tetap bisa dipakai saat internet di lokasi pameran buruk atau tidak ada.
 | Fase | Isi | Status |
 | --- | --- | --- |
 | Phase 0 | Audit repo, workspace lokal, brief proyek, rencana fase | ✅ Selesai — 10 Nov 2026 |
-| Phase 1 | Alur sederhana & wireframe layar utama (5 alur, 14 layar, spesifikasi visual) | ✅ Selesai — 10 Nov 2026 |
-| Phase 2 | Fondasi proyek (Vite + React + TS), PWA, skema IndexedDB, persiapan Cloudflare/GitHub | ⏳ Berikutnya |
-| Phase 3 | Katalog, foto produk, penjualan langsung (lokal/offline) | ⬜ Belum |
+| Phase 1 | Alur & wireframe (5 alur, 17 layar) + keputusan bazar/parkir/ongkir/resi | ✅ Selesai — 10 Nov 2026 |
+| Phase 2 | Fondasi Vite + React + TS, PWA offline, skema IndexedDB, 79 unit test | ✅ Selesai — 10 Nov 2026 |
+| Phase 3 | Katalog, foto produk, penjualan langsung (lokal/offline) | ⏳ Berikutnya |
+| Phase 3B | Bazar (alokasi & tutup) + parkir transaksi | ⬜ Belum |
 | Phase 4 | Pre-order, DP/pelunasan, status pesanan, ongkir, diskon | ⬜ Belum |
-| Phase 5 | Profil usaha, logo, rekening, resi PDF, berbagi, uji kelayakan printer | ⬜ Belum |
+| Phase 5 | Profil usaha, logo, rekening, resi PDF, berbagi | ⬜ Belum |
 | Phase 6 | Sinkronisasi D1 + unggah foto R2 | ⬜ Belum |
 | Phase 7 | QA, backup, deployment, panduan pemilik | ⬜ Belum |
+| To be develop | Cetak printer thermal 58/80 mm (Web Bluetooth) | ⏸️ Ditunda |
 
-**Saat ini repositori berisi dokumentasi dan desain.** Belum ada kode aplikasi, belum ada
-deployment, dan belum ada layanan berbayar yang diaktifkan.
+**Status saat ini:** kerangka aplikasi sudah berjalan, dapat dipasang sebagai PWA, dan
+**terbukti tetap terbuka saat internet dimatikan**. Layar fitur penjualan masih berupa
+penanda fase — belum ada penjualan nyata, belum deploy, dan belum ada layanan berbayar.
 
 Dokumentasi penting:
 
 - [docs/PROJECT-BRIEF.md](docs/PROJECT-BRIEF.md) — ruang lingkup, keputusan, pertanyaan terbuka, rencana fase
 - [docs/design/FLOW.md](docs/design/FLOW.md) — alur pengguna (jual, tambah barang, pesanan, pengaturan, pembatalan)
 - [docs/design/UI-SPEC.md](docs/design/UI-SPEC.md) — **kontrak visual**: warna (kontras terukur), ukuran, tipografi, teks
-- [docs/design/screens/](docs/design/screens/01-beranda.md) — 14 layar MVP, satu berkas per layar
+- [docs/design/BAZAR-PARKIR-RESI.md](docs/design/BAZAR-PARKIR-RESI.md) — bazar & stok, parkir, ongkir 4 keadaan, resi
+- [docs/design/screens/](docs/design/screens/01-beranda.md) — 17 layar MVP, satu berkas per layar
 - [docs/project-history/](docs/project-history/README.md) — catatan serah-terima tiap fase (wajib dibaca agent berikutnya)
 
 ---
@@ -137,19 +141,26 @@ kasir-kayasha/
 ├─ README.md                     ← berkas ini
 ├─ LICENSE                       ← lisensi MIT
 ├─ .gitignore
+├─ index.html                    ← entry aplikasi
+├─ package.json                  ← skrip dev/build/lint/test
+├─ vite.config.ts · vitest.config.ts · eslint.config.js
+├─ tsconfig.json · tsconfig.app.json · tsconfig.node.json
+├─ public/
+│  ├─ manifest.webmanifest       ← PWA
+│  ├─ sw.js                      ← service worker app-shell
+│  └─ icons/                     ← 192 · 512 · maskable
+├─ src/
+│  ├─ main.tsx · App.tsx         ← bootstrap + navigasi
+│  ├─ lib/                       ← fungsi MURNI (money, ongkir, sapaan, keranjang, stok) + tes
+│  ├─ db/                        ← skema IndexedDB + repositori (+ tes)
+│  ├─ pwa/register.ts            ← pendaftaran SW & penyimpanan permanen
+│  ├─ screens/                   ← Beranda, Placeholder
+│  └─ styles/                    ← tokens.css (warna/ukuran), base.css
 ├─ docs/
 │  ├─ PROJECT-BRIEF.md           ← ruang lingkup, keputusan, rencana fase
-│  ├─ design/                    ← hasil Phase 1 (alur, spesifikasi, wireframe)
-│  │  ├─ FLOW.md                 ← alur pengguna
-│  │  ├─ UI-SPEC.md              ← kontrak visual (warna, ukuran, teks)
-│  │  ├─ screens/                ← 14 layar, satu berkas per layar
-│  │  ├─ wireframe.src.mjs       ← sumber wireframe
-│  │  └─ tools/build-wireframe.mjs
+│  ├─ design/                    ← alur, spesifikasi, 17 layar, wireframe
 │  └─ project-history/           ← catatan serah-terima per fase (jangan ditimpa)
-│     ├─ README.md               ← aturan penulisan catatan
-│     ├─ PHASE-00-2026-11-10-1235.md
-│     └─ PHASE-01-2026-11-10-1305.md
-└─ (Phase 2 ke atas akan menambahkan: package.json, src/, public/, migrations/, functions/)
+└─ (Phase 6 akan menambahkan: migrations/ D1, functions/ Pages Functions)
 ```
 
 Wireframe Phase 1 tidak disimpan di repo; hasilnya berada di workspace lokal
@@ -163,23 +174,20 @@ Saat Phase 2 selesai, struktur yang ditargetkan:
 
 ```
 ├─ src/
-│  ├─ main.tsx, App.tsx
 │  ├─ screens/          ← layar: beranda, katalog, keranjang, PO, admin, pengaturan, ringkasan
-│  ├─ db/               ← skema IndexedDB & repositori data
-│  ├─ lib/              ← perhitungan uang/diskon/ongkir, format, kompresi foto, PDF
-│  └─ sync/             ← antrean & sinkronisasi idempoten
-├─ public/              ← manifest, ikon, service worker
-├─ functions/api/       ← Pages Functions (endpoint pemilik)
-├─ migrations/          ← migrasi D1
-└─ tests/               ← unit test perhitungan & alur
+│  ├─ db/               ← ✅ selesai: skema IndexedDB & repositori data
+│  ├─ lib/              ← ✅ selesai: uang/diskon/ongkir/sapaan/stok (fungsi murni + tes)
+│  └─ sync/             ← antrean & sinkronisasi idempoten (Phase 6)
+├─ public/              ← ✅ selesai: manifest, ikon, service worker
+├─ functions/api/       ← Pages Functions (endpoint pemilik) — Phase 6
+└─ migrations/          ← migrasi D1 — Phase 6
 ```
 
 ---
 
 ## Mulai menjalankan (lokal)
 
-> Bagian ini akan aktif setelah **Phase 2**. Perintahnya sudah ditulis agar agent berikutnya
-> dan pemilik memakai langkah yang sama.
+> Sudah aktif sejak **Phase 2**. Perintah di bawah adalah yang benar-benar dipakai.
 
 **Prasyarat**
 
@@ -207,16 +215,27 @@ npm run dev -- --host
 Lalu buka `http://<IP-komputer>:5173` di HP. Aplikasi tidak bisa dipasang sebagai PWA lewat
 HTTP biasa; untuk uji pemasangan gunakan HTTPS (lihat bagian [Cloudflare](#cloudflare-d1-r2-secret-dan-pages)).
 
-**Perintah yang direncanakan**
+**Menguji mode offline**
+
+```bash
+npm run build
+npm run preview
+```
+
+Buka `http://localhost:4173`, muat ulang sekali agar service worker terpasang, lalu matikan
+jaringan di DevTools (Network → Offline) dan muat ulang. Aplikasi harus tetap terbuka.
+Service worker **tidak** aktif saat `npm run dev` — itu disengaja agar hot reload tidak rusak.
+
+**Perintah**
 
 | Perintah | Arti |
 | --- | --- |
 | `npm run dev` | Server pengembangan |
 | `npm run build` | Build produksi ke `dist/` |
-| `npm run preview` | Pratinjau hasil build |
+| `npm run preview` | Pratinjau hasil build (mengaktifkan service worker) |
 | `npm run lint` | Pemeriksaan kode |
 | `npm run typecheck` | Pemeriksaan tipe TypeScript |
-| `npm test` | Unit test |
+| `npm test` | Unit test (79 tes per Phase 2) |
 
 ---
 

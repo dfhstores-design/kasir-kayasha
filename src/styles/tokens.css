@@ -1,0 +1,51 @@
+/*
+ * Token desain — sumber tunggal warna, ukuran, dan tipografi.
+ * Semua nilai berasal dari docs/design/UI-SPEC.md dan sudah dihitung kontrasnya.
+ * Jangan menambah warna baru di komponen; tambahkan di sini lalu perbarui dokumennya.
+ */
+:root {
+  /* Warna */
+  --bg: #f7f4ee;
+  --surface: #ffffff;
+  --ink: #1f2328;
+  --ink-soft: #5a6068;
+  --line: #ded8ce;
+  --field-line: #8a8378;
+  --ph: #e9e4da;
+  --ph-ink: #6f695e;
+  --primary: #8c3f2c;
+  --primary-ink: #ffffff;
+  --accent: #2f6f5e;
+  --accent-bg: #e7f1ec;
+  --accent-ink: #1f5748;
+  --warn-bg: #fbf0dc;
+  --warn-ink: #7a4a00;
+  --danger: #962718;
+  --off-bg: #efece6;
+
+  /* Ukuran — rem agar mengikuti pengaturan font HP */
+  --radius: 1rem;
+  --space-1: 0.5rem;
+  --space-2: 1rem;
+  --space-3: 1.5rem;
+  --space-4: 2rem;
+
+  --touch-min: 3rem; /* 48px */
+  --button-main: 3.75rem; /* 60px */
+  --font-h1: 1.625rem;
+  --font-h2: 1.25rem;
+  --font-body: 1.125rem;
+  --font-soft: 1rem;
+  --font-total: 2.125rem;
+
+  --max-width: 45rem;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}

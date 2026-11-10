@@ -156,8 +156,8 @@ Pertanyaan di atas tidak menghalangi Phase 1 dan Phase 2.
 | --- | --- | --- |
 | Phase 0 | Baca repo & perintah utama, tetapkan workspace lokal + repo + Drive, catat ruang lingkup, keputusan, pertanyaan terbuka, rencana fase, kuota resmi | **Selesai — 10 Nov 2026** |
 | Phase 1 | Alur sederhana & wireframe layar utama (5 alur, 14 layar, spesifikasi visual) | **Selesai — 10 Nov 2026** |
-| Phase 2 | Fondasi proyek (Vite + React + TS), PWA, skema IndexedDB, persiapan Cloudflare/GitHub | Berikutnya |
-| Phase 3 | Katalog + stok gudang + penjualan langsung (lokal/offline) | Belum |
+| Phase 2 | Fondasi proyek (Vite + React + TS), PWA, skema IndexedDB, persiapan Cloudflare/GitHub | **Selesai — 10 Nov 2026** |
+| Phase 3 | Katalog + stok gudang + penjualan langsung (lokal/offline) | Berikutnya |
 | **Phase 3B** | **Bazar (alokasi & tutup), parkir transaksi (maks 3)** | Belum |
 | Phase 4 | Pre-order, DP/pelunasan, status pesanan, ongkir, diskon | Belum |
 | Phase 5 | Profil usaha, logo, rekening, **resi PDF** (susunan mengikuti contoh), berbagi | Belum |
