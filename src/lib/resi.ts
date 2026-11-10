@@ -18,6 +18,9 @@ import { sapaanDariWaktu } from "./sapaan.ts";
 import type { Rekening } from "../db/schema.ts";
 
 /** Baris resi. `align` mengatur posisi: kiri, kanan, atau tengah. */
+/** Dipakai HANYA bila pemilik belum mengisi nama butik di Pengaturan. */
+export const NAMA_BUTIK_BAWAAN = "Kayesha";
+
 export type BarisResi =
   | { jenis: "logo" }
   | { jenis: "judul"; teks: string }
@@ -81,7 +84,7 @@ export function susunResi(d: DataResi): BarisResi[] {
   const b: BarisResi[] = [];
 
   b.push({ jenis: "logo" });
-  b.push({ jenis: "judul", teks: d.namaButik.toUpperCase() || "KASIR KAYASHA" });
+  b.push({ jenis: "judul", teks: (d.namaButik.trim() || NAMA_BUTIK_BAWAAN).toUpperCase() });
   for (const a of d.alamat.filter((x) => x.trim())) {
     b.push({ jenis: "teks", teks: a, tengah: true, kecil: true });
   }
@@ -259,7 +262,7 @@ export function dataContoh(s: {
     waktu: sekarang.toISOString(),
     jenis: "langsung",
     sapaan,
-    namaButik: s.namaButik || "Kasir Kayasha",
+    namaButik: s.namaButik.trim() || NAMA_BUTIK_BAWAAN,
     alamat: [s.alamatBaris1, s.alamatBaris2, s.kotaKodePos].filter((x) => x.trim()),
     telepon: [s.telepon1, s.telepon2].filter((x) => x.trim()),
     logoAda: !!s.logo,

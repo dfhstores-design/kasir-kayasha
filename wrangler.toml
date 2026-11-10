@@ -1,19 +1,28 @@
-# Nama proyek di Cloudflare Pages
-name = "kasir-kayasha"
-# Build memakai skrip pembungkus (mengarahkan temp esbuild ke dalam proyek)
+# Kasir Kayesha — Cloudflare Pages + Pages Functions + D1
+#
+# Deploy:
+#   npm run build
+#   npx wrangler pages deploy dist --project-name kasir-kayesha
+#
+# Sinkronisasi D1 (Phase 6):
+#   1. npx wrangler d1 create kasir-kayesha        → salin database_id di bawah
+#   2. npx wrangler d1 execute kasir-kayesha --remote --file=./db/schema.sql
+#   3. (opsional, disarankan) batasi endpoint: npx wrangler pages secret put SYNC_TOKEN
+#      lalu set VITE_SYNC_TOKEN saat build.
+#
+# CATATAN PENTING: aplikasi tetap berfungsi penuh TANPA D1. Sinkronisasi hanya
+# salinan cloud; perangkat tetap sumber kebenaran. Bila D1 belum dibuat, endpoint
+# /api/sync menjawab 503 dan aplikasi tetap jalan seperti biasa.
+
+name = "kasir-kayesha"
 pages_build_output_dir = "dist"
 compatibility_date = "2026-11-01"
 
-# Catatan untuk Phase 6 (BELUM diaktifkan — perlu persetujuan pemilik):
-#
-# [[d1_databases]]
-# binding = "DB"
-# database_name = "kasir-kayasha"
-# database_id = "<isi setelah `npx wrangler d1 create kasir-kayasha`>"
-#
-# [[r2_buckets]]
-# binding = "PHOTOS"
-# bucket_name = "kasir-kayasha-photos"
-#
-# R2 adalah subscription akun dan biasanya meminta metode pembayaran.
-# Jangan mengaktifkan tanpa persetujuan pemilik (lihat PROJECT-BRIEF Q-02).
+[[d1_databases]]
+binding = "DB"
+database_name = "kasir-kayesha"
+# Ganti dengan id dari `npx wrangler d1 create kasir-kayesha`
+database_id = "214fa920-b118-4a5d-890e-ed27665ad4a2"
+
+# R2 TIDAK dipakai (keputusan pemilik: tanpa kartu). Foto produk tetap di perangkat.
+# Bila kelak R2 diaktifkan, tambahkan binding PHOTOS di sini tanpa mengubah kode lain.

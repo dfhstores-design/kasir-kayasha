@@ -64,7 +64,7 @@ export default function Cadangan({ onDipulihkan }: Props) {
     try {
       const trx = await daftarTransaksi();
       const csv = buatCsvTransaksi(trx);
-      unduh(new Blob([csv], { type: "text/csv;charset=utf-8" }), "Transaksi-KasirKayasha.csv");
+      unduh(new Blob([csv], { type: "text/csv;charset=utf-8" }), "Transaksi-KasirKayesha.csv");
       setPesan("Daftar transaksi (CSV) disimpan di folder Unduhan.");
     } finally {
       setSibuk(false);

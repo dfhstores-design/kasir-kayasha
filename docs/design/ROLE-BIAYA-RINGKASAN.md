@@ -1,4 +1,4 @@
-# Kasir Kayasha — Peran Admin & Kasir, Biaya Bazar, dan Ringkasan
+# Kasir Kayesha — Peran Admin & Kasir, Biaya Bazar, dan Ringkasan
 
 Ditetapkan **10 November 2026** atas permintaan pemilik. Dokumen ini **merevisi** sebagian
 perintah utama (`Kasir_Butik_Pameran_—_Master_Prompt_untuk_AI_Agent.md`) dan mengalahkan isi

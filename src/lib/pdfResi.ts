@@ -24,8 +24,8 @@ const HITAM = rgb(0, 0, 0);
 export async function buatPdfResi(baris: readonly BarisResi[], opsi: Opsi): Promise<Blob> {
   const doc = await PDFDocument.create();
   doc.setTitle(opsi.judul);
-  doc.setCreator("Kasir Kayasha");
-  doc.setProducer("Kasir Kayasha");
+  doc.setCreator("Kasir Kayesha");
+  doc.setProducer("Kasir Kayesha");
 
   const font = await doc.embedFont(StandardFonts.Helvetica);
   const fontTebal = await doc.embedFont(StandardFonts.HelveticaBold);

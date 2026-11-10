@@ -1,6 +1,8 @@
-# Kasir Kayasha
+# Kasir Kayesha
 
-Aplikasi kasir butik **offline-first untuk pameran**, dibuat untuk **Kayasha Clothing**.
+> **Situs produksi:** <https://kasir-kayesha.pages.dev> · **Panduan pemilik:** [docs/PANDUAN-PEMILIK.md](docs/PANDUAN-PEMILIK.md)
+
+Aplikasi kasir butik **offline-first untuk pameran**, dibuat untuk **Kayesha Clothing**.
 Dipakai pemilik butik sendiri lewat HP atau tablet Android, dipasang sebagai PWA,
 dan tetap bisa dipakai saat internet di lokasi pameran buruk atau tidak ada.
 
@@ -43,7 +45,7 @@ dan tetap bisa dipakai saat internet di lokasi pameran buruk atau tidak ada.
 | Phase 3C | Role admin/kasir (PIN), biaya bazar, hitung ulang sisa, ringkasan laba | ✅ Selesai — 10 Nov 2026 |
 | Phase 4 | Pre-order, DP/pelunasan, status pesanan, ongkir menyusul | ✅ Selesai — 10 Nov 2026 |
 | Phase 5 | Profil usaha, logo, rekening, resi PDF, berbagi | ✅ Selesai — 10 Nov 2026 |
-| Phase 6 | Sinkronisasi D1 + unggah foto R2 | ⏳ Menunggu keputusan |
+| Phase 6 | Sinkronisasi D1 (tanpa R2) | ✅ Selesai — 10 Nov 2026 |
 | Phase 7 | QA, backup, deployment, panduan pemilik | ✅ Selesai — 10 Nov 2026 |
 | To be develop | Cetak printer thermal 58/80 mm (Web Bluetooth) | ⏸️ Ditunda |
 
@@ -139,7 +141,7 @@ pihak ketiga, integrasi pembayaran online, WhatsApp Business API.
 ## Struktur repositori
 
 ```
-kasir-kayasha/
+kasir-kayesha/
 ├─ README.md                     ← berkas ini
 ├─ LICENSE                       ← lisensi MIT
 ├─ .gitignore
@@ -166,7 +168,7 @@ kasir-kayasha/
 ```
 
 Wireframe Phase 1 tidak disimpan di repo; hasilnya berada di workspace lokal
-`Kasir-Butik-Kayasha/artifacts/PHASE-01/wireframe.html` dan dapat dibuat ulang dengan:
+`Kasir-Butik-Kayesha/artifacts/PHASE-01/wireframe.html` dan dapat dibuat ulang dengan:
 
 ```bash
 node docs/design/tools/build-wireframe.mjs <path-keluaran.html>
@@ -200,8 +202,8 @@ Saat Phase 2 selesai, struktur yang ditargetkan:
 **Langkah**
 
 ```bash
-git clone https://github.com/dfhstores-design/kasir-kayasha.git
-cd kasir-kayasha
+git clone https://github.com/dfhstores-design/kasir-kayesha.git
+cd kasir-kayesha
 npm install
 npm run dev
 ```
@@ -237,7 +239,7 @@ Service worker **tidak** aktif saat `npm run dev` — itu disengaja agar hot rel
 | `npm run preview` | Pratinjau hasil build (mengaktifkan service worker) |
 | `npm run lint` | Pemeriksaan kode |
 | `npm run typecheck` | Pemeriksaan tipe TypeScript |
-| `npm test` | Unit test (283 tes per Phase 7) |
+| `npm test` | Unit test (307 tes per Phase 6) |
 
 ---
 
@@ -255,7 +257,7 @@ npx wrangler login
 ### 2. Buat database D1
 
 ```bash
-npx wrangler d1 create kasir-kayasha
+npx wrangler d1 create kasir-kayesha
 ```
 
 Salin `database_id` yang dicetak ke bagian `[[d1_databases]]` pada `wrangler.toml`.
@@ -264,16 +266,16 @@ Salin `database_id` yang dicetak ke bagian `[[d1_databases]]` pada `wrangler.tom
 
 ```bash
 # database lokal (untuk pengembangan)
-npx wrangler d1 migrations apply kasir-kayasha --local
+npx wrangler d1 migrations apply kasir-kayesha --local
 
 # database cloud
-npx wrangler d1 migrations apply kasir-kayasha --remote
+npx wrangler d1 migrations apply kasir-kayesha --remote
 ```
 
 ### 4. Buat bucket R2 untuk foto produk
 
 ```bash
-npx wrangler r2 bucket create kasir-kayasha-photos
+npx wrangler r2 bucket create kasir-kayesha-photos
 ```
 
 Binding R2 dideklarasikan di `wrangler.toml`:
@@ -281,7 +283,7 @@ Binding R2 dideklarasikan di `wrangler.toml`:
 ```toml
 [[r2_buckets]]
 binding = "PHOTOS"
-bucket_name = "kasir-kayasha-photos"
+bucket_name = "kasir-kayesha-photos"
 ```
 
 > **Catatan biaya:** R2 diaktifkan sebagai *subscription* akun dan memakai alur checkout
@@ -296,7 +298,7 @@ bucket_name = "kasir-kayasha-photos"
 - Produksi: gunakan `wrangler secret` atau menu **Settings → Variables** di dashboard Pages.
 
 ```bash
-npx wrangler pages secret put OWNER_TOKEN --project-name kasir-kayasha
+npx wrangler pages secret put OWNER_TOKEN --project-name kasir-kayesha
 ```
 
 Endpoint pemilik wajib memeriksa token tersebut; **jangan** membuat endpoint data publik.
@@ -306,7 +308,7 @@ Endpoint pemilik wajib memeriksa token tersebut; **jangan** membuat endpoint dat
 Cara A — dari dashboard (disarankan untuk pemilik):
 
 1. Cloudflare Dashboard → **Workers & Pages** → **Create** → **Pages** → **Connect to Git**
-2. Pilih repositori `dfhstores-design/kasir-kayasha`
+2. Pilih repositori `dfhstores-design/kasir-kayesha`
 3. Build command: `npm run build` · Output directory: `dist`
 4. Simpan. Setiap `git push` ke `main` membuat deploy baru (kuota gratis: 500 build/bulan).
 
@@ -318,7 +320,7 @@ Cara B — dari terminal:
 
 ```bash
 npm run build
-npx wrangler pages deploy dist --project-name kasir-kayasha
+npx wrangler pages deploy dist --project-name kasir-kayesha
 ```
 
 Konfigurasi Pages tersimpan di `wrangler.toml` (`pages_build_output_dir = "dist"`).
@@ -350,7 +352,7 @@ Konfigurasi Pages tersimpan di `wrangler.toml` (`pages_build_output_dir = "dist"
 
 1. Buka **Pengaturan → Cadangan & pemulihan → Pilih berkas cadangan**.
 2. Aplikasi **memeriksa dulu** (`periksaCadangan`) lalu menampilkan ringkasan isi:
-   berkas rusak, bukan cadangan Kasir Kayasha, atau dari versi lebih baru → **ditolak**
+   berkas rusak, bukan cadangan Kasir Kayesha, atau dari versi lebih baru → **ditolak**
    dengan pesan jelas, dan **tidak ada** data yang ditulis.
 3. Pilih mode:
    - **Gabung** (bawaan) — data sekarang tidak dihapus; baris dengan id sama ditimpa.
@@ -367,7 +369,7 @@ diverifikasi manual di browser.
 **Selain aplikasi:**
 
 - Repositori ini dan `docs/project-history/` adalah arsip dokumentasi.
-- Salinan dokumentasi juga disimpan di Google Drive → `AI GPT/Kasir Kayasha/`.
+- Salinan dokumentasi juga disimpan di Google Drive → `AI GPT/Kasir Kayesha/`.
 
 ---
 
@@ -483,7 +485,7 @@ Proyek ini dikerjakan satu fase per sesi agar dapat dilanjutkan agent lain kapan
 4. Jalankan lint, type-check, test, dan build yang relevan. Jangan mengaku tes lulus bila tidak dijalankan.
 5. Buat catatan historis baru `docs/project-history/PHASE-XX-YYYY-MM-DD-HHMM.md`
    (aturan lengkap di [docs/project-history/README.md](docs/project-history/README.md)).
-6. Salin catatan itu ke Google Drive → `AI GPT/Kasir Kayasha/project-history/` sebagai berkas baru.
+6. Salin catatan itu ke Google Drive → `AI GPT/Kasir Kayesha/project-history/` sebagai berkas baru.
 7. Laporkan: apa yang selesai, tes yang dijalankan, letak catatan, yang tertunda, dan fase berikutnya.
 8. Berhenti dan tunggu instruksi. Jangan mulai fase berikutnya sebelum diminta.
 
@@ -511,6 +513,6 @@ Proyek ini dikerjakan satu fase per sesi agar dapat dilanjutkan agent lain kapan
 
 ## Kontak dan tautan
 
-- Repositori: <https://github.com/dfhstores-design/kasir-kayasha>
-- Backup dokumentasi: Google Drive → `AI GPT/Kasir Kayasha`
+- Repositori: <https://github.com/dfhstores-design/kasir-kayesha>
+- Backup dokumentasi: Google Drive → `AI GPT/Kasir Kayesha`
 - Lisensi: [MIT](LICENSE)

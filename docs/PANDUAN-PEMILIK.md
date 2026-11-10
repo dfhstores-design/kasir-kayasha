@@ -1,4 +1,4 @@
-# Panduan Pemilik — Kasir Kayasha
+# Panduan Pemilik — Kasir Kayesha
 
 Panduan ini ditulis untuk **Ibu**, pemilik butik. Tidak perlu pengetahuan teknis.
 Ikuti dari atas ke bawah, sekali saja saat pertama memakai.
@@ -25,7 +25,7 @@ Bisa dipakai **tanpa internet** setelah dibuka sekali.
 1. Ketuk **Pengaturan** di beranda.
 2. Ketuk **Masuk sebagai Admin** — kalau belum ada PIN, ketuk **Buka sebagai Admin (atur PIN)**.
 3. Ketuk **Nama & kontak butik**, isi:
-   - Nama butik (contoh: Kayasha Clothing)
+   - Nama butik (contoh: Kayesha Clothing)
    - Alamat
    - Kota & kode pos
    - Telepon

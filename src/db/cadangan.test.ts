@@ -46,29 +46,29 @@ describe("periksaCadangan", () => {
     expect(periksaCadangan("bukan json")).toEqual({ ok: false, pesan: "Berkas cadangan tidak dapat dibaca." });
   });
 
-  it("menolak JSON bukan cadangan Kasir Kayasha", () => {
+  it("menolak JSON bukan cadangan Kasir Kayesha", () => {
     expect(periksaCadangan(JSON.stringify({ hello: 1 }))).toEqual({
       ok: false,
-      pesan: "Berkas ini bukan cadangan Kasir Kayasha.",
+      pesan: "Berkas ini bukan cadangan Kasir Kayesha.",
     });
   });
 
   it("menolak cadangan dari versi lebih baru", () => {
     const h = periksaCadangan(
-      JSON.stringify({ aplikasi: "Kasir Kayasha", versiFormat: VERSI_CADANGAN + 1, data: {} }),
+      JSON.stringify({ aplikasi: "Kasir Kayesha", versiFormat: VERSI_CADANGAN + 1, data: {} }),
     );
     expect(h.ok).toBe(false);
     if (!h.ok) expect(h.pesan).toContain("versi lebih baru");
   });
 
   it("menolak cadangan tanpa isi", () => {
-    expect(periksaCadangan(JSON.stringify({ aplikasi: "Kasir Kayasha", versiFormat: 1 })).ok).toBe(false);
+    expect(periksaCadangan(JSON.stringify({ aplikasi: "Kasir Kayesha", versiFormat: 1 })).ok).toBe(false);
   });
 
   it("memberi ringkasan isi untuk konfirmasi pemilik", () => {
     const h = periksaCadangan(
       JSON.stringify({
-        aplikasi: "Kasir Kayasha",
+        aplikasi: "Kasir Kayesha",
         versiFormat: 1,
         data: { products: [{}, {}], transactions: [{}] },
         jumlah: { products: 2, transactions: 1 },
@@ -127,7 +127,7 @@ function pulihkanTiruan(
   gudang: GudangTiruan,
   mode: "gabung" | "ganti",
 ): { ok: boolean } {
-  if (berkas.aplikasi !== "Kasir Kayasha") return { ok: false };
+  if (berkas.aplikasi !== "Kasir Kayesha") return { ok: false };
   for (const [nama, baris] of Object.entries(berkas.data)) {
     const store = (gudang as unknown as Record<string, StoreTiruan<unknown>>)[nama];
     if (!store) continue;
@@ -138,7 +138,7 @@ function pulihkanTiruan(
 }
 
 const berkasContoh = (data: Record<string, unknown[]>) => ({
-  aplikasi: "Kasir Kayasha",
+  aplikasi: "Kasir Kayesha",
   versiFormat: VERSI_CADANGAN,
   versiDatabase: 2,
   dibuatPada: new Date().toISOString(),
@@ -172,7 +172,7 @@ describe("pemulihan (tiruan)", () => {
     expect(semua[0]?.nama).toBe("Lama");
   });
 
-  it("menolak berkas bukan Kasir Kayasha tanpa menulis apa pun", () => {
+  it("menolak berkas bukan Kasir Kayesha tanpa menulis apa pun", () => {
     const gudang = gudangBaru();
     const h = pulihkanTiruan({ aplikasi: "Lain", data: { products: [produk("X", 1, 1)] } }, gudang, "gabung");
     expect(h.ok).toBe(false);
@@ -186,23 +186,23 @@ describe("buatCadangan (IndexedDB asli, data non-Blob)", () => {
   it("membuat cadangan dari database yang berisi pengaturan & produk", async () => {
     resetKoneksiDB();
     await getDB();
-    await simpanSettings({ ...SETTINGS_KOSONG, namaButik: "Kayasha" });
+    await simpanSettings({ ...SETTINGS_KOSONG, namaButik: "Kayesha" });
     await simpanProduk(produk("Blus", 180000, 5));
 
     const cad = await buatCadangan();
     expect(cad.ok).toBe(true);
     if (!cad.ok) return;
 
-    expect(cad.berkas.aplikasi).toBe("Kasir Kayasha");
+    expect(cad.berkas.aplikasi).toBe("Kasir Kayesha");
     expect(cad.berkas.jumlah.settings).toBe(1);
     expect(cad.berkas.jumlah.products).toBeGreaterThanOrEqual(1);
 
     const teks = await cad.blob.text();
-    expect(teks).toContain("Kayasha");
+    expect(teks).toContain("Kayesha");
     expect(periksaCadangan(teks).ok).toBe(true);
 
     // data di DB tidak berubah karena ekspor
-    expect((await ambilSettings()).namaButik).toBe("Kayasha");
+    expect((await ambilSettings()).namaButik).toBe("Kayesha");
   });
 });
 

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { ambilSettings, type SettingsRecord } from "../db/repositori.ts";
 import { ambilPesanan, type PesananLengkap } from "../db/pesananOperasi.ts";
-import { susunResi, NAMA_FILE_RESI, type DataResi } from "../lib/resi.ts";
+import { susunResi, NAMA_FILE_RESI, NAMA_BUTIK_BAWAAN, type DataResi } from "../lib/resi.ts";
 import PratinjauResi from "../components/PratinjauResi.tsx";
 
 import { sapaanDariWaktu } from "../lib/sapaan.ts";
@@ -116,7 +116,7 @@ function dariPesanan(l: PesananLengkap, s: SettingsRecord): DataResi {
     waktu: t.waktu,
     jenis: t.jenis,
     sapaan: t.sapaan ?? sapaanDariWaktu(new Date(t.waktu)),
-    namaButik: s.namaButik || "Kasir Kayasha",
+    namaButik: s.namaButik.trim() || NAMA_BUTIK_BAWAAN,
     alamat: [s.alamatBaris1, s.alamatBaris2, s.kotaKodePos].filter((x) => x.trim()),
     telepon: [s.telepon1, s.telepon2].filter((x) => x.trim()),
     logoAda: !!s.logo,

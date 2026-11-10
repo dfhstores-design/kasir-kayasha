@@ -71,6 +71,9 @@ export async function ambilProduk(id: UUID): Promise<ProdukRecord | undefined> {
 export async function simpanProduk(p: ProdukRecord): Promise<void> {
   const db = await getDB();
   await db.put("products", { ...p, updatedAt: new Date().toISOString() });
+  // Antrean sinkronisasi ditulis SESUDAH data tersimpan. Tidak menunggu jaringan.
+  const { tandaiUntukSync } = await import("../sync/mesin.ts");
+  await tandaiUntukSync("produk", p.id);
 }
 
 export const MAKS_FOTO = 3;
@@ -530,6 +533,15 @@ export async function simpanTransaksi(
   }
 
   await tx.done;
+
+  // Antrean sinkronisasi ditulis SESUDAH transaksi tersimpan penuh.
+  // Bila langkah ini gagal, penjualan TETAP sah — hanya sinkronisasi cloud yang tertunda.
+  try {
+    const { tandaiUntukSync } = await import("../sync/mesin.ts");
+    await tandaiUntukSync("transaksi", trx.id);
+  } catch {
+    // Sengaja diam: data lokal sudah aman dan tidak boleh dibatalkan.
+  }
 }
 
 export async function ambilTransaksi(id: UUID): Promise<TransaksiLengkap | undefined> {

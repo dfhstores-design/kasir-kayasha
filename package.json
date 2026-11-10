@@ -1,8 +1,8 @@
 {
-  "name": "kasir-kayasha",
+  "name": "kasir-kayesha",
   "private": true,
   "version": "0.1.0",
-  "description": "Kasir Kayasha — aplikasi kasir butik offline-first untuk pameran",
+  "description": "Kasir Kayesha — aplikasi kasir butik offline-first untuk pameran",
   "type": "module",
   "engines": {
     "node": ">=20"
@@ -11,7 +11,7 @@
     "dev": "vite",
     "build": "tsc -b && node scripts/vite-build.mjs",
     "preview": "vite preview",
-    "typecheck": "tsc -b --noEmit",
+    "typecheck": "tsc -b && tsc -p tsconfig.functions.json --noEmit",
     "lint": "eslint .",
     "test": "vitest run",
     "test:watch": "vitest"
@@ -23,6 +23,7 @@
     "react-dom": "^19.2.0"
   },
   "devDependencies": {
+    "@cloudflare/workers-types": "^5.20261110.1",
     "@eslint/js": "^9.39.1",
     "@testing-library/dom": "^10.4.1",
     "@testing-library/react": "^16.3.0",

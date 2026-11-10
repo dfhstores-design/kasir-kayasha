@@ -1,4 +1,4 @@
-# Kasir Kayasha — Spesifikasi Bazar, Parkir, dan Resi Thermal
+# Kasir Kayesha — Spesifikasi Bazar, Parkir, dan Resi Thermal
 
 Ditambahkan pada **Phase 1 lanjutan** (10 November 2026, 13:30 WIB) berdasarkan keputusan pemilik
 dan contoh resi thermal yang dilampirkan.
@@ -14,7 +14,7 @@ Bila ada perbedaan, berkas ini yang berlaku untuk ketiga topik di bawah.
 | --- | --- | --- |
 | B-01 | Hubungan stok gudang dan stok bazar | **Stok gudang jadi acuan utama; tiap bazar menetapkan alokasi.** Gudang berkurang saat barang dialokasikan ke bazar; penjualan mengurangi saldo bazar. |
 | B-02 | Printer | **Printer thermal 58 mm / 80 mm (Bluetooth).** Output resi memakai **PDF** lebih dulu; cetak thermal masuk daftar *to be develop*. Tetap ada PDF sebagai cadangan. |
-| B-03 | Usaha bernama "DAPUR OPA" | **Hanya contoh format.** Nama, logo, dan alamat diganti data Kayasha Clothing. Yang ditiru susunannya. |
+| B-03 | Usaha bernama "DAPUR OPA" | **Hanya contoh format.** Nama, logo, dan alamat diganti data Kayesha Clothing. Yang ditiru susunannya. |
 | B-04 | Batas dari perintah utama | **Tetap ikut seluruh larangan perintah utama** — tanpa diskon persen, tanpa hapus permanen barang, satu perangkat kasir. |
 | B-05 | Jumlah transaksi parkir | **Maksimal 3**, tiap parkir **diberi nama pembeli**. |
 | B-06 | Jenis transaksi | Tunai / Transfer Bank / QRIS |

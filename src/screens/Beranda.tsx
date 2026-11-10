@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import StatusSinkron from "../components/StatusSinkron.tsx";
 import { daftarParkir, daftarProduk, profilTerisi, type ProdukRecord } from "../db/repositori.ts";
 import type { SettingsRecord } from "../db/schema.ts";
 import type { BazarRecord } from "../db/schema.ts";
@@ -41,7 +42,7 @@ export default function Beranda({ settings, storagePermanen, bazar, peran, onMin
   return (
     <div className="content">
       <div>
-        <p className="h1">Kasir Kayasha</p>
+        <p className="h1">Kasir Kayesha</p>
         {namaButik && <p className="soft" style={{ margin: 0 }}>{namaButik}</p>}
       </div>
 
@@ -158,10 +159,7 @@ export default function Beranda({ settings, storagePermanen, bazar, peran, onMin
 
       <div style={{ marginTop: "auto" }}>
         {parkir > 0 && <p className="soft" style={{ margin: "0 0 0.25rem" }}>{parkir} transaksi tertahan</p>}
-        <div className="status">
-          <span className="dot" aria-hidden="true" />
-          <span>Tersimpan di perangkat</span>
-        </div>
+        <StatusSinkron />
         {storagePermanen === false && (
           <p className="soft" style={{ margin: "0.25rem 0 0" }}>
             Minta browser menyimpan data lebih lama: pasang aplikasi ke layar utama.

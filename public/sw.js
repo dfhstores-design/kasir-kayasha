@@ -1,5 +1,5 @@
 /*
- * Service worker Kasir Kayasha — app shell offline.
+ * Service worker Kasir Kayesha — app shell offline.
  *
  * Strategi:
  *  - navigasi (HTML): network-first, fallback ke cache index.html.

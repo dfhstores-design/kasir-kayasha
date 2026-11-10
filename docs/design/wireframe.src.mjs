@@ -1,5 +1,5 @@
 /*
- * Kasir Kayasha — data wireframe Phase 1
+ * Kasir Kayesha — data wireframe Phase 1
  *
  * Sumber kebenaran tata letak untuk wireframe interaktif. Dijalankan oleh
  * docs/design/tools/build-wireframe.mjs untuk menghasilkan artifacts/PHASE-01/wireframe.html.
@@ -19,8 +19,8 @@ export const SCREENS = [
     body: `
 <div class="content">
   <div>
-    <p class="h1" style="font-size:26px">Kasir Kayasha</p>
-    <p class="muted" style="margin:2px 0 0">Kayasha Clothing</p>
+    <p class="h1" style="font-size:26px">Kasir Kayesha</p>
+    <p class="muted" style="margin:2px 0 0">Kayesha Clothing</p>
   </div>
   <div class="okbox">Ayo isi nama butik dulu. <u>Isi Pengaturan</u></div>
   <div class="big">
@@ -200,7 +200,7 @@ ${appbar("Resi KYS-0012")}
 <div class="content">
   <div class="receipt" style="font-size:13px;line-height:1.5">
     <div class="logobox" style="width:64px;height:64px"></div>
-    <div class="center"><b style="font-size:15px;letter-spacing:.5px">KAYASHA CLOTHING</b></div>
+    <div class="center"><b style="font-size:15px;letter-spacing:.5px">KAYESHA CLOTHING</b></div>
     <div class="center muted" style="font-size:12px">Jl. Melati No. 12<br />Kebayoran Baru<br />JAKARTA 12130<br />0812-1111-2222</div>
     <div class="hr"></div>
     <div class="row" style="font-size:12px"><span>11 Nov 2026 14:20</span><span>#7</span></div>
@@ -375,7 +375,7 @@ ${appbar("Pengaturan")}
   <div class="navitem">Lihat contoh resi <span>›</span></div>
   <div class="navitem">Kunci menu (PIN) <span>›</span></div>
   <div class="navitem">Cadangan & pemulihan <span>›</span></div>
-  <p class="muted" style="font-size:15px;margin:8px 0 0">Kasir Kayasha · Tersimpan di perangkat ini</p>
+  <p class="muted" style="font-size:15px;margin:8px 0 0">Kasir Kayesha · Tersimpan di perangkat ini</p>
 </div>`,
   },
 

@@ -1,4 +1,4 @@
-# Kasir Kayasha — Alur Pengguna (Phase 1)
+# Kasir Kayesha — Alur Pengguna (Phase 1)
 
 Dokumen ini menjawab satu pertanyaan: **"orang tua yang baru pertama kali pegang aplikasi ini
 akan menekan apa, lalu apa yang terjadi?"** Alur ditulis dulu, desain menyusul.

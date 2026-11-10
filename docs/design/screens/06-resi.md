@@ -14,7 +14,7 @@ Spesifikasi latar: [`BAZAR-PARKIR-RESI.md`](../BAZAR-PARKIR-RESI.md) bagian 4a�
 ├──────────────────────────────────────┤
 │  ┌────────────────────────────────┐  │
 │  │        [ LOGO ]                │  │  ← hitam-putih, proporsional
-│  │      KAYASHA CLOTHING          │  │
+│  │      KAYESHA CLOTHING          │  │
 │  │      Jl. Melati No. 12         │  │
 │  │      Kebayoran Baru            │  │
 │  │      JAKARTA 12130             │  │

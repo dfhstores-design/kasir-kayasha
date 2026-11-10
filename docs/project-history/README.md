@@ -1,6 +1,6 @@
 # Aturan Catatan Historis Proyek
 
-Folder ini adalah **sumber wajib** dokumentasi serah-terima proyek Kasir Kayasha.
+Folder ini adalah **sumber wajib** dokumentasi serah-terima proyek Kasir Kayesha.
 Setiap fase meninggalkan satu catatan baru yang cukup dibaca agent lain tanpa perlu percakapan sebelumnya.
 
 ## Nama berkas
@@ -39,7 +39,7 @@ Contoh: `PHASE-03-2026-11-12-2035.md`
 
 ## Salinan Google Drive
 
-- Lokasi: Google Drive → `AI GPT/Kasir Kayasha/project-history/`.
+- Lokasi: Google Drive → `AI GPT/Kasir Kayesha/project-history/`.
 - Salin catatan baru **sebagai berkas baru** dengan nama yang sama; jangan mengganti berkas lama.
 - Jika Drive tidak tersedia, dokumentasi lokal tetap wajib; sebutkan di catatan bahwa salinan
   Drive belum dibuat.
@@ -60,6 +60,7 @@ Contoh: `PHASE-03-2026-11-12-2035.md`
 | 2026-11-10 18:00 | [PHASE-04-2026-11-10-1800.md](PHASE-04-2026-11-10-1800.md) | Phase 4 — pre-order (tanpa potong stok), DP/pelunasan, status pesanan, ongkir menyusul (244 tes) |
 | 2026-11-10 19:00 | [PHASE-05-2026-11-10-1900.md](PHASE-05-2026-11-10-1900.md) | Phase 5 — profil/logo/rekening + resi PDF (susunan contoh pemilik), berbagi & simpan (269 tes) |
 | 2026-11-10 20:00 | [PHASE-07-2026-11-10-2000.md](PHASE-07-2026-11-10-2000.md) | Phase 7 — cadangan/pemulihan JSON+CSV, panduan pemilik, kesiapan deploy (283 tes) |
+| 2026-11-10 21:00 | [PHASE-06-2026-11-10-2100.md](PHASE-06-2026-11-10-2100.md) | Phase 6 — sinkronisasi D1 idempoten (tanpa R2), **deploy ke Pages**, revisi nama Kayesha (307 tes) |
 
 > **Catatan urutan rilis:** commit Phase 0 yang dipush ke GitHub (10 Nov 12:26 WIB) masih memuat
 > tabel di atas tanpa baris PHASE-01; baris tersebut ditambahkan pada commit Phase 1. Isi catatan

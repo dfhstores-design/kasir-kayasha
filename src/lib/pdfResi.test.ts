@@ -9,7 +9,7 @@ const data = (over: Partial<DataResi> = {}): DataResi => ({
   waktu: "2026-11-11T07:20:00.000Z",
   jenis: "langsung",
   sapaan: "Sore",
-  namaButik: "Kayasha Clothing",
+  namaButik: "Kayesha Clothing",
   alamat: ["Jl. Melati No. 12"],
   telepon: ["0812-1111-2222"],
   logoAda: false,

@@ -16,7 +16,7 @@ const dasar = (over: Partial<DataResi> = {}): DataResi => ({
   waktu: "2026-11-11T07:20:00.000Z",
   jenis: "langsung",
   sapaan: "Sore",
-  namaButik: "Kayasha Clothing",
+  namaButik: "Kayesha Clothing",
   alamat: ["Jl. Melati No. 12", "JAKARTA 12130"],
   telepon: ["0812-1111-2222"],
   logoAda: true,
@@ -45,14 +45,14 @@ describe("susunResi — urutan & isi", () => {
     const t = teksResi(susunResi(dasar()));
     const potong = t.split("\n").slice(0, 6).join("\n");
     expect(potong).toContain("[logo]");
-    expect(potong).toContain("KAYASHA CLOTHING");
+    expect(potong).toContain("KAYESHA CLOTHING");
     expect(potong).toContain("Jl. Melati No. 12");
     expect(potong).toContain("0812-1111-2222");
   });
 
   it("tanpa logo tetap rapi dengan nama butik sebagai judul", () => {
     const t = teksResi(susunResi(dasar({ logoAda: false })));
-    expect(t).toContain("KAYASHA CLOTHING");
+    expect(t).toContain("KAYESHA CLOTHING");
   });
 
   it("menampilkan tanggal dan nomor urut hari", () => {

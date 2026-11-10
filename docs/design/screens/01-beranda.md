@@ -4,8 +4,8 @@
 
 ```
 ┌──────────────────────────────────────┐
-│  Kasir Kayasha                       │  ← judul aplikasi, 26 px
-│  Kayasha Clothing                    │  ← nama butik dari Pengaturan, 16 px abu
+│  Kasir Kayesha                       │  ← judul aplikasi, 26 px
+│  Kayesha Clothing                    │  ← nama butik dari Pengaturan, 16 px abu
 ├──────────────────────────────────────┤
 │                                      │
 │  ┌────────────────────────────────┐  │
@@ -32,7 +32,7 @@
 
 | Bagian | Isi | Perilaku |
 | --- | --- | --- |
-| Judul | "Kasir Kayasha" | Tetap di semua layar beranda |
+| Judul | "Kasir Kayesha" | Tetap di semua layar beranda |
 | Nama butik | dari Pengaturan | Mengikuti isian pemilik |
 | **Jual Barang** | tombol terbesar | → Pilih Barang (Alur 1) |
 | **Pesanan** | tombol besar | → Daftar Pesanan |

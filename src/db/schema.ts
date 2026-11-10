@@ -1,5 +1,5 @@
 /**
- * Skema IndexedDB Kasir Kayasha.
+ * Skema IndexedDB Kasir Kayesha.
  *
  * Aturan dari CONTEXT: jangan pakai localStorage untuk data transaksi utama.
  * Semua data bisnis ada di IndexedDB, ditulis SEBELUM menunggu server.
@@ -21,7 +21,18 @@ import type { OngkirMode } from "../lib/ongkir.ts";
 import type { Sapaan } from "../lib/sapaan.ts";
 import type { StatusBayar } from "../lib/keranjang.ts";
 
+/**
+ * Nama database IndexedDB.
+ *
+ * SENGAJA tetap "kasir-kayasha" (ejaan lama) walaupun nama aplikasi sudah menjadi
+ * "Kasir Kayesha". Mengganti nama ini akan membuat aplikasi membuka database KOSONG
+ * dan data pemilik seolah hilang. Nama internal bukan nama yang dilihat pengguna.
+ * Bila suatu saat harus diganti, WAJIB disertai migrasi yang menyalin seluruh isi
+ * database lama (lihat `salinDatabaseLama` di komentar bawah).
+ */
 export const DB_NAME = "kasir-kayasha";
+/** Nama database yang dipakai versi lama; hanya untuk keperluan migrasi. */
+export const DB_NAME_LAMA = "kasir-kayesha";
 export const DB_VERSION = 2;
 
 export type UUID = string;
@@ -342,7 +353,7 @@ export function getDB(): Promise<IDBPDatabase<KasirDB>> {
         }
       },
       blocked() {
-        console.warn("Kasir Kayasha: pembaruan database tertahan — tutup tab lain lalu muat ulang.");
+        console.warn("Kasir Kayesha: pembaruan database tertahan — tutup tab lain lalu muat ulang.");
       },
     });
   }

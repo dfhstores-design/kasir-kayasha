@@ -15,7 +15,7 @@ import { getDB, DB_VERSION, type KasirDB } from "./schema.ts";
 
 export const VERSI_CADANGAN = 1;
 export const NAMA_BERKAS_CADANGAN = (tgl: Date) =>
-  `Cadangan-KasirKayasha-${tgl.toISOString().slice(0, 10)}.json`;
+  `Cadangan-KasirKayesha-${tgl.toISOString().slice(0, 10)}.json`;
 
 /** Store yang ikut dicadangkan (semua data bisnis). */
 export const STORE_CADANGAN = [
@@ -34,7 +34,7 @@ export const STORE_CADANGAN = [
 type NamaStore = (typeof STORE_CADANGAN)[number];
 
 export interface BerkasCadangan {
-  aplikasi: "Kasir Kayasha";
+  aplikasi: "Kasir Kayesha";
   versiFormat: number;
   versiDatabase: number;
   dibuatPada: string;
@@ -148,7 +148,7 @@ export async function buatCadangan(sekarang: Date = new Date()): Promise<HasilEk
     }
 
     const berkas: BerkasCadangan = {
-      aplikasi: "Kasir Kayasha",
+      aplikasi: "Kasir Kayesha",
       versiFormat: VERSI_CADANGAN,
       versiDatabase: DB_VERSION,
       dibuatPada: sekarang.toISOString(),
@@ -179,8 +179,8 @@ export function periksaCadangan(teks: string): HasilPeriksa {
   }
 
   const b = mentah as Partial<BerkasCadangan>;
-  if (!b || b.aplikasi !== "Kasir Kayasha") {
-    return { ok: false, pesan: "Berkas ini bukan cadangan Kasir Kayasha." };
+  if (!b || b.aplikasi !== "Kasir Kayesha") {
+    return { ok: false, pesan: "Berkas ini bukan cadangan Kasir Kayesha." };
   }
   if (typeof b.versiFormat !== "number") {
     return { ok: false, pesan: "Format cadangan tidak dikenal." };
@@ -244,8 +244,8 @@ export type HasilPulihkan = { ok: true; dipulihkan: Record<string, number> } | {
  * Bila satu store gagal, error dilempar dan UI menampilkan pesan — tidak setengah jadi.
  */
 export async function pulihkanCadangan(cadangan: BerkasCadangan, opsi: OpsiPulihkan): Promise<HasilPulihkan> {
-  if (cadangan.aplikasi !== "Kasir Kayasha") {
-    return { ok: false, pesan: "Berkas ini bukan cadangan Kasir Kayasha." };
+  if (cadangan.aplikasi !== "Kasir Kayesha") {
+    return { ok: false, pesan: "Berkas ini bukan cadangan Kasir Kayesha." };
   }
   if (cadangan.versiFormat > VERSI_CADANGAN) {
     return { ok: false, pesan: "Cadangan dibuat oleh aplikasi versi lebih baru." };

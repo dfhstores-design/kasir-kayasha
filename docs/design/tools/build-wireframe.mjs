@@ -1,5 +1,5 @@
 /*
- * Kasir Kayasha — pembuat wireframe Phase 1
+ * Kasir Kayesha — pembuat wireframe Phase 1
  * Menghasilkan satu berkas HTML mandiri (tanpa dependensi, tanpa internet, tanpa data).
  *
  * Jalankan dari root repo:
@@ -46,7 +46,7 @@ function renderHtml(screens, views) {
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Kasir Kayasha — Wireframe Phase 1</title>
+<title>Kasir Kayesha — Wireframe Phase 1</title>
 <style>
   :root {
     --bg: #f7f4ee;
@@ -156,7 +156,7 @@ function renderHtml(screens, views) {
 </head>
 <body>
 <header class="top">
-  <h1>Kasir Kayasha — Wireframe Phase 1</h1>
+  <h1>Kasir Kayesha — Wireframe Phase 1</h1>
   <p>Gambaran layar MVP (±360 × 740 px, skala HP kecil). Tanpa fungsi nyata — untuk menyetujui alur dan tata letak
      sebelum kode ditulis. Spesifikasi warna, ukuran, dan teks: <code>docs/design/UI-SPEC.md</code>.</p>
 </header>
@@ -179,7 +179,7 @@ ${frames}
   function show(i) {
     frames.forEach(function (f, j) { f.classList.toggle('on', i === j); });
     items.forEach(function (b, j) { b.setAttribute('aria-current', j === i ? 'true' : 'false'); });
-    document.title = 'Kasir Kayasha — Layar ' + (i + 1);
+    document.title = 'Kasir Kayesha — Layar ' + (i + 1);
   }
   items.forEach(function (b, i) { b.addEventListener('click', function () { show(i); }); });
   document.addEventListener('keydown', function (e) {

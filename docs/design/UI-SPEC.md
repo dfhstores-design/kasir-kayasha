@@ -1,4 +1,4 @@
-# Kasir Kayasha — Spesifikasi Layar & Aturan Visual (Phase 1)
+# Kasir Kayesha — Spesifikasi Layar & Aturan Visual (Phase 1)
 
 Dokumen ini adalah kontrak desain untuk Phase 2 ke atas: **nama layar, isi, tata letak, teks, dan
 aturan visual**. Implementasi harus mengikuti dokumen ini; bila perlu menyimpang, catat alasannya
