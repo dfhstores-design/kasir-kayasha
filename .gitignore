@@ -42,3 +42,6 @@ test-results/
 .DS_Store
 Thumbs.db
 desktop.ini
+
+# Temp build (esbuild)
+.tmp-esbuild/

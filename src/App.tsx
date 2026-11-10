@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import Beranda from "./screens/Beranda.tsx";
-import Placeholder from "./screens/Placeholder.tsx";
+
 import PilihBarang from "./screens/PilihBarang.tsx";
 import DetailBarang from "./screens/DetailBarang.tsx";
 import Keranjang, { MAKS_PARKIR_TAMPIL, type ParkirRingkas } from "./screens/Keranjang.tsx";
@@ -18,6 +18,10 @@ import AturPin from "./screens/AturPin.tsx";
 import Pesanan from "./screens/Pesanan.tsx";
 import DetailPesanan from "./screens/DetailPesanan.tsx";
 import FormPesanan from "./screens/FormPesanan.tsx";
+import Pengaturan from "./screens/Pengaturan.tsx";
+import Resi from "./screens/Resi.tsx";
+import MenuPengaturan from "./screens/MenuPengaturan.tsx";
+import ContohResi from "./screens/ContohResi.tsx";
 import {
   ambilParkir,
   ambilSettings,
@@ -65,7 +69,10 @@ export type Layar =
   | { nama: "biaya-bazar"; bazar: BazarRecord }
   | { nama: "atur-pin" }
   | { nama: "detail-pesanan"; id: string }
-  | { nama: "form-pesanan" };
+  | { nama: "form-pesanan" }
+  | { nama: "pengaturan-isi"; bagian: "profil" | "rekening" | "logo" }
+  | { nama: "resi"; transaksiId: string }
+  | { nama: "contoh-resi" };
 
 interface NilaiKeranjang {
   diskonTotal: number;
@@ -362,6 +369,9 @@ export default function App() {
     "tutup-bazar": "Tutup Bazar",
     ringkasan: "Ringkasan",
     pengaturan: "Pengaturan",
+    "pengaturan-isi": "Pengaturan",
+    resi: "Resi",
+    "contoh-resi": "Contoh Resi",
   };
 
   const tampilAppbar = layar.nama !== "beranda" && layar.nama !== "tersimpan";
@@ -493,7 +503,7 @@ export default function App() {
       {layar.nama === "tersimpan" && (
         <TransaksiTersimpanLayar
           transaksi={layar.transaksi}
-          onBuatResi={() => setLayar({ nama: "pengaturan" })}
+          onBuatResi={() => setLayar({ nama: "resi", transaksiId: layar.transaksi.id })}
           onTransaksiBaru={() => setLayar({ nama: "pilih-barang" })}
         />
       )}
@@ -549,9 +559,28 @@ export default function App() {
         />
       )}
 
-      {(layar.nama === "pengaturan") && (
-        <Placeholder nama={layar.nama} settings={settings} storagePermanen={storagePermanen} />
+      {layar.nama === "pengaturan" && (
+        <MenuPengaturan
+          namaButik={settings?.namaButik ?? ""}
+          jumlahRekening={settings?.rekening.length ?? 0}
+          adaLogo={!!settings?.logo}
+          onBuka={(bagian) => setLayar({ nama: "pengaturan-isi", bagian })}
+          onContohResi={() => setLayar({ nama: "contoh-resi" })}
+          onPin={() => setLayar({ nama: "atur-pin" })}
+        />
       )}
+
+      {layar.nama === "pengaturan-isi" && (
+        <Pengaturan
+          bagian={layar.bagian}
+          onSimpan={() => void muat()}
+          onLihatContohResi={() => setLayar({ nama: "contoh-resi" })}
+        />
+      )}
+
+      {layar.nama === "resi" && <Resi transaksiId={layar.transaksiId} onSelesai={() => setLayar({ nama: "beranda" })} />}
+
+      {layar.nama === "contoh-resi" && settings && <ContohResi settings={settings} />}
 
       {layar.nama === "atur-pin" &&
         (peran === "admin" ? (
@@ -627,7 +656,7 @@ export default function App() {
         <DetailPesanan
           pesanan={pesananDibuka}
           sibuk={sibukPesanan}
-          onLihatResi={() => setLayar({ nama: "pengaturan" })}
+          onLihatResi={() => setLayar({ nama: "resi", transaksiId: pesananDibuka.transaksi.id })}
           onCatatPembayaran={(nominal, metode) => {
             setSibukPesanan(true);
             void catatPembayaran(pesananDibuka.transaksi.id, {

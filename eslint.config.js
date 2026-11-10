@@ -23,7 +23,7 @@ export default [
     },
   },
   {
-    files: ["vite.config.ts", "vitest.config.ts", "eslint.config.js", "docs/design/tools/**/*.mjs", "docs/design/*.mjs"],
+    files: ["vite.config.ts", "vitest.config.ts", "eslint.config.js", "docs/design/tools/**/*.mjs", "docs/design/*.mjs", "scripts/**/*.mjs", "scripts/**/*.js"],
     languageOptions: { globals: globals.node },
   },
 ];

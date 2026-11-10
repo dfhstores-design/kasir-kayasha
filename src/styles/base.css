@@ -503,3 +503,63 @@ select {
   justify-content: center;
   margin: 1.5rem auto 0.5rem;
 }
+
+/* ---------------- pratinjau resi (Phase 5) ---------------- */
+
+.resi {
+  background: #fff;
+  border: 1px dashed #b9b2a5;
+  border-radius: 0.5rem;
+  padding: 0.875rem;
+  font-size: 0.8125rem;
+  line-height: 1.5;
+  color: var(--ink);
+}
+
+.resi__judul {
+  text-align: center;
+  font-weight: 700;
+  font-size: 0.9375rem;
+  letter-spacing: 0.03em;
+  margin: 0 0 0.125rem;
+}
+
+.resi__teks {
+  margin: 0;
+}
+
+.resi__tengah {
+  text-align: center;
+}
+
+.resi__kecil {
+  font-size: 0.75rem;
+}
+
+.resi__garis {
+  border: 0;
+  border-top: 1px dashed #b9b2a5;
+  margin: 0.375rem 0;
+}
+
+.resi__baris {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.resi__total {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+  font-weight: 700;
+  font-size: 0.9375rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.resi__barang {
+  font-weight: 700;
+  margin: 0.25rem 0 0;
+  text-transform: uppercase;
+}
