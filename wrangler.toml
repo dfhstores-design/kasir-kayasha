@@ -1,0 +1,19 @@
+# Nama proyek di Cloudflare Pages
+name = "kasir-kayasha"
+# Build memakai skrip pembungkus (mengarahkan temp esbuild ke dalam proyek)
+pages_build_output_dir = "dist"
+compatibility_date = "2026-11-01"
+
+# Catatan untuk Phase 6 (BELUM diaktifkan — perlu persetujuan pemilik):
+#
+# [[d1_databases]]
+# binding = "DB"
+# database_name = "kasir-kayasha"
+# database_id = "<isi setelah `npx wrangler d1 create kasir-kayasha`>"
+#
+# [[r2_buckets]]
+# binding = "PHOTOS"
+# bucket_name = "kasir-kayasha-photos"
+#
+# R2 adalah subscription akun dan biasanya meminta metode pembayaran.
+# Jangan mengaktifkan tanpa persetujuan pemilik (lihat PROJECT-BRIEF Q-02).

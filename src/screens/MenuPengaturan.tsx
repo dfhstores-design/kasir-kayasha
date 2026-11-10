@@ -5,13 +5,14 @@ interface Props {
   onBuka: (bagian: "profil" | "rekening" | "logo") => void;
   onContohResi: () => void;
   onPin: () => void;
+  onCadangan: () => void;
 }
 
 /**
  * Menu Pengaturan (docs/design/screens/11-pengaturan.md).
  * Daftar pilihan besar — bukan tab kecil.
  */
-export default function MenuPengaturan({ namaButik, jumlahRekening, adaLogo, onBuka, onContohResi, onPin }: Props) {
+export default function MenuPengaturan({ namaButik, jumlahRekening, adaLogo, onBuka, onContohResi, onPin, onCadangan }: Props) {
   const item = (judul: string, keterangan: string, aksi: () => void) => (
     <button
       type="button"
@@ -40,6 +41,7 @@ export default function MenuPengaturan({ namaButik, jumlahRekening, adaLogo, onB
       )}
       {item("Lihat contoh resi", "Pratinjau dengan data saat ini", onContohResi)}
       {item("PIN Admin", "Kunci menu admin", onPin)}
+      {item("Cadangan & pemulihan", "Simpan/ambil data ke berkas", onCadangan)}
       <div className="panel panel--ok">Printer thermal: sedang disiapkan. Saat ini resi berupa PDF.</div>
     </div>
   );

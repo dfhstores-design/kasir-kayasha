@@ -59,6 +59,7 @@ Contoh: `PHASE-03-2026-11-12-2035.md`
 | 2026-11-10 17:00 | [PHASE-03C-2026-11-10-1700.md](PHASE-03C-2026-11-10-1700.md) | Phase 3C — role admin/kasir (PIN), biaya bazar, hitung ulang sisa, ringkasan laba (197 tes) — **merevisi perintah utama** |
 | 2026-11-10 18:00 | [PHASE-04-2026-11-10-1800.md](PHASE-04-2026-11-10-1800.md) | Phase 4 — pre-order (tanpa potong stok), DP/pelunasan, status pesanan, ongkir menyusul (244 tes) |
 | 2026-11-10 19:00 | [PHASE-05-2026-11-10-1900.md](PHASE-05-2026-11-10-1900.md) | Phase 5 — profil/logo/rekening + resi PDF (susunan contoh pemilik), berbagi & simpan (269 tes) |
+| 2026-11-10 20:00 | [PHASE-07-2026-11-10-2000.md](PHASE-07-2026-11-10-2000.md) | Phase 7 — cadangan/pemulihan JSON+CSV, panduan pemilik, kesiapan deploy (283 tes) |
 
 > **Catatan urutan rilis:** commit Phase 0 yang dipush ke GitHub (10 Nov 12:26 WIB) masih memuat
 > tabel di atas tanpa baris PHASE-01; baris tersebut ditambahkan pada commit Phase 1. Isi catatan

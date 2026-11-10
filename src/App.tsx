@@ -22,6 +22,7 @@ import Pengaturan from "./screens/Pengaturan.tsx";
 import Resi from "./screens/Resi.tsx";
 import MenuPengaturan from "./screens/MenuPengaturan.tsx";
 import ContohResi from "./screens/ContohResi.tsx";
+import Cadangan from "./screens/Cadangan.tsx";
 import {
   ambilParkir,
   ambilSettings,
@@ -72,7 +73,8 @@ export type Layar =
   | { nama: "form-pesanan" }
   | { nama: "pengaturan-isi"; bagian: "profil" | "rekening" | "logo" }
   | { nama: "resi"; transaksiId: string }
-  | { nama: "contoh-resi" };
+  | { nama: "contoh-resi" }
+  | { nama: "cadangan" };
 
 interface NilaiKeranjang {
   diskonTotal: number;
@@ -372,6 +374,7 @@ export default function App() {
     "pengaturan-isi": "Pengaturan",
     resi: "Resi",
     "contoh-resi": "Contoh Resi",
+    cadangan: "Cadangan",
   };
 
   const tampilAppbar = layar.nama !== "beranda" && layar.nama !== "tersimpan";
@@ -567,6 +570,7 @@ export default function App() {
           onBuka={(bagian) => setLayar({ nama: "pengaturan-isi", bagian })}
           onContohResi={() => setLayar({ nama: "contoh-resi" })}
           onPin={() => setLayar({ nama: "atur-pin" })}
+          onCadangan={() => setLayar({ nama: "cadangan" })}
         />
       )}
 
@@ -581,6 +585,14 @@ export default function App() {
       {layar.nama === "resi" && <Resi transaksiId={layar.transaksiId} onSelesai={() => setLayar({ nama: "beranda" })} />}
 
       {layar.nama === "contoh-resi" && settings && <ContohResi settings={settings} />}
+
+      {layar.nama === "cadangan" && (
+        <Cadangan
+          onDipulihkan={() => {
+            void muat();
+          }}
+        />
+      )}
 
       {layar.nama === "atur-pin" &&
         (peran === "admin" ? (

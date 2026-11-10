@@ -12,6 +12,7 @@ export const LAYAR_KHUSUS_ADMIN = [
   "pengaturan",
   "biaya-bazar",
   "atur-pin",
+  "cadangan",
 ] as const;
 
 export function khususAdmin(layar: string): boolean {

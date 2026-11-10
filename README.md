@@ -43,13 +43,13 @@ dan tetap bisa dipakai saat internet di lokasi pameran buruk atau tidak ada.
 | Phase 3C | Role admin/kasir (PIN), biaya bazar, hitung ulang sisa, ringkasan laba | ✅ Selesai — 10 Nov 2026 |
 | Phase 4 | Pre-order, DP/pelunasan, status pesanan, ongkir menyusul | ✅ Selesai — 10 Nov 2026 |
 | Phase 5 | Profil usaha, logo, rekening, resi PDF, berbagi | ✅ Selesai — 10 Nov 2026 |
-| Phase 6 | Sinkronisasi D1 + unggah foto R2 | ⬜ Belum |
-| Phase 7 | QA, backup, deployment, panduan pemilik | ⬜ Belum |
+| Phase 6 | Sinkronisasi D1 + unggah foto R2 | ⏳ Menunggu keputusan |
+| Phase 7 | QA, backup, deployment, panduan pemilik | ✅ Selesai — 10 Nov 2026 |
 | To be develop | Cetak printer thermal 58/80 mm (Web Bluetooth) | ⏸️ Ditunda |
 
 **Status saat ini:** barang dapat ditambahkan dengan foto, dijual, dan tersimpan menjadi
 transaksi nyata di perangkat. Aplikasi **terbukti tetap terbuka saat internet dimatikan**.
-Bazar (stok terpisah dari gudang) dan parkir transaksi sudah ada. Resi PDF sudah bisa dibuat & dibagikan;
+Bazar (stok terpisah dari gudang) dan parkir transaksi sudah ada. Resi PDF dan cadangan/pemulihan sudah ada;
 belum deploy; belum ada layanan berbayar.
 
 Dokumentasi penting:
@@ -237,7 +237,7 @@ Service worker **tidak** aktif saat `npm run dev` — itu disengaja agar hot rel
 | `npm run preview` | Pratinjau hasil build (mengaktifkan service worker) |
 | `npm run lint` | Pemeriksaan kode |
 | `npm run typecheck` | Pemeriksaan tipe TypeScript |
-| `npm test` | Unit test (269 tes per Phase 5) |
+| `npm test` | Unit test (283 tes per Phase 7) |
 
 ---
 
@@ -308,8 +308,11 @@ Cara A — dari dashboard (disarankan untuk pemilik):
 1. Cloudflare Dashboard → **Workers & Pages** → **Create** → **Pages** → **Connect to Git**
 2. Pilih repositori `dfhstores-design/kasir-kayasha`
 3. Build command: `npm run build` · Output directory: `dist`
-4. Tambahkan binding D1 (`DB`) dan R2 (`PHOTOS`) di **Settings → Bindings**
-5. Simpan. Setiap `git push` ke `main` membuat deploy baru (kuota gratis: 500 build/bulan).
+4. Simpan. Setiap `git push` ke `main` membuat deploy baru (kuota gratis: 500 build/bulan).
+
+> **Phase 7:** aplikasi saat ini **belum memakai D1/R2** — semua data ada di perangkat.
+> Binding D1 (`DB`) dan R2 (`PHOTOS`) baru diperlukan pada Phase 6 dan belum diaktifkan
+> (R2 adalah subscription akun; lihat `PROJECT-BRIEF` Q-02).
 
 Cara B — dari terminal:
 
@@ -317,6 +320,10 @@ Cara B — dari terminal:
 npm run build
 npx wrangler pages deploy dist --project-name kasir-kayasha
 ```
+
+Konfigurasi Pages tersimpan di `wrangler.toml` (`pages_build_output_dir = "dist"`).
+
+**Wajib HTTPS.** PWA dan service worker hanya aktif lewat HTTPS; `pages.dev` sudah HTTPS.
 
 ---
 
@@ -332,17 +339,30 @@ npx wrangler pages deploy dist --project-name kasir-kayasha
 
 ## Backup dan pemulihan
 
-**Ekspor (dari aplikasi, menu Ringkasan/Backup):**
+**Ekspor (Pengaturan → Cadangan & pemulihan):**
 
-- File JSON berisi katalog, transaksi, item, pembayaran, dan pengaturan.
-- File CSV untuk membaca transaksi di aplikasi spreadsheet.
+- **JSON** — satu berkas berisi semua object store: pengaturan (termasuk logo), barang,
+  foto produk, bazar, barang bazar, biaya, transaksi, baris transaksi, pembayaran, dan
+  transaksi tertahan. Blob (foto/logo) disimpan sebagai **base64** agar satu berkas cukup.
+- **CSV** — daftar transaksi untuk spreadsheet; nilai uang tetap integer Rupiah.
 
-**Pemulihan dasar:**
+**Pemulihan:**
 
-1. Pastikan aplikasi versi yang sama atau lebih baru.
-2. Buka menu Backup → **Pulihkan dari cadangan** → pilih file JSON.
-3. Aplikasi menampilkan ringkasan isi cadangan sebelum menulis data; konfirmasi di akhir.
-4. Data yang sudah ada tidak terhapus kecuali diminta dan dikonfirmasi.
+1. Buka **Pengaturan → Cadangan & pemulihan → Pilih berkas cadangan**.
+2. Aplikasi **memeriksa dulu** (`periksaCadangan`) lalu menampilkan ringkasan isi:
+   berkas rusak, bukan cadangan Kasir Kayasha, atau dari versi lebih baru → **ditolak**
+   dengan pesan jelas, dan **tidak ada** data yang ditulis.
+3. Pilih mode:
+   - **Gabung** (bawaan) — data sekarang tidak dihapus; baris dengan id sama ditimpa.
+   - **Ganti semua** — data dibersihkan lebih dulu (butuh centang + konfirmasi).
+4. Setelah selesai, seluruh layar memuat ulang.
+
+**Versi format cadangan:** `VERSI_CADANGAN = 1` (`src/db/cadangan.ts`). Menaikkan versi
+hanya bila bentuk data berubah; cadangan lama tetap diterima selama `versiFormat` ≤ versi terpasang.
+
+**Catatan uji:** `fake-indexeddb` mengubah Blob menjadi `{}` saat disimpan, sehingga tes otomatis
+menguji logika Blob secara langsung dan pemulihan pada penyimpanan tiruan. Jalur Blob nyata
+diverifikasi manual di browser.
 
 **Selain aplikasi:**
 
