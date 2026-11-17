@@ -8,37 +8,67 @@ Spesifikasi latar: [`BAZAR-PARKIR-RESI.md`](../BAZAR-PARKIR-RESI.md) bagian 4a�
 > *to be develop* sesuai keputusan B-02. Susunan baris di bawah tetap dipakai bila printer
 > diaktifkan kelak.
 
+> Susunan di bawah mengikuti contoh resi yang dibahas Andri (mockup nota v8 /
+> resi v9 / resi bazar v4, 15 Nov 2026). Perbedaan utama dari versi sebelumnya:
+> ada judul dokumen (RESI / INVOICE) + lencana status, info dua kolom,
+> pembayaran per baris, kotak rekening yang selalu tampil, kotak peringatan,
+> dan tanda tangan "Hormat Kami". Baris sapaan dan baris "TERIMA KASIH"
+> tidak lagi dicetak.
+
 ```
 ┌──────────────────────────────────────┐
 │  ‹ Kembali     Resi KYS-0012         │
 ├──────────────────────────────────────┤
 │  ┌────────────────────────────────┐  │
-│  │        [ LOGO ]                │  │  ← hitam-putih, proporsional
-│  │      KAYESHA CLOTHING          │  │
-│  │      Jl. Melati No. 12         │  │
-│  │      Kebayoran Baru            │  │
-│  │      JAKARTA 12130             │  │
-│  │      0812-1111-2222            │  │
+│  │  [LOGO]  KAYESA                │  │  ← logo kiri, nama di kanan
+│  │          KAYESA'S CLOTHING     │  │
+│  │  Jl. Tarumanegara No. 41       │  │
+│  │  (Sebelah Pempak Nyai)         │  │
+│  │  Ploso Ciptum 15419            │  │
+│  │  WA 0812 1141 4017 · 0821 ...  │  │
 │  │  ────────────────────────────  │  │
-│  │  11 Nov 2026 14:20         #7  │  │
-│  │  - Sore -                      │  │  ← otomatis dari jam
+│  │  [CONTOH DATA FIKTIF]          │  │  ← hanya pratinjau/contoh
+│  │  RESI                          │  │
+│  │  BUKTI PEMBAYARAN PENJUALAN    │  │
+│  │  BARANG                        │  │
+│  │  [ LUNAS ]                     │  │
+│  │  ┌──────────────────────────┐  │  │
+│  │  │ KODE TRANSAKSI (USULAN)  │  │  │
+│  │  │ KYS-0012                 │  │  │
+│  │  └──────────────────────────┘  │  │
+│  │  TANGGAL RESI    LOKASI        │  │
+│  │  15 Nov 2026     Bazar Contoh  │  │
+│  │  PEMBELI         METODE BAYAR  │  │
+│  │  Pembeli Umum    Tunai         │  │
 │  │  ────────────────────────────  │  │
-│  │  BLUS LINEN                    │  │
-│  │  25x 10.000           250.000  │  │
-│  │  ROK PLISKET                   │  │
-│  │  2x 42.000             84.000  │  │
+│  │  RINCIAN PENJUALAN             │  │
+│  │  BLUS BATIK MOTIF BUNGA        │  │
+│  │  Barang stok bazar · ukuran M  │  │
+│  │  1x 180.000           180.000  │  │
 │  │  ────────────────────────────  │  │
-│  │  Ongkos kirim        Rp25.000  │  │  ← SELALU tampil
+│  │  Total penjualan    Rp180.000  │  │
 │  │  ────────────────────────────  │  │
-│  │  Total              Rp359.000  │  │
-│  │                Belum Dibayar   │  │
-│  │  Bayar (Transfer)   Rp200.000  │  │
-│  │  Sisa               Rp159.000  │  │
-│  │      **TERIMA KASIH**          │  │
-│  │      Siti Aminah               │  │
-│  │      BNI 0971092588            │  │
-│  │      BCA 8810295431            │  │
-│  │      Sore, sampai jumpa!       │  │
+│  │  PEMBAYARAN DITERIMA           │  │
+│  │  Tunai diterima     Rp200.000  │  │
+│  │  15 Nov 2026 · Lunas           │  │
+│  │  ┌──────────────────────────┐  │  │
+│  │  │ Kembalian    Rp20.000    │  │  │  ← kotak sorot
+│  │  └──────────────────────────┘  │  │
+│  │  ┌──────────────────────────┐  │  │
+│  │  │ REKENING KAYESA          │  │  │  ← selalu tampil
+│  │  │ BCA · 676 017 885        │  │  │
+│  │  │ a.n. NARSHITA DEWI       │  │  │
+│  │  └──────────────────────────┘  │  │
+│  │  ┌──────────────────────────┐  │  │
+│  │  │ PENGINGAT                │  │  │
+│  │  │ Simpan resi ini sebagai  │  │  │
+│  │  │ bukti pembayaran.        │  │  │
+│  │  └──────────────────────────┘  │  │
+│  │                   Hormat Kami, │  │
+│  │                   ──────────   │  │
+│  │                       KAYESA   │  │
+│  │  Terima kasih telah berbelanja │  │
+│  │  di KAYESA.                    │  │
 │  └────────────────────────────────┘  │
 ├──────────────────────────────────────┤
 │  ┌────────────────────────────────┐  │
@@ -52,29 +82,71 @@ Spesifikasi latar: [`BAZAR-PARKIR-RESI.md`](../BAZAR-PARKIR-RESI.md) bagian 4a�
 
 ## Urutan isi resi (mengikuti contoh)
 
-1. **Logo** hitam-putih, dipotong proporsional (tidak diregangkan). Tanpa logo → nama butik besar.
-2. **Nama butik**, huruf kapital.
-3. **Alamat** (sampai 3 baris), **kota + kode pos**, **telepon** (sampai 2 nomor).
+1. **Kop** — **logo** hitam-putih di kiri (proporsional, tidak diregangkan),
+   **nama butik** besar di kanannya + **nama lengkap** (`KAYESA'S CLOTHING`)
+   di bawahnya. Tanpa logo → nama butik besar saja.
+2. **Alamat**: baris 1 + patokan dalam kurung, lalu **kota + kode pos**.
+3. **Telepon** satu baris: `WA 0812 ... · 0821 ...`.
 4. Garis pemisah.
-5. **Tanggal & jam** `11 Nov 2026 14:20`, **nomor urut hari itu** `#7` di kanan.
-6. **Nomor resi** `KYS-0012` (boleh dimatikan di Pengaturan).
-7. **Sapaan** `- Sore -` — **otomatis dari jam** transaksi (lihat `4b`), bisa dimatikan di Pengaturan.
-8. Garis pemisah.
-9. **Blok barang** — nama **tebal**, baris di bawahnya `jumlah x harga` (angka tanpa `Rp`) rata
-   kiri dan subtotal rata kanan.
-10. **Baris diskon** bila ada: `Diskon @ Rp 2.000 x 25` dan/atau `Diskon total`.
-11. Garis pemisah.
-12. **Ongkos kirim — SELALU tampil** (keputusan B-10), salah satu dari:
-    `Rp25.000` (ditagihkan butik) · `Rp0` (ambil sendiri) · `Belum ditentukan` (menyusul) ·
-    `Dibayar langsung ke kurir`.
-13. **Total** — `Rp359.000` 2 px lebih besar. Bila ongkir `Belum ditentukan`, tambahkan baris kecil
-    `Total belum termasuk ongkir`.
-14. **Status** di kanan bawah: `Belum Dibayar` / `DP` / *(kosong bila Lunas)*.
-15. Bila DP/Belum dibayar: **`Bayar (Transfer)`** dan **`Sisa`**.
-16. **`**TERIMA KASIH**`**.
-17. **Nama pemilik rekening** + **rekening** (maks 2), bila masih ada sisa tagihan.
-18. **Teks penutup** (opsional).
-19. Bila PO: label **`PRE-ORDER`** + tanggal siap, tepat di bawah nomor resi.
+5. **Lencana `CONTOH DATA FIKTIF`** — hanya untuk pratinjau / data contoh.
+6. **Judul dokumen**: `RESI` bila lunas, `INVOICE` bila pesanan belum lunas.
+   Subjudul: `BUKTI PEMBAYARAN PENJUALAN BARANG` (penjualan),
+   `BUKTI PEMBAYARAN PESANAN` (pesanan lunas), `NOTA PESANAN JAHIT` (invoice).
+7. **Lencana status**: `LUNAS` / `BELUM LUNAS`.
+8. **Kotak kode transaksi**: `KODE TRANSAKSI (USULAN)` + nomor resi
+   (boleh dimatikan di Pengaturan). Penomoran masih usulan — BU-19 menunggu Tante.
+9. **Info dua kolom** (label kecil di atas nilai tebal):
+   penjualan: `TANGGAL RESI` / `LOKASI`, `PEMBELI` / `METODE BAYAR`;
+   pesanan: `PEMESAN` / `TANGGAL PESANAN`, `JENIS JAHITAN` / `PERKIRAAN SELESAI`.
+   Tanggal saja (`15 Nov 2026`), tanpa jam. Nomor urut hari (`#7`) tidak lagi dicetak.
+10. Garis pemisah.
+11. **Rincian** — judul `RINCIAN PENJUALAN` / `RINCIAN PESANAN`, lalu tiap barang:
+    nama **tebal**, baris kecil keterangan (`Barang stok bazar · ukuran M`),
+    `jumlah x harga` (angka tanpa `Rp`) rata kiri dan subtotal rata kanan.
+    Pesanan jahit: baris `Jasa jahit` + `Biaya lainnya` (hanya pratinjau —
+    model jahitan belum ada di skema transaksi, lihat bawah).
+12. **Baris diskon** bila ada: `Diskon @ Rp 2.000 x 25` dan/atau `Diskon total`.
+13. **Ongkos kirim — hanya bila ada nominalnya atau belum ditentukan**
+    (contoh tidak menampilkan baris ongkir bila tidak ada ongkir):
+    `Rp25.000` (ditagihkan butik) · `Belum ditentukan` (menyusul) ·
+    `Dibayar langsung ke kurir`. Bila ongkir `Belum ditentukan`, tambahkan
+    baris kecil `Total belum termasuk ongkir`.
+14. **Total** — `Total penjualan` / `Total tagihan`, `Rp180.000` 2 px lebih besar.
+15. **Pembayaran, per baris** (bukan agregat): penjualan —
+    `Tunai diterima Rp200.000` + `15 Nov 2026 · Lunas`; pesanan —
+    `DP Rp300.000` + `12 Nov 2026 · Transfer BCA`, lalu
+    `Pelunasan · Tunai Rp675.000` + `Tanggal Pelunasan — 15 Nov 2026`.
+16. **Kotak sorot** (latar krem, garis kiri cokelat): `Kembalian`,
+    `TOTAL PEMBAYARAN DITERIMA`, atau `Sisa pembayaran` — sesuai keadaan.
+17. **Kotak rekening — SELALU tampil**, judul `REKENING KAYESA` (resi) atau
+    `PEMBAYARAN MELALUI` (invoice), isi rekening utama saja:
+    `BCA · 676 017 885` + `a.n. NARSHITA DEWI`.
+18. **Kotak peringatan**: penjualan → `PENGINGAT` ("Simpan resi ini sebagai
+    bukti pembayaran."); pesanan dengan catatan → `PERHATIAN!!!`
+    ("Catatan pesanan: ...").
+19. **Tanda tangan**: `Hormat Kami,` + garis + nama butik, rata kanan.
+20. **Kalimat penutup** sesuai jenis dokumen: penjualan —
+    `Terima kasih telah berbelanja di KAYESA.`; pesanan —
+    `Terima kasih telah mempercayakan pesanan jahit kepada KAYESA.`
+    (Bukan field `teksPenutup` di Pengaturan — lihat catatan bawah.)
+
+## Yang belum bisa mengikuti contoh (model belum ada)
+
+- **Pesanan jahit di kode masih PO barang katalog** (`jenis: "po"` dengan
+  item barang). Field `model/jenis`, `ukuran`, `biayaJasa`, dan `biaya
+  lainnya` ada di dokumen Tahap 1 (SPESIFIKASI-DESAIN-TAHAP-1.md §3,
+  BU-14/BU-15) tapi **belum ada di skema transaksi** (`schema.ts`) —
+  BLUEPRINT R-1/R-2 mencatat kekurangan ini. Di resi, `JENIS JAHITAN` dan
+  baris `Jasa jahit` / `Biaya lainnya` hanya tampil di **pratinjau contoh**
+  (`dataContohPO`); transaksi PO asli menampilkan item barangnya.
+- **Penomoran dokumen** masih usulan (`KODE TRANSAKSI (USULAN)`) — BU-19
+  menunggu Tante.
+- **Ejaan kop**: contoh memakai `KAYESYA` / `KAYESYA'S CLOTHING` (ejaan lama
+  di logo dan kop mockup), sementara nama resmi yang dikunci adalah
+  `KAYESA` / `KAYESA'S CLOTHING`. Resi memakai nama dari Pengaturan.
+- **Field `teksPenutup` di Pengaturan** tidak lagi dicetak di resi (kalimat
+  penutup kini mengikuti jenis dokumen contoh). Perlu diputuskan Andri
+  apakah field itu dihapus atau dipakai menimpa kalimat penutup.
 
 ## Format kertas
 

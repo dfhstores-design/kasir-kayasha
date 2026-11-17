@@ -7,6 +7,7 @@
  */
 import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
 import type { BarisResi } from "./resi.ts";
+import { formatRupiahResi } from "./money.ts";
 
 export const LEBAR_A5 = 420; // pt
 export const TINGGI_A5 = 595;
@@ -19,6 +20,11 @@ interface Opsi {
 }
 
 const HITAM = rgb(0, 0, 0);
+const COKELAT = rgb(0.48, 0.35, 0.23);
+const COKELAT_GELAP = rgb(0.42, 0.29, 0.18);
+const ABU = rgb(0.33, 0.32, 0.3);
+const TAN_BG = rgb(0.97, 0.94, 0.89);
+const TAN_GARIS = rgb(0.79, 0.65, 0.48);
 
 /** Membuat PDF dari baris resi. Mengembalikan Blob application/pdf. */
 export async function buatPdfResi(baris: readonly BarisResi[], opsi: Opsi): Promise<Blob> {
@@ -81,7 +87,22 @@ export async function buatPdfResi(baris: readonly BarisResi[], opsi: Opsi): Prom
     y -= ukuranFont + 4;
   };
 
-  for (const r of baris) {
+  // Kop: logo di kiri, nama butik + nama lengkap di kanannya (contoh v8/v9/v4).
+  // `kepala` menandai pita kop yang sedang digambar: logo sudah digambar dan
+  // judul/subjudul mengisi sisi kanannya sebelum y maju melewati pita itu.
+  let kepala: { bawah: number } | null = null;
+  const teksKanan = (teks: string, ukuranFont: number, tebal: boolean, warna = HITAM) => {
+    const f = tebal ? fontTebal : font;
+    const t = potong(teks, ukuranFont, lebarIsi, tebal);
+    const w = f.widthOfTextAtSize(t, ukuranFont);
+    pastikanRuang(ukuranFont + 4);
+    page.drawText(t, { x: LEBAR_A5 - MARGIN - w, y: y - ukuranFont, size: ukuranFont, font: f, color: warna });
+    y -= ukuranFont + 4;
+  };
+
+  for (let idx = 0; idx < baris.length; idx++) {
+    const r = baris[idx];
+    if (!r) continue;
     switch (r.jenis) {
       case "logo": {
         if (!opsi.logo) break;
@@ -92,17 +113,127 @@ export async function buatPdfResi(baris: readonly BarisResi[], opsi: Opsi): Prom
           const w = gambar.width * skala;
           const h = gambar.height * skala;
           pastikanRuang(h + 8);
-          page.drawImage(gambar, { x: (LEBAR_A5 - w) / 2, y: y - h, width: w, height: h });
-          y -= h + 8;
+          page.drawImage(gambar, { x: MARGIN, y: y - h, width: w, height: h });
+          kepala = { bawah: y - h };
         } catch {
           // Logo tidak terbaca: lewati, judul butik tetap tampil.
+          kepala = null;
         }
         break;
       }
-      case "judul":
-        pastikanRuang(18);
-        tulis(r.teks, MARGIN, 14, true);
+      case "judul": {
+        const berikutnyaSubjudul = baris[idx + 1]?.jenis === "subjudul";
+        if (kepala) {
+          const t = potong(r.teks, 18, lebarIsi - 84, true);
+          page.drawText(t, { x: MARGIN + 84, y: y - 18, size: 18, font: fontTebal, color: HITAM });
+          if (!berikutnyaSubjudul) {
+            y = kepala.bawah - 8;
+            kepala = null;
+          }
+        } else {
+          pastikanRuang(18);
+          tulis(r.teks, MARGIN, 18, true);
+        }
         break;
+      }
+      case "subjudul": {
+        if (kepala) {
+          const t = potong(r.teks, 10, lebarIsi - 84, false);
+          page.drawText(t, { x: MARGIN + 84, y: y - 32, size: 10, font, color: ABU });
+          y = kepala.bawah - 8;
+          kepala = null;
+        } else {
+          tulis(r.teks, MARGIN, 10, false);
+        }
+        break;
+      }
+      case "lencana": {
+        const ukuranFont = 9;
+        const f = fontTebal;
+        const t = r.teks;
+        const wTeks = f.widthOfTextAtSize(t, ukuranFont);
+        const lebar = wTeks + 16;
+        const tinggi = 16;
+        pastikanRuang(tinggi + 6);
+        const x0 = (LEBAR_A5 - lebar) / 2;
+        const y0 = y - tinggi;
+        if (r.varian === "status") {
+          page.drawRectangle({ x: x0, y: y0, width: lebar, height: tinggi, color: COKELAT_GELAP });
+          page.drawText(t, { x: x0 + 8, y: y0 + 4, size: ukuranFont, font: f, color: rgb(1, 1, 1) });
+        } else {
+          page.drawRectangle({ x: x0, y: y0, width: lebar, height: tinggi, borderColor: TAN_GARIS, borderWidth: 0.7, color: TAN_BG });
+          page.drawText(t, { x: x0 + 8, y: y0 + 4, size: ukuranFont, font: f, color: COKELAT });
+        }
+        y -= tinggi + 6;
+        break;
+      }
+      case "dokumen": {
+        pastikanRuang(20);
+        tulis(r.judul, MARGIN, 20, true);
+        tulis(r.subjudul, MARGIN, 10, false);
+        y -= 2;
+        break;
+      }
+      case "kotak": {
+        const sorot = r.sorot ?? false;
+        const ukuranJudul = sorot ? 8 : 8;
+        const ukuranIsi = sorot ? 13 : 10;
+        const tinggi =
+          8 + ukuranJudul + 4 + r.isi.length * (ukuranIsi + 4) + 8;
+        pastikanRuang(tinggi);
+        const y0 = y - tinggi;
+        if (sorot) {
+          page.drawRectangle({ x: MARGIN, y: y0, width: lebarIsi, height: tinggi, color: TAN_BG });
+          page.drawRectangle({ x: MARGIN, y: y0, width: 4, height: tinggi, color: COKELAT_GELAP });
+        }
+        page.drawRectangle({
+          x: MARGIN,
+          y: y0,
+          width: lebarIsi,
+          height: tinggi,
+          borderColor: TAN_GARIS,
+          borderWidth: 0.7,
+        });
+        let yy = y - 8;
+        const judulKotak = potong(r.judul, ukuranJudul, lebarIsi - 16, true);
+        page.drawText(judulKotak, { x: MARGIN + 8, y: yy - ukuranJudul, size: ukuranJudul, font: fontTebal, color: COKELAT });
+        yy -= ukuranJudul + 4;
+        for (const isi of r.isi) {
+          const t = potong(isi, ukuranIsi, lebarIsi - 16, sorot);
+          page.drawText(t, { x: MARGIN + 8, y: yy - ukuranIsi, size: ukuranIsi, font: sorot ? fontTebal : font, color: HITAM });
+          yy -= ukuranIsi + 4;
+        }
+        y = y0 - 6;
+        break;
+      }
+      case "metaPasangan": {
+        const tinggi = 26;
+        pastikanRuang(tinggi + 4);
+        const gambarPasangan = (x: number, label: string, nilai: string) => {
+          const l = potong(label, 7, lebarIsi / 2 - 8, false);
+          page.drawText(l, { x, y: y - 7, size: 7, font, color: ABU });
+          const n = potong(nilai, 10, lebarIsi / 2 - 8, true);
+          page.drawText(n, { x, y: y - 19, size: 10, font: fontTebal, color: HITAM });
+        };
+        gambarPasangan(MARGIN, r.kiri.label, r.kiri.nilai);
+        if (r.kanan) gambarPasangan(MARGIN + lebarIsi / 2, r.kanan.label, r.kanan.nilai);
+        y -= tinggi + 4;
+        break;
+      }
+      case "tandatangan": {
+        pastikanRuang(56);
+        teksKanan("Hormat Kami,", 10, false, ABU);
+        y -= 24;
+        page.drawLine({
+          start: { x: LEBAR_A5 - MARGIN - 140, y },
+          end: { x: LEBAR_A5 - MARGIN, y },
+          thickness: 0.5,
+          color: ABU,
+        });
+        y -= 6;
+        teksKanan(r.nama, 11, true);
+        break;
+      }
       case "teks": {
         const f = r.tebal ? fontTebal : font;
         const s = ukuran(r.kecil);
@@ -138,6 +269,9 @@ export async function buatPdfResi(baris: readonly BarisResi[], opsi: Opsi): Prom
       case "barang": {
         pastikanRuang(26);
         tulis(r.nama, MARGIN, 10, true);
+        if (r.keterangan) {
+          tulis(`  ${r.keterangan}`, MARGIN, 8, false);
+        }
         // baris "jumlah x harga" dan subtotal rata kanan
         barisKanan(`  ${r.jumlah}x ${r.hargaSatuan.toLocaleString("id-ID")}`, r.subtotal.toLocaleString("id-ID"), 9, false);
         if (r.diskonPerUnit && r.diskonPerUnit > 0) {
@@ -147,6 +281,14 @@ export async function buatPdfResi(baris: readonly BarisResi[], opsi: Opsi): Prom
             8,
             false,
           );
+        }
+        break;
+      }
+      case "rincian": {
+        pastikanRuang(26);
+        barisKanan(r.label, formatRupiahResi(r.nominal), 10, true);
+        if (r.keterangan) {
+          tulis(`  ${r.keterangan}`, MARGIN, 8, false);
         }
         break;
       }

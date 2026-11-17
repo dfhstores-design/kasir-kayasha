@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { NAMA_FILE_RESI, susunResi, teksResi, type DataResi } from "./resi.ts";
+import { NAMA_FILE_RESI, dataContoh, dataContohPO, susunResi, teksResi, type DataResi } from "./resi.ts";
 
 const rekening = (over: Partial<{ id: string; namaBank: string; nomor: string; namaPemilik: string; utama: boolean }> = {}) => ({
   id: "r1",
@@ -40,7 +40,23 @@ const dasar = (over: Partial<DataResi> = {}): DataResi => ({
   ...over,
 });
 
-describe("susunResi — urutan & isi", () => {
+const pengaturanContoh = {
+  namaButik: "KAYESA",
+  alamatBaris1: "Jl. Tarumanegara No. 41",
+  alamatBaris2: "Sebelah Pempak Nyai",
+  kotaKodePos: "Ploso Ciptum 15419",
+  telepon1: "0812 1141 4017",
+  telepon2: "0821 1376 5892",
+  teksPenutup: "Terima kasih, sampai jumpa!",
+  logo: null,
+  rekening: [rekening({ namaBank: "BCA", nomor: "676 017 885", namaPemilik: "NARSHITA DEWI" })],
+  tampilkanSapaan: true,
+  tampilkanNomorResi: true,
+  tampilkanRincianDiskon: true,
+  tampilkanPembayaranSisa: true,
+};
+
+describe("susunResi — urutan & isi (contoh v8/v9/v4)", () => {
   it("logo, nama butik, alamat, telepon ada di atas", () => {
     const t = teksResi(susunResi(dasar()));
     const potong = t.split("\n").slice(0, 6).join("\n");
@@ -55,21 +71,24 @@ describe("susunResi — urutan & isi", () => {
     expect(t).toContain("KAYESHA CLOTHING");
   });
 
-  it("menampilkan tanggal dan nomor urut hari", () => {
+  it("menampilkan judul dokumen RESI, kode transaksi, dan tanggal resi", () => {
     const t = teksResi(susunResi(dasar()));
-    expect(t).toMatch(/#7/);
+    expect(t).toContain("RESI");
+    expect(t).toContain("BUKTI PEMBAYARAN PENJUALAN BARANG");
+    expect(t).toContain("KODE TRANSAKSI (USULAN)");
     expect(t).toContain("KYS-0012");
+    expect(t).toContain("TANGGAL RESI");
   });
 
-  it("menampilkan sapaan sesuai snapshot", () => {
-    expect(teksResi(susunResi(dasar()))).toContain("- Sore -");
+  it("sapaan tidak lagi dicetak di resi (tidak ada di contoh)", () => {
+    expect(teksResi(susunResi(dasar()))).not.toContain("- Sore -");
   });
 
-  it("menampilkan barang, diskon barang, dan total", () => {
+  it("menampilkan barang, diskon barang, dan total penjualan", () => {
     const t = teksResi(susunResi(dasar()));
     expect(t).toContain("Blus Linen 2x");
     expect(t).toMatch(/Diskon barang/);
-    expect(t).toContain("Total Rp365.000");
+    expect(t).toContain("Total penjualan Rp365.000");
   });
 
   it("baris barang membawa diskon per unit untuk PDF", () => {
@@ -77,14 +96,17 @@ describe("susunResi — urutan & isi", () => {
     expect(baris && baris.jenis === "barang" ? baris.diskonPerUnit : null).toBe(10000);
   });
 
-  it("ongkos kirim SELALU tampil termasuk Rp0", () => {
-    const t = teksResi(susunResi(dasar({ ongkir: { mode: "ambil_sendiri", nominal: 0 } })));
-    expect(t).toContain("Ongkos kirim Rp0");
+  it("ongkir hanya tampil bila ada nominalnya; Rp0 tidak tampil", () => {
+    const tanpaOngkir = teksResi(susunResi(dasar({ ongkir: { mode: "ambil_sendiri", nominal: 0 } })));
+    expect(tanpaOngkir).not.toContain("Ongkos kirim");
+    const denganOngkir = teksResi(susunResi(dasar({ ongkir: { mode: "butik", nominal: 25000 } })));
+    expect(denganOngkir).toContain("Ongkos kirim Rp25.000");
   });
 
   it("ongkir belum ditentukan tertulis jelas, bukan Rp0", () => {
     const t = teksResi(susunResi(dasar({ ongkir: { mode: "belum_ditentukan", nominal: null } })));
     expect(t).toContain("Ongkos kirim Belum ditentukan");
+    expect(t).toContain("Total belum termasuk ongkir");
   });
 
   it("ongkir ke kurir tertulis siapa yang membayar", () => {
@@ -94,7 +116,7 @@ describe("susunResi — urutan & isi", () => {
 });
 
 describe("susunResi — status bayar & rekening", () => {
-  it("LUNAS penuh tidak menulis status & tidak mencetak rekening", () => {
+  it("LUNAS menampilkan lencana LUNAS dan tetap mencetak kotak rekening", () => {
     const t = teksResi(
       susunResi(
         dasar({
@@ -104,12 +126,13 @@ describe("susunResi — status bayar & rekening", () => {
         }),
       ),
     );
-    expect(t).not.toContain("Lunas");
-    expect(t).not.toContain("Sisa");
-    expect(t).not.toContain("BNI");
+    expect(t).toContain("LUNAS");
+    expect(t).toContain("REKENING KAYESHA CLOTHING");
+    expect(t).toContain("BNI · 0971092588");
+    expect(t).not.toContain("Sisa pembayaran");
   });
 
-  it("DP mencetak status, bayar, sisa, dan rekening", () => {
+  it("DP menampilkan BELUM LUNAS, baris DP, dan kotak sisa pembayaran", () => {
     const t = teksResi(
       susunResi(
         dasar({
@@ -119,19 +142,21 @@ describe("susunResi — status bayar & rekening", () => {
         }),
       ),
     );
-    expect(t).toContain("DP");
-    expect(t).toContain("Bayar (Transfer) Rp150.000");
-    expect(t).toContain("Sisa Rp350.000");
-    expect(t).toContain("BNI 0971092588");
+    expect(t).toContain("BELUM LUNAS");
+    expect(t).toContain("Transfer diterima Rp150.000");
+    expect(t).toContain("Sisa pembayaran");
+    expect(t).toContain("Rp350.000");
+    expect(t).toContain("BNI · 0971092588");
   });
 
-  it("belum dibayar mencetak sisa penuh", () => {
+  it("belum dibayar menampilkan BELUM LUNAS dan sisa penuh", () => {
     const t = teksResi(susunResi(dasar({ total: 360000, statusBayar: "belum_dibayar", pembayaran: [] })));
-    expect(t).toContain("Belum dibayar");
-    expect(t).toContain("Sisa Rp360.000");
+    expect(t).toContain("BELUM LUNAS");
+    expect(t).toContain("Sisa pembayaran");
+    expect(t).toContain("Rp360.000");
   });
 
-  it("maksimal 2 rekening dicetak", () => {
+  it("hanya rekening utama yang dicetak", () => {
     const t = teksResi(
       susunResi(
         dasar({
@@ -147,8 +172,22 @@ describe("susunResi — status bayar & rekening", () => {
       ),
     );
     expect(t).toContain("BNI");
-    expect(t).toContain("BCA");
+    expect(t).not.toContain("BCA");
     expect(t).not.toContain("Mandiri");
+  });
+
+  it("kembalian ditampilkan saat tunai melebihi total", () => {
+    const t = teksResi(
+      susunResi(
+        dasar({
+          total: 180000,
+          statusBayar: "lunas",
+          pembayaran: [{ waktu: "2026-11-15T09:00:00.000Z", nominal: 200000, metode: "tunai", catatan: null }],
+        }),
+      ),
+    );
+    expect(t).toContain("Kembalian");
+    expect(t).toContain("Rp20.000");
   });
 });
 
@@ -178,23 +217,98 @@ describe("susunResi — sakelar pengaturan", () => {
         }),
       ),
     );
-    expect(t).not.toContain("Sisa");
-    expect(t).not.toContain("Bayar (");
+    expect(t).not.toContain("Sisa pembayaran");
+    expect(t).not.toContain("PEMBAYARAN DITERIMA");
   });
 });
 
 describe("susunResi — PO & pembatalan", () => {
-  it("PO menampilkan label PRE-ORDER, perkiraan siap, dan nama pemesan", () => {
+  it("PO lunas berjudul RESI / BUKTI PEMBAYARAN PESANAN dengan info pemesan", () => {
     const t = teksResi(
       susunResi(dasar({ jenis: "po", perkiraanSiap: "2026-11-20", namaPemesan: "Ibu Sari" })),
     );
-    expect(t).toContain("PRE-ORDER");
-    expect(t).toContain("siap ± 2026-11-20");
-    expect(t).toContain("Pemesan: Ibu Sari");
+    expect(t).toContain("RESI");
+    expect(t).toContain("BUKTI PEMBAYARAN PESANAN");
+    expect(t).toContain("PEMESAN");
+    expect(t).toContain("Ibu Sari");
+    expect(t).toContain("PERKIRAAN SELESAI");
+    expect(t).toContain("20 Nov 2026");
+    expect(t).not.toContain("PRE-ORDER");
+  });
+
+  it("PO belum lunas berjudul INVOICE / NOTA PESANAN JAHIT", () => {
+    const t = teksResi(
+      susunResi(
+        dasar({
+          jenis: "po",
+          statusBayar: "dp",
+          total: 975000,
+          pembayaran: [{ waktu: "2026-11-12T09:00:00.000Z", nominal: 300000, metode: "transfer", catatan: null }],
+          namaPemesan: "Nadia Putri",
+        }),
+      ),
+    );
+    expect(t).toContain("INVOICE");
+    expect(t).toContain("NOTA PESANAN JAHIT");
+    expect(t).toContain("BELUM LUNAS");
+    expect(t).toContain("PEMBAYARAN MELALUI");
+    expect(t).toContain("Sisa pembayaran");
+    expect(t).toContain("Rp675.000");
+  });
+
+  it("PO lunas menampilkan total pembayaran diterima", () => {
+    const t = teksResi(
+      susunResi(
+        dasar({
+          jenis: "po",
+          statusBayar: "lunas",
+          total: 975000,
+          pembayaran: [
+            { waktu: "2026-11-12T09:00:00.000Z", nominal: 300000, metode: "transfer", catatan: null },
+            { waktu: "2026-11-15T10:00:00.000Z", nominal: 675000, metode: "tunai", catatan: null },
+          ],
+          namaPemesan: "Nadia Putri",
+        }),
+      ),
+    );
+    expect(t).toContain("TOTAL PEMBAYARAN DITERIMA");
+    expect(t).toContain("Rp975.000");
+  });
+
+  it("catatan pesanan PO tampil di kotak PERHATIAN", () => {
+    const t = teksResi(susunResi(dasar({ jenis: "po", catatanPesanan: "lengan panjang" })));
+    expect(t).toContain("PERHATIAN!!!");
+    expect(t).toContain("Catatan pesanan: lengan panjang");
   });
 
   it("transaksi dibatalkan diberi penanda", () => {
     expect(teksResi(susunResi(dasar({ dibatalkan: true })))).toContain("*** DIBATALKAN ***");
+  });
+});
+
+describe("susunResi — data contoh pratinjau", () => {
+  it("contoh penjualan mengikuti contoh resi bazar (Blus Batik, kembalian, PENGINGAT)", () => {
+    const t = teksResi(susunResi(dataContoh(pengaturanContoh)));
+    expect(t).toContain("CONTOH DATA FIKTIF");
+    expect(t).toContain("RESI");
+    expect(t).toContain("Blus Batik Motif Bunga");
+    expect(t).toContain("Kembalian");
+    expect(t).toContain("Rp20.000");
+    expect(t).toContain("PENGINGAT");
+    expect(t).toContain("REKENING KAYESA");
+    expect(t).toContain("BCA · 676 017 885");
+  });
+
+  it("contoh PO mengikuti contoh resi v9 / nota v8 (Nadia Putri, Kebaya brokat)", () => {
+    const t = teksResi(susunResi(dataContohPO(pengaturanContoh)));
+    expect(t).toContain("CONTOH DATA FIKTIF");
+    expect(t).toContain("Nadia Putri");
+    expect(t).toContain("Kebaya brokat");
+    expect(t).toContain("Jasa jahit Rp850.000");
+    expect(t).toContain("Biaya lainnya Rp125.000");
+    expect(t).toContain("Total tagihan Rp975.000");
+    expect(t).toContain("TOTAL PEMBAYARAN DITERIMA");
+    expect(t).toContain("PERHATIAN!!!");
   });
 });
 
