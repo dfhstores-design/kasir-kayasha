@@ -41,6 +41,7 @@ import {
   type SettingsRecord,
 } from "./db/repositori.ts";
 import { mintaPenyimpananPermanen } from "./pwa/register.ts";
+import { jalankanSeedDemo } from "./db/seedDemo.ts";
 import type { OngkirMode } from "./lib/ongkir.ts";
 import type { StatusBayar } from "./lib/keranjang.ts";
 import { khususAdmin, type Peran } from "./lib/peran.ts";
@@ -146,6 +147,9 @@ export default function App() {
   useEffect(() => {
     let hidup = true;
     (async () => {
+      // Seed demo hanya jalan bila database masih kosong (lihat seedDemo.ts);
+      // bila Tante sudah punya data, fungsi ini tidak mengubah apa pun.
+      await jalankanSeedDemo().catch(() => false);
       const s = await ambilSettings().catch(() => null);
       const b = await bazarAktif().catch(() => undefined);
       const saldo = b ? await saldoSemuaBazar(b.id).catch(() => new Map<string, number>()) : new Map<string, number>();
