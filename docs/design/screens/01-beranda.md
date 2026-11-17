@@ -35,7 +35,6 @@
 | Judul | "Kasir Kayesa" | Tetap di semua layar beranda |
 | Nama butik | dari Pengaturan | Mengikuti isian pemilik |
 | **Jual Barang** | tombol terbesar | → Pilih Barang (Alur 1) |
-| **Pesanan** | tombol besar | → Daftar Pesanan |
 | **Barang** | tombol besar | → Daftar Barang (admin) |
 | **Ringkasan** | tombol besar | → Ringkasan Hari Ini |
 | **Pengaturan** | tombol besar | → Pengaturan (minta PIN bila diatur) |
@@ -80,5 +79,15 @@ Keputusan Andri: di bawah tombol utama ditambah bagian **"Mini ERP"** berisi 5 t
 (`tile--segera`, label kecil "Segera"): Catatan Keuangan, Catat Belanja, Laporan Keuangan,
 Data Pelanggan, Pengeluaran. Semuanya placeholder — belum ada fungsi; saat diketik/diketuk
 menampilkan panel notifikasi "sedang dalam pengembangan". Pengecualian dari aturan
-"Hanya lima tujuan" di atas, khusus untuk bagian ini. Tombol "Pesanan" tetap ada
-(keputusan soal itu masih terbuka).
+"Hanya lima tujuan" di atas, khusus untuk bagian ini.
+
+## Pembaruan 17 Nov 2026 — tombol "Pesanan" (PO barang) dihapus
+
+Klarifikasi Andri: pesanan = barang custom = pesanan jahit. Tidak ada pesanan dari
+barang stok. Tombol "Pesanan" yang membuka daftar PO barang (pilih item stok →
+FormPesanan → simpanPO) adalah salah kaprah, jadi tile-nya dihapus dari Beranda.
+Yang dipertahankan: "Jual Barang" (penjualan langsung barang stok), "Pesanan Jahit"
+dan "Kasir" (alur Tahap 1). Kode layar Pesanan/FormPesanan/DetailPesanan dan
+fungsi simpanPO masih ada di repo tapi tidak bisa dicapai dari Beranda — begitu
+pula 3 PO CONTOH di seed demo. Perlu keputusan lanjutan apakah kode + seed PO
+itu dihapus total.
