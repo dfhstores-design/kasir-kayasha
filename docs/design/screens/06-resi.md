@@ -141,12 +141,13 @@ Spesifikasi latar: [`BAZAR-PARKIR-RESI.md`](../BAZAR-PARKIR-RESI.md) bagian 4a�
   (`dataContohPO`); transaksi PO asli menampilkan item barangnya.
 - **Penomoran dokumen** masih usulan (`KODE TRANSAKSI (USULAN)`) — BU-19
   menunggu Tante.
-- **Ejaan kop**: contoh memakai `KAYESYA` / `KAYESYA'S CLOTHING` (ejaan lama
-  di logo dan kop mockup), sementara nama resmi yang dikunci adalah
-  `KAYESA` / `KAYESA'S CLOTHING`. Resi memakai nama dari Pengaturan.
-- **Field `teksPenutup` di Pengaturan** tidak lagi dicetak di resi (kalimat
-  penutup kini mengikuti jenis dokumen contoh). Perlu diputuskan Andri
-  apakah field itu dihapus atau dipakai menimpa kalimat penutup.
+- **Ejaan kop** (keputusan Andri, 17 Nov 2026): semua teks memakai `KAYESA` /
+  `KAYESA'S CLOTHING`. Kop contoh mockup memakai `KAYESYA` (ejaan lama),
+  begitu juga teks di dalam artwork logo — teks di dalam gambar tidak bisa
+  diubah dengan edit teks; perlu file logo baru bila mau diperbaiki total.
+- **Field `teksPenutup` di Pengaturan** adalah penutup pengganti (keputusan
+  Andri, 17 Nov 2026): bila terisi, kalimat itu yang dicetak di resi; bila
+  kosong, resi memakai kalimat penutup bawaan sesuai jenis dokumen.
 
 ## Format kertas
 

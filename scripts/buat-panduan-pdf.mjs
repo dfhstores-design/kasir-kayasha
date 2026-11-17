@@ -201,8 +201,8 @@ async function buat() {
   const blok = urai(md);
 
   const doc = await PDFDocument.create();
-  doc.setTitle("Panduan Pemilik — Kasir Kayesha");
-  doc.setAuthor("Kasir Kayesha");
+  doc.setTitle("Panduan Pemilik — Kasir Kayesa");
+  doc.setAuthor("Kasir Kayesa");
   doc.setSubject("Panduan memakai aplikasi kasir untuk pemilik butik");
   doc.setCreator("scripts/buat-panduan-pdf.mjs");
 
@@ -215,7 +215,7 @@ async function buat() {
 
   const footer = () => {
     nomorHalaman++;
-    const teks = `Panduan Pemilik Kasir Kayesha  ·  halaman ${nomorHalaman}`;
+    const teks = `Panduan Pemilik Kasir Kayesa  ·  halaman ${nomorHalaman}`;
     const w = biasa.widthOfTextAtSize(teks, 8);
     page.drawText(teks, { x: (A4.lebar - w) / 2, y: 28, size: 8, font: biasa, color: ABU });
   };
@@ -308,7 +308,7 @@ async function buat() {
     font: tebal,
     color: rgb(1, 1, 1),
   });
-  page.drawText("Kasir Kayesha", {
+  page.drawText("Kasir Kayesa", {
     x: MARGIN,
     y: A4.tinggi - 106,
     size: 18,

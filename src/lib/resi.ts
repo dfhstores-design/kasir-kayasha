@@ -12,16 +12,17 @@
  * Karena berupa baris terstruktur (bukan sekadar HTML), susunan yang SAMA dipakai
  * untuk pratinjau di layar dan untuk halaman PDF. Tidak ada dua kebenaran.
  *
- * CATATAN EJAAN: kop contoh memakai "KAYESYA" (ejaan lama di logo dan kop
- * mockup). Nama resmi yang dikunci Andri adalah KAYESA / KAYESA'S CLOTHING,
- * jadi teks di sini memakai nama dari Pengaturan (KAYESA), bukan KAYESYA.
- * Pertanyaan ejaan kop vs logo masih menunggu Andri/Tante.
+ * CATATAN EJAAN (keputusan Andri, 17 Nov 2026): semua teks memakai
+ * KAYESA / KAYESA'S CLOTHING. Kop contoh mockup memakai "KAYESYA" (ejaan
+ * lama), begitu juga teks di dalam artwork logo (file
+ * logo_kayesya_reference.png) — teks di dalam gambar itu tidak bisa diubah
+ * dengan edit teks; perlu file logo baru bila mau diperbaiki total.
  *
- * CATATAN PENUTUP: kalimat penutup di sini mengikuti jenis dokumen contoh
- * ("Terima kasih telah berbelanja di ..." / "... mempercayakan pesanan jahit
- * kepada ..."), bukan field `teksPenutup` di Pengaturan. Field itu masih
- * tersimpan, tapi tidak lagi dicetak di resi — perlu diputuskan Andri apakah
- * field Pengaturan itu dihapus atau dipakai menimpa kalimat ini.
+ * CATATAN PENUTUP (keputusan Andri, 17 Nov 2026): field `teksPenutup` di
+ * Pengaturan dipakai sebagai penutup pengganti. Bila terisi, kalimat itu
+ * yang dicetak di resi; bila kosong, dipakai kalimat penutup bawaan sesuai
+ * jenis dokumen ("Terima kasih telah berbelanja di ..." / "... mempercayakan
+ * pesanan jahit kepada ...").
  */
 import type { Rupiah } from "./money.ts";
 import { formatRupiah, formatRupiahResi, formatRupiahTanpaRp } from "./money.ts";
@@ -351,14 +352,19 @@ export function susunResi(d: DataResi): BarisResi[] {
     b.push({ jenis: "kotak", judul: "PERHATIAN!!!", isi: [`Catatan pesanan: ${d.catatanPesanan.trim()}`] });
   }
 
-  // --- Hormat Kami + kalimat penutup sesuai jenis dokumen ---
+  // --- Hormat Kami + kalimat penutup ---
+  // Keputusan Andri 17 Nov 2026: teksPenutup di Pengaturan adalah penutup
+  // pengganti — bila terisi, kalimat itu yang dicetak; bila kosong, dipakai
+  // kalimat penutup bawaan sesuai jenis dokumen.
+  const penutupPengganti = d.teksPenutup.trim();
+  const penutupBawaan =
+    d.jenis === "langsung"
+      ? `Terima kasih telah berbelanja di ${nama}.`
+      : `Terima kasih telah mempercayakan pesanan jahit kepada ${nama}.`;
   b.push({ jenis: "tandatangan", nama });
   b.push({
     jenis: "teks",
-    teks:
-      d.jenis === "langsung"
-        ? `Terima kasih telah berbelanja di ${nama}.`
-        : `Terima kasih telah mempercayakan pesanan jahit kepada ${nama}.`,
+    teks: penutupPengganti || penutupBawaan,
     tengah: true,
     kecil: true,
   });

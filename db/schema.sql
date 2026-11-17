@@ -1,4 +1,4 @@
--- Skema D1 untuk Kasir Kayesha — salinan cloud (Phase 6).
+-- Skema D1 untuk Kasir Kayesa — salinan cloud (Phase 6).
 --
 -- PRINSIP: D1 adalah SALINAN, bukan sumber kebenaran. Perangkat tetap sumber utama.
 -- Sinkronisasi bersifat idempoten: mengirim ulang data yang sama TIDAK menggandakan baris.

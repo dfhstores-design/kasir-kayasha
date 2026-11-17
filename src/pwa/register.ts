@@ -10,7 +10,7 @@ export function daftarkanServiceWorker(): void {
   window.addEventListener("load", () => {
     navigator.serviceWorker.register(`${import.meta.env.BASE_URL}sw.js`).catch(() => {
       // Offline tetap bisa dipakai; hanya app-shell cache yang tidak aktif.
-      console.warn("Kasir Kayesha: mode offline belum aktif di perangkat ini.");
+      console.warn("Kasir Kayesa: mode offline belum aktif di perangkat ini.");
     });
   });
 }

@@ -30,8 +30,8 @@ const TAN_GARIS = rgb(0.79, 0.65, 0.48);
 export async function buatPdfResi(baris: readonly BarisResi[], opsi: Opsi): Promise<Blob> {
   const doc = await PDFDocument.create();
   doc.setTitle(opsi.judul);
-  doc.setCreator("Kasir Kayesha");
-  doc.setProducer("Kasir Kayesha");
+  doc.setCreator("Kasir Kayesa");
+  doc.setProducer("Kasir Kayesa");
 
   const font = await doc.embedFont(StandardFonts.Helvetica);
   const fontTebal = await doc.embedFont(StandardFonts.HelveticaBold);

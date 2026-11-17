@@ -173,6 +173,58 @@ export default function Pengaturan({ onSimpan, onLihatContohResi, bagian }: Prop
                 onChange={(e) => ubah({ teksPenutup: e.target.value })}
                 placeholder="Contoh: Terima kasih, sampai jumpa!"
               />
+              <p className="hint">
+                Bila diisi, teks ini dipakai sebagai kalimat penutup resi. Bila kosong, resi memakai kalimat
+                penutup bawaan.
+              </p>
+            </div>
+            <div>
+              <span className="label">Tampilan</span>
+              <p className="hint" style={{ margin: 0 }}>
+                Berlaku untuk seluruh aplikasi setelah disimpan.
+              </p>
+              <span className="label" style={{ marginTop: "0.5rem" }}>
+                Ukuran huruf
+              </span>
+              <div className="pilihan">
+                <button
+                  type="button"
+                  className="pilihan__item"
+                  aria-pressed={s.ukuranFont !== "besar"}
+                  onClick={() => ubah({ ukuranFont: "normal" })}
+                >
+                  Normal
+                </button>
+                <button
+                  type="button"
+                  className="pilihan__item"
+                  aria-pressed={s.ukuranFont === "besar"}
+                  onClick={() => ubah({ ukuranFont: "besar" })}
+                >
+                  Besar
+                </button>
+              </div>
+              <span className="label" style={{ marginTop: "0.5rem" }}>
+                Tema
+              </span>
+              <div className="pilihan">
+                <button
+                  type="button"
+                  className="pilihan__item"
+                  aria-pressed={s.tema !== "gelap"}
+                  onClick={() => ubah({ tema: "terang" })}
+                >
+                  Terang
+                </button>
+                <button
+                  type="button"
+                  className="pilihan__item"
+                  aria-pressed={s.tema === "gelap"}
+                  onClick={() => ubah({ tema: "gelap" })}
+                >
+                  Gelap
+                </button>
+              </div>
             </div>
             <div>
               <span className="label">Sapaan resi (otomatis dari jam)</span>

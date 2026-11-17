@@ -22,7 +22,7 @@
 │  │ Cadangan & pemulihan         › │  │
 │  └────────────────────────────────┘  │
 │                                      │
-│  Kasir Kayesha versi 0.x.x           │
+│  Kasir Kayesa versi 0.x.x           │
 │  Tersimpan di perangkat ini          │
 └──────────────────────────────────────┘
 ```
@@ -43,6 +43,17 @@ Bisa tambah lebih dari satu, hanya satu yang aktif. Contoh format ditampilkan di
 
 ### Teks penutup resi
 Satu kolom teks bebas, contoh: "Terima kasih, sampai jumpa di pameran berikutnya!" — boleh kosong.
+Keputusan Andri 17 Nov 2026: teks ini adalah penutup pengganti — bila terisi, kalimat
+itu yang dicetak di resi; bila kosong, resi memakai kalimat penutup bawaan sesuai
+jenis dokumen.
+
+### Tampilan (baru, 17 Nov 2026)
+Di bagian Nama & kontak butik, dua pilihan besar:
+- **Ukuran huruf**: Normal / Besar. Besar membesarkan seluruh aplikasi (bukan hanya
+  resi). Bawaan Normal.
+- **Tema**: Terang / Gelap. Gelap membalik warna latar dan teks aplikasi; resi
+  tetap kertas putih. Bawaan Terang.
+Pilihan tersimpan di Pengaturan (IndexedDB) dan langsung berlaku setelah disimpan.
 
 ### Lihat contoh resi
 Pratinjau resi dengan logo, nama, rekening aktif, dan teks penutup saat ini (data contoh).

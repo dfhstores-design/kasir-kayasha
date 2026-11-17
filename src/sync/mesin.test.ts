@@ -169,7 +169,7 @@ describe("kirimAntrean", () => {
   });
 
   it("settings tidak dikirim dan antrean dibersihkan", async () => {
-    await simpanSettings({ ...SETTINGS_KOSONG, namaButik: "Kayesha" });
+    await simpanSettings({ ...SETTINGS_KOSONG, namaButik: "Kayesa" });
     await tandaiUntukSync("settings", "utama");
 
     const r = await kirimAntrean({

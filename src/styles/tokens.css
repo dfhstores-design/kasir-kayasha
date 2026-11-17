@@ -41,6 +41,39 @@
   --max-width: 45rem;
 }
 
+/* Tema gelap — dipakai bila <html data-tema="gelap"> (Pengaturan → Tema).
+ * Resi tetap kertas putih (lihat .resi di base.css), jadi tidak ikut gelap. */
+:root[data-tema="gelap"] {
+  --bg: #211d18;
+  --surface: #2e2822;
+  --ink: #f5f0e6;
+  --ink-soft: #c9c0ae;
+  --line: #4a4238;
+  --field-line: #8a8378;
+  --ph: #3a332b;
+  --ph-ink: #c9c0ae;
+  --primary: #d08a6a;
+  --primary-ink: #241a15;
+  --accent: #6fbf9f;
+  --accent-bg: #1e3a31;
+  --accent-ink: #b7e2d2;
+  --warn-bg: #3d2f16;
+  --warn-ink: #f5c86e;
+  --danger: #ff9a86;
+  --off-bg: #2e2822;
+}
+
+/* Huruf besar — dipakai bila <html data-ukuran-font="besar"> (Pengaturan →
+ * Ukuran huruf). Semua ukuran memakai rem/variabel, jadi satu tempat ini
+ * membesarkan seluruh aplikasi. */
+:root[data-ukuran-font="besar"] {
+  --font-h1: 2rem;
+  --font-h2: 1.5rem;
+  --font-body: 1.375rem;
+  --font-soft: 1.1875rem;
+  --font-total: 2.5rem;
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

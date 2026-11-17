@@ -16,7 +16,7 @@ const dasar = (over: Partial<DataResi> = {}): DataResi => ({
   waktu: "2026-11-11T07:20:00.000Z",
   jenis: "langsung",
   sapaan: "Sore",
-  namaButik: "Kayesha Clothing",
+  namaButik: "Kayesa Clothing",
   alamat: ["Jl. Melati No. 12", "JAKARTA 12130"],
   telepon: ["0812-1111-2222"],
   logoAda: true,
@@ -61,14 +61,14 @@ describe("susunResi — urutan & isi (contoh v8/v9/v4)", () => {
     const t = teksResi(susunResi(dasar()));
     const potong = t.split("\n").slice(0, 6).join("\n");
     expect(potong).toContain("[logo]");
-    expect(potong).toContain("KAYESHA CLOTHING");
+    expect(potong).toContain("KAYESA CLOTHING");
     expect(potong).toContain("Jl. Melati No. 12");
     expect(potong).toContain("0812-1111-2222");
   });
 
   it("tanpa logo tetap rapi dengan nama butik sebagai judul", () => {
     const t = teksResi(susunResi(dasar({ logoAda: false })));
-    expect(t).toContain("KAYESHA CLOTHING");
+    expect(t).toContain("KAYESA CLOTHING");
   });
 
   it("menampilkan judul dokumen RESI, kode transaksi, dan tanggal resi", () => {
@@ -127,7 +127,7 @@ describe("susunResi — status bayar & rekening", () => {
       ),
     );
     expect(t).toContain("LUNAS");
-    expect(t).toContain("REKENING KAYESHA CLOTHING");
+    expect(t).toContain("REKENING KAYESA CLOTHING");
     expect(t).toContain("BNI · 0971092588");
     expect(t).not.toContain("Sisa pembayaran");
   });
@@ -219,6 +219,30 @@ describe("susunResi — sakelar pengaturan", () => {
     );
     expect(t).not.toContain("Sisa pembayaran");
     expect(t).not.toContain("PEMBAYARAN DITERIMA");
+  });
+});
+
+describe("susunResi — penutup pengganti (keputusan Andri 17 Nov 2026)", () => {
+  it("teksPenutup yang terisi dipakai sebagai kalimat penutup, bukan bawaan", () => {
+    const t = teksResi(susunResi(dasar({ teksPenutup: "Terima kasih, sampai jumpa!" })));
+    expect(t).toContain("Terima kasih, sampai jumpa!");
+    expect(t).not.toContain("Terima kasih telah berbelanja di");
+  });
+
+  it("teksPenutup kosong memakai penutup bawaan penjualan", () => {
+    const t = teksResi(susunResi(dasar({ teksPenutup: "   " })));
+    expect(t).toContain("Terima kasih telah berbelanja di KAYESA CLOTHING.");
+  });
+
+  it("teksPenutup kosong pada PO memakai penutup bawaan pesanan jahit", () => {
+    const t = teksResi(susunResi(dasar({ jenis: "po", teksPenutup: "", namaPemesan: "Nadia Putri" })));
+    expect(t).toContain("Terima kasih telah mempercayakan pesanan jahit kepada KAYESA CLOTHING.");
+  });
+
+  it("contoh pratinjau memakai teksPenutup seed sebagai penutup pengganti", () => {
+    const t = teksResi(susunResi(dataContoh(pengaturanContoh)));
+    expect(t).toContain("Terima kasih, sampai jumpa!");
+    expect(t).not.toContain("Terima kasih telah berbelanja di");
   });
 });
 

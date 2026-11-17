@@ -15,7 +15,7 @@ import { getDB, DB_VERSION, type KasirDB } from "./schema.ts";
 
 export const VERSI_CADANGAN = 1;
 export const NAMA_BERKAS_CADANGAN = (tgl: Date) =>
-  `Cadangan-KasirKayesha-${tgl.toISOString().slice(0, 10)}.json`;
+  `Cadangan-KasirKayesa-${tgl.toISOString().slice(0, 10)}.json`;
 
 /** Store yang ikut dicadangkan (semua data bisnis). */
 export const STORE_CADANGAN = [
@@ -34,7 +34,9 @@ export const STORE_CADANGAN = [
 type NamaStore = (typeof STORE_CADANGAN)[number];
 
 export interface BerkasCadangan {
-  aplikasi: "Kasir Kayesha";
+  /** Ejaan baru "Kasir Kayesa" (keputusan Andri 17 Nov 2026); cadangan lama
+   *  masih bertuliskan "Kasir Kayesha" dan tetap diterima saat dibaca. */
+  aplikasi: "Kasir Kayesa" | "Kasir Kayesha";
   versiFormat: number;
   versiDatabase: number;
   dibuatPada: string;
@@ -148,7 +150,7 @@ export async function buatCadangan(sekarang: Date = new Date()): Promise<HasilEk
     }
 
     const berkas: BerkasCadangan = {
-      aplikasi: "Kasir Kayesha",
+      aplikasi: "Kasir Kayesa",
       versiFormat: VERSI_CADANGAN,
       versiDatabase: DB_VERSION,
       dibuatPada: sekarang.toISOString(),
@@ -179,8 +181,9 @@ export function periksaCadangan(teks: string): HasilPeriksa {
   }
 
   const b = mentah as Partial<BerkasCadangan>;
-  if (!b || b.aplikasi !== "Kasir Kayesha") {
-    return { ok: false, pesan: "Berkas ini bukan cadangan Kasir Kayesha." };
+  // Cadangan lama bertuliskan "Kasir Kayesha" — tetap diterima.
+  if (!b || (b.aplikasi !== "Kasir Kayesa" && b.aplikasi !== "Kasir Kayesha")) {
+    return { ok: false, pesan: "Berkas ini bukan cadangan Kasir Kayesa." };
   }
   if (typeof b.versiFormat !== "number") {
     return { ok: false, pesan: "Format cadangan tidak dikenal." };
@@ -244,8 +247,9 @@ export type HasilPulihkan = { ok: true; dipulihkan: Record<string, number> } | {
  * Bila satu store gagal, error dilempar dan UI menampilkan pesan — tidak setengah jadi.
  */
 export async function pulihkanCadangan(cadangan: BerkasCadangan, opsi: OpsiPulihkan): Promise<HasilPulihkan> {
-  if (cadangan.aplikasi !== "Kasir Kayesha") {
-    return { ok: false, pesan: "Berkas ini bukan cadangan Kasir Kayesha." };
+  // Cadangan lama bertuliskan "Kasir Kayesha" — tetap diterima.
+  if (cadangan.aplikasi !== "Kasir Kayesa" && cadangan.aplikasi !== "Kasir Kayesha") {
+    return { ok: false, pesan: "Berkas ini bukan cadangan Kasir Kayesa." };
   }
   if (cadangan.versiFormat > VERSI_CADANGAN) {
     return { ok: false, pesan: "Cadangan dibuat oleh aplikasi versi lebih baru." };

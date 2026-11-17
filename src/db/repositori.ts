@@ -29,6 +29,8 @@ export const SETTINGS_KOSONG: SettingsRecord = {
   tampilkanNomorResi: true,
   tampilkanRincianDiskon: true,
   tampilkanPembayaranSisa: true,
+  ukuranFont: "normal",
+  tema: "terang",
   pinHash: null,
   updatedAt: new Date(0).toISOString(),
 };
@@ -41,7 +43,11 @@ export function buatId(): UUID {
 
 export async function ambilSettings(): Promise<SettingsRecord> {
   const db = await getDB();
-  return (await db.get("settings", "utama")) ?? SETTINGS_KOSONG;
+  const tersimpan = await db.get("settings", "utama");
+  if (!tersimpan) return SETTINGS_KOSONG;
+  // Catatan lama (sebelum ada ukuranFont/tema) dilengkapi dari bawaan, supaya
+  // tidak perlu migrasi database: field yang tidak ada dianggap "normal"/"terang".
+  return { ...SETTINGS_KOSONG, ...tersimpan };
 }
 
 export async function simpanSettings(nilai: SettingsRecord): Promise<void> {

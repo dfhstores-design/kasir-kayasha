@@ -42,6 +42,7 @@ import {
 } from "./db/repositori.ts";
 import { mintaPenyimpananPermanen } from "./pwa/register.ts";
 import { jalankanSeedDemo } from "./db/seedDemo.ts";
+import { terapkanTampilan, temaDari, ukuranFontDari } from "./lib/tampilan.ts";
 import type { OngkirMode } from "./lib/ongkir.ts";
 import type { StatusBayar } from "./lib/keranjang.ts";
 import { khususAdmin, type Peran } from "./lib/peran.ts";
@@ -99,6 +100,12 @@ export default function App() {
   const [layar, setLayar] = useState<Layar>({ nama: "beranda" });
   const [settings, setSettings] = useState<SettingsRecord | null>(null);
   const [storagePermanen, setStoragePermanen] = useState<boolean | null>(null);
+
+  // Terapkan ukuran huruf & tema dari Pengaturan ke seluruh aplikasi.
+  // Nilai lama yang belum punya field ini dianggap "normal" / "terang".
+  useEffect(() => {
+    terapkanTampilan(ukuranFontDari(settings?.ukuranFont), temaDari(settings?.tema));
+  }, [settings]);
 
   const [keranjang, setKeranjang] = useState<IsiKeranjang[]>([]);
   const [nilaiKeranjang, setNilaiKeranjang] = useState<NilaiKeranjang>(KERANJANG_AWAL);

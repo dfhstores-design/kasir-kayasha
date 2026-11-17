@@ -506,6 +506,8 @@ select {
 
 /* ---------------- pratinjau resi (Phase 5) ---------------- */
 
+/* Resi sengaja tetap kertas putih dengan tinta gelap, walau tema gelap aktif —
+ * resi dicetak/dibagikan sebagai dokumen. */
 .resi {
   background: #fff;
   border: 1px dashed #b9b2a5;
@@ -513,7 +515,7 @@ select {
   padding: 0.875rem;
   font-size: 0.8125rem;
   line-height: 1.5;
-  color: var(--ink);
+  color: #1f2328;
 }
 
 .resi__judul {
@@ -701,5 +703,5 @@ select {
 
 .resi__tandatangan-nama {
   font-weight: 800;
-  color: var(--ink);
+  color: #1f2328;
 }

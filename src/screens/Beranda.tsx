@@ -42,7 +42,7 @@ export default function Beranda({ settings, storagePermanen, bazar, peran, onMin
   return (
     <div className="content">
       <div>
-        <p className="h1">Kasir Kayesha</p>
+        <p className="h1">Kasir Kayesa</p>
         {namaButik && <p className="soft" style={{ margin: 0 }}>{namaButik}</p>}
       </div>
 
