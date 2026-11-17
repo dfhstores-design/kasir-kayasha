@@ -19,7 +19,7 @@ import type { Rekening } from "../db/schema.ts";
 
 /** Baris resi. `align` mengatur posisi: kiri, kanan, atau tengah. */
 /** Dipakai HANYA bila pemilik belum mengisi nama butik di Pengaturan. */
-export const NAMA_BUTIK_BAWAAN = "Kayesha";
+export const NAMA_BUTIK_BAWAAN = "KAYESA";
 
 export type BarisResi =
   | { jenis: "logo" }
