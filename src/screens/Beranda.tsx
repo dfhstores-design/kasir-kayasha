@@ -101,9 +101,6 @@ export default function Beranda({ settings, storagePermanen, bazar, peran, onMin
             Jual Barang
           </button>
         )}
-        <button type="button" className="tile" onClick={() => buka("pesanan")}>
-          Pesanan
-        </button>
         <button type="button" className="tile" onClick={() => buka("daftar-jahit")}>
           Pesanan Jahit
         </button>
