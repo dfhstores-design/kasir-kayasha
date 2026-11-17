@@ -1,18 +1,36 @@
 import { useEffect, useState } from "react";
-import { daftarProduk, type ProdukRecord } from "../db/repositori.ts";
+import { daftarProduk, type BazarRecord, type ProdukRecord } from "../db/repositori.ts";
 import { formatRupiah } from "../lib/money.ts";
 import { useThumbnail } from "./useFoto.ts";
 
 interface Props {
   onTambah: () => void;
   onUbah: (p: ProdukRecord) => void;
+  /**
+   * Bazar yang sedang aktif + barang yang baru saja disimpan (baru/diubah).
+   * Bila keduanya ada, tampilkan ajakan ke Atur Barang: stok yang dijual
+   * saat bazar aktif adalah saldo bazar, bukan stok gudang — barang yang
+   * baru disimpan di gudang belum bisa dijual sampai dialokasikan.
+   * Bila tidak ada bazar aktif, ajakan tidak tampil (stok gudang yang dijual).
+   */
+  bazarAktif?: BazarRecord | null;
+  barangBaruDisimpan?: ProdukRecord | null;
+  onAturBarangBazar?: () => void;
+  onTutupPemberitahuan?: () => void;
 }
 
 /**
  * Layar 9 — Daftar Barang (docs/design/screens/09-daftar-barang.md).
  * Stok tidak diedit di sini; hanya dari Form Barang.
  */
-export default function DaftarBarang({ onTambah, onUbah }: Props) {
+export default function DaftarBarang({
+  onTambah,
+  onUbah,
+  bazarAktif,
+  barangBaruDisimpan,
+  onAturBarangBazar,
+  onTutupPemberitahuan,
+}: Props) {
   const [produk, setProduk] = useState<ProdukRecord[] | null>(null);
   const [cari, setCari] = useState("");
   const [tampilArsip, setTampilArsip] = useState(false);
@@ -32,6 +50,24 @@ export default function DaftarBarang({ onTambah, onUbah }: Props) {
   return (
     <>
       <div className="content">
+        {bazarAktif && barangBaruDisimpan && (
+          <div className="panel panel--warn" role="status">
+            <strong>Barang tersimpan di gudang.</strong>
+            <p style={{ margin: "0.25rem 0 0.5rem" }}>
+              “{barangBaruDisimpan.nama}” belum dibawa ke bazar aktif ({bazarAktif.nama}), jadi belum bisa
+              dijual di Penjualan.
+            </p>
+            <div className="grid2">
+              <button type="button" className="btn btn--primary btn--small" onClick={onAturBarangBazar}>
+                Atur Barang di Bazar
+              </button>
+              <button type="button" className="btn btn--ghost btn--small" onClick={onTutupPemberitahuan}>
+                Nanti saja
+              </button>
+            </div>
+          </div>
+        )}
+
         <button type="button" className="btn btn--primary btn--small" onClick={onTambah}>
           + Tambah Barang
         </button>

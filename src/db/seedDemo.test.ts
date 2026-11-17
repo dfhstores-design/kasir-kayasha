@@ -8,11 +8,17 @@ import {
   daftarTransaksi,
   simpanProduk,
 } from "./repositori.ts";
+import { daftarPesananJahit } from "../lib/jahitan.ts";
 import { resetKoneksiDB, type ProdukRecord } from "./schema.ts";
 
 function resetDB() {
   (globalThis as unknown as { indexedDB: IDBFactory }).indexedDB = new IDBFactory();
   resetKoneksiDB();
+  try {
+    localStorage.clear();
+  } catch {
+    // lingkungan tanpa localStorage: abaikan
+  }
 }
 
 describe("seed demo KAYESA", () => {
@@ -43,7 +49,7 @@ describe("seed demo KAYESA", () => {
     expect((await daftarProduk()).length).toBe(5);
   });
 
-  it("mengisi settings, 5 produk, 1 bazar, 10 penjualan dan 3 PO bila DB kosong", async () => {
+  it("mengisi settings, 5 produk, 1 bazar, 10 penjualan dan 2 pesanan jahit bila DB kosong", async () => {
     vi.stubGlobal(
       "fetch",
       vi.fn(async () => ({ ok: true, blob: async () => new Blob(["logo-png"], { type: "image/png" }) })),
@@ -92,22 +98,43 @@ describe("seed demo KAYESA", () => {
     expect(bazar?.status).toBe("aktif");
 
     const semua = await daftarTransaksi();
-    expect(semua).toHaveLength(13);
+    expect(semua).toHaveLength(12);
     const penjualan = semua.filter((t) => t.jenis === "langsung");
-    const po = semua.filter((t) => t.jenis === "po");
+    const jahit = semua.filter((t) => t.jenisDokumen === "jasa");
     expect(penjualan).toHaveLength(10);
-    expect(po).toHaveLength(3);
-    expect(po.map((t) => t.statusPesanan).sort()).toEqual(["diproses", "diproses", "siap"]);
-    expect(po.every((t) => t.namaPemesan?.startsWith("CONTOH – "))).toBe(true);
-    expect(po.every((t) => t.catatanPesanan === "DATA CONTOH DEMO")).toBe(true);
+    // Seed TIDAK lagi membuat PO barang stok (BU-24: Pesanan = pesanan jahit).
+    expect(semua.filter((t) => t.jenis === "po" && t.jenisDokumen !== "jasa")).toHaveLength(0);
+    expect(jahit).toHaveLength(2);
+    expect(jahit.map((t) => t.namaPemesan).sort()).toEqual(["CONTOH – Dewi", "CONTOH – Sari"]);
+    expect(jahit.every((t) => t.namaPemesan?.startsWith("CONTOH – "))).toBe(true);
+    expect(jahit.every((t) => t.bazarId === null)).toBe(true);
     expect(penjualan.every((t) => t.bazarId === bazar?.id)).toBe(true);
+
+    const pesananJahit = await daftarPesananJahit();
+    expect(pesananJahit).toHaveLength(2);
+    const sari = pesananJahit.find((p) => p.namaPemesan === "CONTOH – Sari");
+    const dewi = pesananJahit.find((p) => p.namaPemesan === "CONTOH – Dewi");
+    // Sari: Kebaya brokat 850.000 + Payet 125.000 = 975.000, DP 300.000.
+    expect(sari?.model).toBe("Kebaya brokat");
+    expect(sari?.total).toBe(975000);
+    expect(sari?.terbayar).toBe(300000);
+    expect(sari?.sisa).toBe(675000);
+    expect(sari?.status).toBe("terbuka");
+    expect(sari?.perkiraanSelesai).toBe("2026-11-19");
+    // Dewi: Gaun Pesta 350.000, bayar penuh.
+    expect(dewi?.model).toBe("Gaun Pesta");
+    expect(dewi?.total).toBe(350000);
+    expect(dewi?.terbayar).toBe(350000);
+    expect(dewi?.sisa).toBe(0);
+    expect(dewi?.status).toBe("lunas");
+    expect(dewi?.perkiraanSelesai).toBe("2026-11-18");
   });
 
   it("tidak mengubah apa pun bila dijalankan dua kali", async () => {
     expect(await jalankanSeedDemo()).toBe(true);
     expect(await jalankanSeedDemo()).toBe(false);
     expect((await daftarProduk()).length).toBe(5);
-    expect((await daftarTransaksi()).length).toBe(13);
+    expect((await daftarTransaksi()).length).toBe(12);
   });
 
   it("tidak jalan bila sudah ada produk", async () => {

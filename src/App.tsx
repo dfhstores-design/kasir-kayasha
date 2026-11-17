@@ -21,6 +21,7 @@ import FormPesanan from "./screens/FormPesanan.tsx";
 import WizardPesananJahit from "./screens/WizardPesananJahit.tsx";
 import DaftarPesananJahit from "./screens/DaftarPesananJahit.tsx";
 import DetailPesananJahit from "./screens/DetailPesananJahit.tsx";
+import KasirDetail from "./screens/KasirDetail.tsx";
 import Pengaturan from "./screens/Pengaturan.tsx";
 import Resi from "./screens/Resi.tsx";
 import MenuPengaturan from "./screens/MenuPengaturan.tsx";
@@ -81,6 +82,7 @@ export type Layar =
   | { nama: "daftar-jahit" }
   | { nama: "wizard-jahit" }
   | { nama: "detail-jahit"; id: string }
+  | { nama: "kasir-detail"; id: string }
   | { nama: "pengaturan-isi"; bagian: "profil" | "rekening" | "logo" | "tampilan" }
   | { nama: "resi"; transaksiId: string }
   | { nama: "contoh-resi" }
@@ -133,6 +135,8 @@ export default function App() {
   /** Bazar aktif + saldo per barang. Saat null, penjualan memakai stok gudang. */
   const [bazar, setBazar] = useState<BazarRecord | null>(null);
   const [saldoBazar, setSaldoBazar] = useState<Map<string, number>>(new Map());
+  /** Barang yang baru disimpan saat bazar aktif — pemicu ajakan alokasi di DaftarBarang. */
+  const [barangBaruDisimpan, setBarangBaruDisimpan] = useState<ProdukRecord | null>(null);
 
   const muatParkir = useCallback(async () => {
     const daftar = await daftarParkir();
@@ -212,6 +216,8 @@ export default function App() {
       setJahitanDibuka(null);
       return setLayar({ nama: "daftar-jahit" });
     }
+    if (n === "kasir-detail") return setLayar({ nama: "detail-jahit", id: layar.id });
+    setBarangBaruDisimpan(null);
     setLayar({ nama: "beranda" });
   }, [layar, keranjang.length]);
 
@@ -379,9 +385,12 @@ export default function App() {
             updatedAt: sekarang,
           };
       await simpanProduk(p);
+      // Hanya saat bazar aktif ajakan alokasi ditampilkan: tanpa bazar,
+      // stok gudang langsung yang dijual, jadi tidak ada yang perlu diatur.
+      setBarangBaruDisimpan(bazar ? p : null);
       setLayar({ nama: "barang" });
     },
-    [layar],
+    [layar, bazar],
   );
 
   const judul: Record<string, string> = {
@@ -404,6 +413,7 @@ export default function App() {
     "daftar-jahit": "Pesanan Jahit",
     "wizard-jahit": "Pesanan Jahit Baru",
     "detail-jahit": "Detail Pesanan Jahit",
+    "kasir-detail": "Terima Pembayaran",
   };
 
   const tampilAppbar = layar.nama !== "beranda" && layar.nama !== "tersimpan";
@@ -542,8 +552,22 @@ export default function App() {
 
       {layar.nama === "barang" && (
         <DaftarBarang
-          onTambah={() => setLayar({ nama: "form-barang", produk: null })}
-          onUbah={(p) => setLayar({ nama: "form-barang", produk: p })}
+          bazarAktif={bazar}
+          barangBaruDisimpan={barangBaruDisimpan}
+          onAturBarangBazar={() => {
+            if (!bazar) return;
+            setBarangBaruDisimpan(null);
+            setLayar({ nama: "alokasi-bazar", bazar });
+          }}
+          onTutupPemberitahuan={() => setBarangBaruDisimpan(null)}
+          onTambah={() => {
+            setBarangBaruDisimpan(null);
+            setLayar({ nama: "form-barang", produk: null });
+          }}
+          onUbah={(p) => {
+            setBarangBaruDisimpan(null);
+            setLayar({ nama: "form-barang", produk: p });
+          }}
         />
       )}
 
@@ -785,9 +809,20 @@ export default function App() {
         <DetailPesananJahit
           id={jahitanDibuka}
           segarkan={segarkanJahitan}
+          onTerimaPembayaran={() => setLayar({ nama: "kasir-detail", id: jahitanDibuka })}
           onKembali={() => {
             setJahitanDibuka(null);
             setLayar({ nama: "daftar-jahit" });
+          }}
+        />
+      )}
+
+      {layar.nama === "kasir-detail" && (
+        <KasirDetail
+          id={layar.id}
+          onKembali={() => {
+            setSegarkanJahitan((n) => n + 1);
+            setLayar({ nama: "detail-jahit", id: layar.id });
           }}
         />
       )}
@@ -796,6 +831,16 @@ export default function App() {
         <Kasir
           segarkan={segarkanJahitan}
           onPesananBaru={() => setLayar({ nama: "wizard-jahit" })}
+          onPenjualan={
+            // Penjaga yang sama dengan buka("pilih-barang") di Beranda: kasir hanya
+            // menjual bila ada bazar aktif. Null = tombol Penjualan nonaktif.
+            peran === "admin" || bazar
+              ? () => {
+                  setModeKeranjang("jual");
+                  setLayar({ nama: "pilih-barang" });
+                }
+              : null
+          }
         />
       )}
 

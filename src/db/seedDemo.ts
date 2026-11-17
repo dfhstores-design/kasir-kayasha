@@ -10,7 +10,8 @@
  * dari data asli dan bisa dihapus setelah demo.
  *
  * Urutan: settings -> produk -> bazar + alokasi -> 10 penjualan (dari saldo
- * bazar, stok berkurang) -> 3 PO (tidak mengurangi stok saat dibuat).
+ * bazar, stok berkurang) -> 2 pesanan jahit (1 Belum Lunas dengan DP,
+ * 1 Lunas; tidak mengurangi stok).
  * Logo DI-seed dari public/logo-kayesa.png (file logo_kayesya_reference.png
  * dari Drive, 1200x1200 PNG, 119 KB): Andri memutuskan secara eksplisit pada
  * 17 Nov 2026 bahwa saat link dibuka logo sudah ada, mengesampingkan
@@ -33,8 +34,8 @@ import {
   type SettingsRecord,
 } from "./repositori.ts";
 import { simpanPenjualan, type JenisBayar } from "../lib/penjualan.ts";
-import { simpanPO } from "./pesanan.ts";
-import { ubahStatusPesanan } from "./pesananOperasi.ts";
+import { simpanPesananJahit, type RencanaJahitan } from "../lib/jahitan.ts";
+import { terimaPembayaranKasir } from "./kasirOperasi.ts";
 import type { StatusBayar } from "../lib/keranjang.ts";
 
 export const SETTINGS_DEMO: SettingsRecord = {
@@ -104,19 +105,48 @@ const PENJUALAN_DEMO: PenjualanDemo[] = [
   { waktu: "2026-11-17T15:40:00+07:00", items: [{ nama: "Rok Plisket", kuantitas: 2 }], jenisBayar: "qris", statusBayar: "lunas", dibayarSekarang: 0 },
 ];
 
-interface PODemo {
-  namaPemesan: string;
-  items: Array<{ nama: string; kuantitas: number }>;
+interface JahitanDemo {
+  rencana: RencanaJahitan;
+  /** Uang yang sudah dibayar saat seed (0 = belum ada pembayaran). */
   dibayarSekarang: number;
-  jenisBayar: JenisBayar | null;
-  perkiraanSiap: string;
-  jadiSiap: boolean;
+  /** Metode pembayaran awal ("tunai" / "transfer" / "qris"). */
+  jenisBayar: string;
 }
 
-const PO_DEMO: PODemo[] = [
-  { namaPemesan: "CONTOH – Sari", items: [{ nama: "Blus Linen", kuantitas: 1 }, { nama: "Rok Plisket", kuantitas: 1 }], dibayarSekarang: 200000, jenisBayar: "transfer", perkiraanSiap: "2026-11-19", jadiSiap: false },
-  { namaPemesan: "CONTOH – Dewi", items: [{ nama: "Dress Batik", kuantitas: 1 }], dibayarSekarang: 0, jenisBayar: null, perkiraanSiap: "2026-11-20", jadiSiap: false },
-  { namaPemesan: "CONTOH – Rina", items: [{ nama: "Kemeja Katun", kuantitas: 2 }, { nama: "Celana Kulot", kuantitas: 1 }], dibayarSekarang: 300000, jenisBayar: "qris", perkiraanSiap: "2026-11-19", jadiSiap: true },
+/**
+ * 2 contoh pesanan jahit (BU-24: "Pesanan" = barang custom = pesanan jahit;
+ * PO barang stok tidak lagi di-seed). Pesanan jahit bazarId null — tidak
+ * mengurangi stok dan tidak terikat bazar demo.
+ */
+const JAHITAN_DEMO: JahitanDemo[] = [
+  {
+    rencana: {
+      namaPemesan: "CONTOH – Sari",
+      kontak: null,
+      model: "Kebaya brokat",
+      ukuran: null,
+      perkiraanSelesai: "2026-11-19",
+      catatan: "DATA CONTOH DEMO",
+      biayaJasa: 850000,
+      biayaLain: [{ nama: "Payet", nominal: 125000 }],
+    },
+    dibayarSekarang: 300000,
+    jenisBayar: "tunai",
+  },
+  {
+    rencana: {
+      namaPemesan: "CONTOH – Dewi",
+      kontak: null,
+      model: "Gaun Pesta",
+      ukuran: null,
+      perkiraanSelesai: "2026-11-18",
+      catatan: "DATA CONTOH DEMO",
+      biayaJasa: 350000,
+      biayaLain: [],
+    },
+    dibayarSekarang: 350000,
+    jenisBayar: "transfer",
+  },
 ];
 
 /** URL logo default yang ikut ter-copy ke dist/ saat build (public/). */
@@ -157,7 +187,7 @@ export async function databaseMasihKosong(): Promise<boolean> {
 
 /**
  * Mengisi settings default + 5 produk + 1 bazar demo + 10 penjualan +
- * 3 PO. Mengembalikan true bila seed dijalankan, false bila database
+ * 2 pesanan jahit. Mengembalikan true bila seed dijalankan, false bila database
  * sudah berisi data (tidak ada yang diubah).
  */
 export async function jalankanSeedDemo(): Promise<boolean> {
@@ -214,31 +244,15 @@ export async function jalankanSeedDemo(): Promise<boolean> {
     if (!hasil.ok) throw new Error(`Seed penjualan gagal: ${hasil.pesan}`);
   }
 
-  for (const po of PO_DEMO) {
-    const hasil = await simpanPO(
-      {
-        items: po.items.map((i) => {
-          const p = produkDariNama.get(i.nama);
-          if (!p) throw new Error(`Produk demo tidak ditemukan: ${i.nama}`);
-          return { produkId: p.id, nama: p.nama, hargaSatuan: p.hargaJual, kuantitas: i.kuantitas, diskonPerUnit: 0 };
-        }),
-        diskonTotal: 0,
-        ongkir: { mode: "ambil_sendiri", nominal: 0 },
-        namaPemesan: po.namaPemesan,
-        kontak: null,
-        perkiraanSiap: po.perkiraanSiap,
-        alamat: null,
-        catatan: "DATA CONTOH DEMO",
-        dibayarSekarang: po.dibayarSekarang,
-        jenisBayar: po.jenisBayar,
-        bazarId: bazar.id,
-      },
-      { rekening: SETTINGS_DEMO.rekening, waktu: new Date("2026-11-17T08:00:00+07:00") },
-    );
-    if (!hasil.ok) throw new Error(`Seed PO gagal: ${hasil.pesan}`);
-    if (po.jadiSiap) {
-      const ubah = await ubahStatusPesanan(hasil.pesanan.id, "siap");
-      if (!ubah.ok) throw new Error(`Seed ubah status PO gagal: ${ubah.pesan}`);
+  for (const jahit of JAHITAN_DEMO) {
+    const hasil = await simpanPesananJahit(jahit.rencana, {
+      rekening: SETTINGS_DEMO.rekening,
+      waktu: new Date("2026-11-17T08:00:00+07:00"),
+    });
+    if (!hasil.ok) throw new Error(`Seed pesanan jahit gagal: ${hasil.pesan}`);
+    if (jahit.dibayarSekarang > 0) {
+      const bayar = await terimaPembayaranKasir(hasil.pesanan.id, jahit.dibayarSekarang, jahit.jenisBayar);
+      if (!bayar.ok) throw new Error(`Seed pembayaran jahit gagal: ${bayar.pesan}`);
     }
   }
 

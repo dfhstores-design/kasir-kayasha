@@ -7,18 +7,27 @@ interface Props {
   /** Naikkan untuk memuat ulang daftar setelah ada perubahan. */
   segarkan: number;
   onPesananBaru: () => void;
+  /**
+   * Buka alur jual barang (pilih-barang). Null = tombol Penjualan nonaktif:
+   * penjaga yang sama dengan Beranda — kasir hanya menjual bila ada bazar aktif.
+   */
+  onPenjualan: (() => void) | null;
 }
 
 type Tab = "belum-lunas" | "riwayat";
 
 /**
  * Antar-muka kasir (BU-18, BU-24, BU-29).
- * Dua alur besar: "Pesanan" (aktif) dan "Penjualan" (nonaktif sampai tahap stok, label "segera").
+ * Dua alur besar: "Pesanan Jahit" dan "Penjualan". Entri "Penjualan" dari layar Kasir
+ * dibuka atas keputusan Andri 17 Nov 2026 (P0+P1): penjualan barang sudah berjalan
+ * lewat Beranda, jadi bukan lagi ditunda sampai tahap stok (kunci BU-24 lama).
+ * Penjualan tetap hanya untuk kasir bila ada bazar aktif — penjaga yang sama dengan
+ * Beranda (onPenjualan null = tombol nonaktif).
  * Daftar memakai dua tab besar: Belum Lunas (default) & Riwayat; kartu besar menampilkan
  * nama, jenis jahitan, sisa, dan tanda sudah dikirim. Ketuk kartu untuk detail (terima bayar).
  * Daftar & entitas dipakai ulang dari `lib/jahitan.ts` (agent ui-tante) — tidak diduplikasi.
  */
-export default function Kasir({ segarkan, onPesananBaru }: Props) {
+export default function Kasir({ segarkan, onPesananBaru, onPenjualan }: Props) {
   const [daftarView, setDaftarView] = useState(false);
   const [tab, setTab] = useState<Tab>("belum-lunas");
   const [detailId, setDetailId] = useState<string | null>(null);
@@ -46,6 +55,7 @@ export default function Kasir({ segarkan, onPesananBaru }: Props) {
       {!daftarView ? (
         <MenuUtama
           onPesanan={() => setDaftarView(true)}
+          onPenjualan={onPenjualan}
         />
       ) : (
         <>
@@ -87,19 +97,26 @@ export default function Kasir({ segarkan, onPesananBaru }: Props) {
   );
 }
 
-/** Dua tombol besar pintu kasir (BU-24). "Penjualan" ditunda sampai tahap stok (BU-12). */
-function MenuUtama({ onPesanan }: { onPesanan: () => void }) {
+/** Dua tombol besar pintu kasir. "Penjualan" dibuka atas keputusan Andri 17 Nov 2026 (P0+P1). */
+function MenuUtama({ onPesanan, onPenjualan }: { onPesanan: () => void; onPenjualan: (() => void) | null }) {
   return (
     <div className="kastiles">
       <button type="button" className="kastile" onClick={onPesanan}>
-        <span className="kastile__judul">Pesanan</span>
+        <span className="kastile__judul">Pesanan Jahit</span>
         <span className="kastile__sub">Pesan jahitan &amp; terima pembayaran</span>
       </button>
 
-      <button type="button" className="kastile kastile--mati" disabled title="Dibuka pada tahap stok">
-        <span className="kastile__judul">Penjualan</span>
-        <span className="kastile__sub">Segera</span>
-      </button>
+      {onPenjualan ? (
+        <button type="button" className="kastile" onClick={onPenjualan}>
+          <span className="kastile__judul">Penjualan</span>
+          <span className="kastile__sub">Jual barang stok</span>
+        </button>
+      ) : (
+        <button type="button" className="kastile kastile--mati" disabled title="Kasir hanya menjual bila ada bazar aktif">
+          <span className="kastile__judul">Penjualan</span>
+          <span className="kastile__sub">Perlu bazar aktif</span>
+        </button>
+      )}
     </div>
   );
 }

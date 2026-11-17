@@ -118,7 +118,7 @@ export default function Keranjang({
       <div className="content">
         <div className="panel panel--ok">
           <strong>Keranjang belum ada barang.</strong>
-          <p style={{ margin: "0.25rem 0 0" }}>Pilih barang lewat tombol Jual Barang di beranda.</p>
+          <p style={{ margin: "0.25rem 0 0" }}>Pilih barang lewat tombol Penjualan di beranda.</p>
         </div>
 
         {parkir.length > 0 && (

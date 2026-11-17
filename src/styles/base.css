@@ -198,20 +198,7 @@ select:focus-visible {
   border-color: var(--primary);
 }
 
-/* Tombol placeholder Mini ERP: abu-abu, belum ada fungsi, hanya notifikasi. */
-.tile--segera {
-  background: var(--off-bg);
-  border-color: var(--line);
-  color: var(--ink-soft);
-  flex-direction: column;
-  gap: 0.25rem;
-  cursor: pointer;
-}
-
-.tile--segera .tile__sub {
-  font-size: var(--font-soft);
-  font-weight: 400;
-}
+/* (Kelas .tile--segera dihapus 17 Nov 2026 bersama bagian Mini ERP.) */
 
 /* ---------------- panel & kartu ---------------- */
 

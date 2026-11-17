@@ -18,6 +18,8 @@ interface Props {
   id: string;
   onKembali: () => void;
   segarkan: number;
+  /** Buka layar terima pembayaran (KasirDetail) untuk pesanan ini. */
+  onTerimaPembayaran?: () => void;
 }
 
 /**
@@ -25,7 +27,7 @@ interface Props {
  * Invoice menampilkan SISA (BU-26.C) untuk menagih sopan; judul otomatis invoice/resi
  * (K-02). Log pengiriman dicatat otomatis (BU-27/BU-28).
  */
-export default function DetailPesananJahit({ id, onKembali, segarkan }: Props) {
+export default function DetailPesananJahit({ id, onKembali, segarkan, onTerimaPembayaran }: Props) {
   const [data, setData] = useState<PesananJahitLengkap | null>(null);
   const [sibuk, setSibuk] = useState(false);
   const [pesan, setPesan] = useState<string | null>(null);
@@ -157,6 +159,11 @@ export default function DetailPesananJahit({ id, onKembali, segarkan }: Props) {
       </div>
 
       <div className="bottombar">
+        {data.sisa > 0 && onTerimaPembayaran && (
+          <button type="button" className="btn btn--primary" onClick={onTerimaPembayaran}>
+            Terima Pembayaran
+          </button>
+        )}
         <button type="button" className="btn btn--primary" onClick={bagikan} disabled={sibuk}>
           {sibuk ? "Membuat dokumen…" : data.sisa > 0 ? "Lihat & Bagikan Invoice" : "Lihat & Bagikan Resi"}
         </button>
