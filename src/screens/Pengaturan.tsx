@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ambilSettings, buatId, simpanSettings, type SettingsRecord } from "../db/repositori.ts";
-import type { Rekening } from "../db/schema.ts";
+import type { Rekening, Tema } from "../db/schema.ts";
+import { DAFTAR_TEMA, LABEL_SKALA, LABEL_TEMA, SKALA_FONT, terapkanTampilan } from "../lib/tampilan.ts";
 import { kompresFoto, KompresiError, periksaBerkasFoto } from "../lib/kompresiFoto.ts";
 import { PROGRES_AWAL, progresGagal, progresSelesai, progresUntuk, type ProgresFoto } from "../lib/progresFoto.ts";
 import { IndikatorProgresFoto } from "../components/IndikatorProgres.tsx";
@@ -9,8 +10,8 @@ interface Props {
   /** Dipanggil setelah pengaturan tersimpan. */
   onSimpan: () => void;
   onLihatContohResi: () => void;
-  /** "profil" | "rekening" | "logo" */
-  bagian: "profil" | "rekening" | "logo";
+  /** "profil" | "rekening" | "logo" | "tampilan" */
+  bagian: "profil" | "rekening" | "logo" | "tampilan";
 }
 
 const HARI = ["Pagi", "Siang", "Sore", "Malam"];
@@ -50,6 +51,16 @@ export default function Pengaturan({ onSimpan, onLihatContohResi, bagian }: Prop
   }
 
   const ubah = (v: Partial<SettingsRecord>) => setS({ ...s, ...v });
+
+  // Pengaturan tampilan langsung terasa (pratinjau) sebelum ditekan Simpan.
+  function ubahSkala(skala: number) {
+    ubah({ skalaFont: skala });
+    terapkanTampilan(skala, s!.tema);
+  }
+  function ubahTemaPilih(tema: Tema) {
+    ubah({ tema });
+    terapkanTampilan(s!.skalaFont, tema);
+  }
 
   async function simpan() {
     setGalat(null);
@@ -173,58 +184,6 @@ export default function Pengaturan({ onSimpan, onLihatContohResi, bagian }: Prop
                 onChange={(e) => ubah({ teksPenutup: e.target.value })}
                 placeholder="Contoh: Terima kasih, sampai jumpa!"
               />
-              <p className="hint">
-                Bila diisi, teks ini dipakai sebagai kalimat penutup resi. Bila kosong, resi memakai kalimat
-                penutup bawaan.
-              </p>
-            </div>
-            <div>
-              <span className="label">Tampilan</span>
-              <p className="hint" style={{ margin: 0 }}>
-                Berlaku untuk seluruh aplikasi setelah disimpan.
-              </p>
-              <span className="label" style={{ marginTop: "0.5rem" }}>
-                Ukuran huruf
-              </span>
-              <div className="pilihan">
-                <button
-                  type="button"
-                  className="pilihan__item"
-                  aria-pressed={s.ukuranFont !== "besar"}
-                  onClick={() => ubah({ ukuranFont: "normal" })}
-                >
-                  Normal
-                </button>
-                <button
-                  type="button"
-                  className="pilihan__item"
-                  aria-pressed={s.ukuranFont === "besar"}
-                  onClick={() => ubah({ ukuranFont: "besar" })}
-                >
-                  Besar
-                </button>
-              </div>
-              <span className="label" style={{ marginTop: "0.5rem" }}>
-                Tema
-              </span>
-              <div className="pilihan">
-                <button
-                  type="button"
-                  className="pilihan__item"
-                  aria-pressed={s.tema !== "gelap"}
-                  onClick={() => ubah({ tema: "terang" })}
-                >
-                  Terang
-                </button>
-                <button
-                  type="button"
-                  className="pilihan__item"
-                  aria-pressed={s.tema === "gelap"}
-                  onClick={() => ubah({ tema: "gelap" })}
-                >
-                  Gelap
-                </button>
-              </div>
             </div>
             <div>
               <span className="label">Sapaan resi (otomatis dari jam)</span>
@@ -363,6 +322,57 @@ export default function Pengaturan({ onSimpan, onLihatContohResi, bagian }: Prop
             <p className="hint">
               Maksimal 2 rekening dicetak di resi. Rekening hanya muncul bila masih ada sisa tagihan.
               Nomor rekening tidak pernah ditulis ke log.
+            </p>
+          </>
+        )}
+        {bagian === "tampilan" && (
+          <>
+            <div>
+              <span className="label">Ukuran huruf</span>
+              <div className="pilihan">
+                {SKALA_FONT.map((skala, i) => (
+                  <button
+                    type="button"
+                    key={skala}
+                    className="pilihan__item"
+                    aria-pressed={s.skalaFont === skala}
+                    onClick={() => ubahSkala(skala)}
+                  >
+                    {LABEL_SKALA[i]}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div>
+              <span className="label">Warna tema</span>
+              <div className="pilihan">
+                {DAFTAR_TEMA.map((tema) => (
+                  <button
+                    type="button"
+                    key={tema}
+                    className="pilihan__item"
+                    aria-pressed={s.tema === tema}
+                    onClick={() => ubahTemaPilih(tema)}
+                  >
+                    {LABEL_TEMA[tema]}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="panel">
+              <strong>Pratinjau</strong>
+              <p style={{ margin: "0.5rem 0 0" }}>
+                Nama barang dan harganya tampil seperti ini.
+              </p>
+              <div style={{ marginTop: "0.5rem" }}>
+                <span className="money">Rp 180.000</span>
+              </div>
+            </div>
+
+            <p className="hint">
+              Ukuran huruf & tema hanya untuk tampilan aplikasi. Resi & nota tetap sama.
             </p>
           </>
         )}

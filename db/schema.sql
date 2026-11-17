@@ -17,7 +17,10 @@ CREATE TABLE IF NOT EXISTS transactions (
   id                TEXT PRIMARY KEY,
   nomor_resi        TEXT NOT NULL,
   waktu             TEXT NOT NULL,
-  jenis             TEXT NOT NULL,          -- langsung | po
+  jenis             TEXT,                    -- deprecated: langsung | po (dipetakan dari jenis_dokumen)
+  jenis_dokumen     TEXT NOT NULL,           -- penjualan | pesanan | jasa
+  arah_stok         TEXT NOT NULL,           -- keluar | masuk | tidak_ada
+  pelanggan_id      TEXT,                    -- UUID pelanggan (CRM, BU-28); null = belum ditautkan
   status_pesanan    TEXT NOT NULL,
   status_bayar      TEXT NOT NULL,
   bazar_id          TEXT,
@@ -97,3 +100,44 @@ CREATE TABLE IF NOT EXISTS sync_log (
 );
 
 CREATE INDEX IF NOT EXISTS idx_sync_log_jenis ON sync_log (jenis);
+
+-- ---------------------------------------------------------------- journal
+
+CREATE TABLE IF NOT EXISTS journal (
+  id           TEXT PRIMARY KEY,
+  arah         TEXT NOT NULL,            -- masuk | keluar
+  kategori     TEXT NOT NULL,
+  nominal      INTEGER NOT NULL,         -- integer Rupiah, > 0
+  waktu        TEXT NOT NULL,
+  dokumen_id   TEXT,                     -- dokumen asal; null = jurnal manual
+  pemilik      TEXT NOT NULL,            -- usaha | pribadi
+  sumber       TEXT NOT NULL,            -- usaha | pribadi
+  catatan      TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_journal_waktu ON journal (waktu);
+CREATE INDEX IF NOT EXISTS idx_journal_dokumen ON journal (dokumen_id);
+
+-- ---------------------------------------------------------------- pelanggan
+
+CREATE TABLE IF NOT EXISTS pelanggan (
+  id           TEXT PRIMARY KEY,
+  nama         TEXT NOT NULL,
+  kontak       TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_pelanggan_nama ON pelanggan (nama);
+
+-- ---------------------------------------------------------------- pengiriman
+
+CREATE TABLE IF NOT EXISTS pengiriman (
+  id           TEXT PRIMARY KEY,
+  dokumen_id   TEXT NOT NULL,
+  pelanggan_id TEXT NOT NULL,
+  waktu        TEXT NOT NULL,
+  jenis        TEXT NOT NULL,            -- invoice | resi
+  tujuan       TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_pengiriman_dokumen ON pengiriman (dokumen_id);
+CREATE INDEX IF NOT EXISTS idx_pengiriman_pelanggan ON pengiriman (pelanggan_id);

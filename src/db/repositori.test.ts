@@ -6,7 +6,6 @@ import {
   alokasikanKeBazar,
   ambilSettings,
   buatBazar,
-  SETTINGS_KOSONG,
   daftarParkir,
   daftarProduk,
   hapusParkir,
@@ -49,21 +48,6 @@ describe("settings", () => {
     expect(s.id).toBe("utama");
     expect(s.namaButik).toBe("");
     expect(s.rekening).toEqual([]);
-    expect(s.ukuranFont).toBe("normal");
-    expect(s.tema).toBe("terang");
-  });
-
-  it("catatan lama tanpa ukuranFont/tema dilengkapi bawaan (tanpa migrasi)", async () => {
-    const { getDB } = await import("./schema.ts");
-    const db = await getDB();
-    const lama = { ...SETTINGS_KOSONG, namaButik: "KAYESA" } as Record<string, unknown>;
-    delete lama.ukuranFont;
-    delete lama.tema;
-    await db.put("settings", lama as never);
-    const s = await ambilSettings();
-    expect(s.namaButik).toBe("KAYESA");
-    expect(s.ukuranFont).toBe("normal");
-    expect(s.tema).toBe("terang");
   });
 });
 

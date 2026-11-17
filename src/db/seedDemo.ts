@@ -60,7 +60,7 @@ export const SETTINGS_DEMO: SettingsRecord = {
   tampilkanNomorResi: true,
   tampilkanRincianDiskon: true,
   tampilkanPembayaranSisa: true,
-  ukuranFont: "normal",
+  skalaFont: 1,
   tema: "terang",
   pinHash: null,
   updatedAt: new Date().toISOString(),

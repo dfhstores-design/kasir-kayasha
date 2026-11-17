@@ -1,35 +1,55 @@
 import { describe, expect, it } from "vitest";
-import { TEMA_BAWAAN, temaDari, terapkanTampilan, UKURAN_FONT_BAWAAN, ukuranFontDari } from "./tampilan.ts";
+import {
+  DAFTAR_TEMA,
+  LABEL_SKALA,
+  LABEL_TEMA,
+  SKALA_FONT,
+  terapkanSkalaFont,
+  terapkanTampilan,
+  terapkanTema,
+} from "./tampilan.ts";
 
-describe("ukuranFontDari / temaDari — nilai lama & nilai aneh aman", () => {
-  it("bawaan adalah normal / terang", () => {
-    expect(UKURAN_FONT_BAWAAN).toBe("normal");
-    expect(TEMA_BAWAAN).toBe("terang");
+describe("SKALA_FONT / DAFTAR_TEMA", () => {
+  it("punya 4 skala dengan label sejajar", () => {
+    expect(SKALA_FONT).toEqual([0.9, 1, 1.15, 1.3]);
+    expect(LABEL_SKALA).toEqual(["Kecil", "Normal", "Besar", "Sangat besar"]);
+    expect(SKALA_FONT.length).toBe(LABEL_SKALA.length);
   });
 
-  it("undefined / null / nilai aneh kembali ke bawaan", () => {
-    expect(ukuranFontDari(undefined)).toBe("normal");
-    expect(ukuranFontDari(null)).toBe("normal");
-    expect(ukuranFontDari("kecil")).toBe("normal");
-    expect(temaDari(undefined)).toBe("terang");
-    expect(temaDari(null)).toBe("terang");
-    expect(temaDari("biru")).toBe("terang");
-  });
-
-  it("hanya 'besar' dan 'gelap' yang diteruskan", () => {
-    expect(ukuranFontDari("besar")).toBe("besar");
-    expect(temaDari("gelap")).toBe("gelap");
+  it("punya 3 tema dengan label lengkap", () => {
+    expect(DAFTAR_TEMA).toEqual(["terang", "gelap", "krem"]);
+    expect(LABEL_TEMA).toEqual({ terang: "Terang", gelap: "Gelap", krem: "Krem" });
   });
 });
 
-describe("terapkanTampilan", () => {
-  it("menulis atribut data di elemen <html>", () => {
-    const akar = document.createElement("html");
-    terapkanTampilan("besar", "gelap", akar);
-    expect(akar.dataset.ukuranFont).toBe("besar");
-    expect(akar.dataset.tema).toBe("gelap");
-    terapkanTampilan("normal", "terang", akar);
-    expect(akar.dataset.ukuranFont).toBe("normal");
-    expect(akar.dataset.tema).toBe("terang");
+describe("terapkanSkalaFont / terapkanTema", () => {
+  it("setel font-size root sesuai skala", () => {
+    terapkanSkalaFont(1.3);
+    expect(document.documentElement.style.fontSize).toBe("130%");
+    terapkanSkalaFont(1);
+    expect(document.documentElement.style.fontSize).toBe("100%");
+  });
+
+  it("nilai skala tidak sah kembali ke 1", () => {
+    terapkanSkalaFont(2);
+    expect(document.documentElement.style.fontSize).toBe("100%");
+  });
+
+  it("setel data-tema", () => {
+    terapkanTema("gelap");
+    expect(document.documentElement.getAttribute("data-tema")).toBe("gelap");
+    terapkanTema("krem");
+    expect(document.documentElement.getAttribute("data-tema")).toBe("krem");
+  });
+
+  it("tema tidak sah kembali ke terang", () => {
+    terapkanTema("biru" as "terang" | "gelap" | "krem");
+    expect(document.documentElement.getAttribute("data-tema")).toBe("terang");
+  });
+
+  it("terapkanTampilan setel keduanya sekaligus", () => {
+    terapkanTampilan(1, "krem");
+    expect(document.documentElement.style.fontSize).toBe("100%");
+    expect(document.documentElement.getAttribute("data-tema")).toBe("krem");
   });
 });

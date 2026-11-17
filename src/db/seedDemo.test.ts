@@ -58,7 +58,7 @@ describe("seed demo KAYESA", () => {
     expect(s.telepon1).toBe("0812 1141 4017");
     expect(s.telepon2).toBe("0821 1376 5892");
     expect(s.teksPenutup).toBe("Terima kasih, sampai jumpa!");
-    expect(s.ukuranFont).toBe("normal");
+    expect(s.skalaFont).toBe(1);
     expect(s.tema).toBe("terang");
     // fake-indexeddb di lingkungan tes ini mengembalikan Blob hasil
     // structured clone sebagai objek kosong {}, jadi isi logo (type/size)

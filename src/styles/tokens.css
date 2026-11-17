@@ -41,37 +41,49 @@
   --max-width: 45rem;
 }
 
-/* Tema gelap — dipakai bila <html data-tema="gelap"> (Pengaturan → Tema).
- * Resi tetap kertas putih (lihat .resi di base.css), jadi tidak ikut gelap. */
-:root[data-tema="gelap"] {
-  --bg: #211d18;
-  --surface: #2e2822;
-  --ink: #f5f0e6;
-  --ink-soft: #c9c0ae;
-  --line: #4a4238;
-  --field-line: #8a8378;
-  --ph: #3a332b;
-  --ph-ink: #c9c0ae;
-  --primary: #d08a6a;
-  --primary-ink: #241a15;
-  --accent: #6fbf9f;
-  --accent-bg: #1e3a31;
-  --accent-ink: #b7e2d2;
-  --warn-bg: #3d2f16;
-  --warn-ink: #f5c86e;
-  --danger: #ff9a86;
-  --off-bg: #2e2822;
+/*
+ * Tema tampilan (BU-32). Diatur lewat atribut data-tema pada <html>.
+ * 'terang' = bawaan (nilai di :root). 'gelap' dan 'krem' menimpa variabel warna.
+ * Hanya warna UI; ukuran font & layout dokumen/nota tidak pernah ikut berubah.
+ */
+[data-tema="gelap"] {
+  --bg: #1b1e22;
+  --surface: #262a30;
+  --ink: #f1f2f4;
+  --ink-soft: #b3b8bf;
+  --line: #3a4048;
+  --field-line: #5a616b;
+  --ph: #32373e;
+  --ph-ink: #9aa0a8;
+  --primary: #c25a3e;
+  --primary-ink: #ffffff;
+  --accent: #55a08b;
+  --accent-bg: #233c35;
+  --accent-ink: #a8d6c8;
+  --warn-bg: #3a3220;
+  --warn-ink: #f0c46a;
+  --danger: #e06a55;
+  --off-bg: #2e333a;
 }
 
-/* Huruf besar — dipakai bila <html data-ukuran-font="besar"> (Pengaturan →
- * Ukuran huruf). Semua ukuran memakai rem/variabel, jadi satu tempat ini
- * membesarkan seluruh aplikasi. */
-:root[data-ukuran-font="besar"] {
-  --font-h1: 2rem;
-  --font-h2: 1.5rem;
-  --font-body: 1.375rem;
-  --font-soft: 1.1875rem;
-  --font-total: 2.5rem;
+[data-tema="krem"] {
+  --bg: #f3ece0;
+  --surface: #fbf7ef;
+  --ink: #3a2f24;
+  --ink-soft: #6c5f50;
+  --line: #d8cbb4;
+  --field-line: #9b8a72;
+  --ph: #e7dcc8;
+  --ph-ink: #82745f;
+  --primary: #93452c;
+  --primary-ink: #fffaf2;
+  --accent: #2f6f5e;
+  --accent-bg: #e6efe8;
+  --accent-ink: #1f5748;
+  --warn-bg: #f5e8cf;
+  --warn-ink: #7a4a00;
+  --danger: #962718;
+  --off-bg: #ece2d2;
 }
 
 @media (prefers-reduced-motion: reduce) {

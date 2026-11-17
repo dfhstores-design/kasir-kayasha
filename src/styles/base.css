@@ -705,3 +705,152 @@ select {
   font-weight: 800;
   color: #1f2328;
 }
+/* ---------------- antar-muka kasir (BU-24, BU-29) ---------------- */
+
+.kastiles {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+}
+
+.kastile {
+  min-height: 9rem;
+  border-radius: var(--radius);
+  border: 2px solid var(--line);
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 0.25rem;
+  padding: 1rem;
+  cursor: pointer;
+  text-align: left;
+}
+
+.kastile__judul {
+  font-size: 1.75rem;
+  font-weight: 800;
+}
+
+.kastile__sub {
+  font-size: var(--font-soft);
+  color: var(--ink-soft);
+  line-height: 1.3;
+}
+
+.kastile--mati {
+  background: var(--off-bg);
+  border-color: var(--line);
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+.kastile--mati .kastile__judul {
+  color: var(--ink-soft);
+}
+
+.kaslist {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.kaskartu {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 0.875rem;
+  padding: 0.875rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  width: 100%;
+}
+
+.kaskartu__atas {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.kaskartu__nama {
+  font-size: var(--font-h2);
+}
+
+.kaskartu__bawah {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 0.5rem;
+}
+
+/* ---------------- komponen kecil lintas layar ---------------- */
+
+/* Label judul kecil di atas sekumpulan isi (form, rincian, riwayat). */
+.label {
+  display: block;
+  font-size: var(--font-soft);
+  font-weight: 700;
+  color: var(--ink-soft);
+}
+
+/* Pil kecil status (Belum lunas / Lunas / Batal / ✓ dikirim, dll). */
+.chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--touch-min);
+  padding: 0 0.75rem;
+  border-radius: 999px;
+  border: 2px solid var(--field-line);
+  background: var(--surface);
+  color: var(--ink);
+  font-size: var(--font-soft);
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.chip.warn {
+  background: var(--warn-bg);
+  border-color: var(--warn-ink);
+  color: var(--warn-ink);
+}
+
+/* Dua kolom sejajar untuk pasangan tombol/aksi pendek (Simpan + Batal, dll). */
+.grid2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.625rem;
+}
+
+/* Baris daftar lebar penuh, bisa diketuk; konten fleksibel + aksi di kanan. */
+.listrow {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  width: 100%;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 0.875rem;
+  padding: 0.875rem;
+  color: var(--ink);
+}
+
+/* Garis pemisah halus. Pemakaian memakai style inline; kelas ini hanya cadangan. */
+.hr {
+  border: 0;
+  border-top: 1px solid var(--line);
+}
+
+/* Tab kasir (ditambahi `pilihan`/`pilihan__item` untuk ukuran & aksen). */
+.kastab {
+  width: 100%;
+  flex-wrap: nowrap;
+}
+
+.kastab__item {
+  min-height: 3.5rem;
+  font-size: 1.125rem;
+}

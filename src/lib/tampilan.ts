@@ -1,36 +1,44 @@
 /**
- * Tampilan aplikasi — ukuran huruf dan tema.
+ * Penerapan pengaturan tampilan (BU-32): skala huruf & tema warna UI.
  *
- * Disimpan di SettingsRecord (IndexedDB), jadi ikut tersimpan di perangkat
- * dan ikut tercadangkan. Nilai lama yang belum punya field ini dianggap
- * "normal" / "terang", jadi tidak perlu migrasi database.
- *
- * Diterapkan lewat atribut data di <html>: CSS di tokens.css membaca
- * [data-tema="gelap"] dan [data-ukuran-font="besar"].
+ * BATAS TEGAS (BU-25): pengaturan ini HANYA untuk UI aplikasi.
+ * Ukuran font & layout dokumen/nota (src/lib/dokumen.ts, PDF/PNG) TETAP fix.
+ * Di sini kita hanya setel data-tema pada <html> dan font-size root (rem).
  */
+import type { Tema } from "../db/schema.ts";
 
-export type UkuranFont = "normal" | "besar";
-export type Tema = "terang" | "gelap";
+/** Opsi skala font yang ditawarkan (BU-32). 1 = normal. */
+export const SKALA_FONT: readonly number[] = [0.9, 1, 1.15, 1.3];
 
-export const UKURAN_FONT_BAWAAN: UkuranFont = "normal";
-export const TEMA_BAWAAN: Tema = "terang";
+/** Label tampilan untuk tiap skala (urutan sama dengan SKALA_FONT). */
+export const LABEL_SKALA: readonly string[] = ["Kecil", "Normal", "Besar", "Sangat besar"];
 
-/** Nilai apa pun yang bukan "besar" dianggap "normal" (aman untuk data lama). */
-export function ukuranFontDari(nilai: unknown): UkuranFont {
-  return nilai === "besar" ? "besar" : "normal";
+/** Opsi tema yang ditawarkan (BU-32). */
+export const DAFTAR_TEMA: readonly Tema[] = ["terang", "gelap", "krem"];
+
+/** Label ramah untuk tiap tema (urutan sama dengan DAFTAR_TEMA). */
+export const LABEL_TEMA: Record<Tema, string> = {
+  terang: "Terang",
+  gelap: "Gelap",
+  krem: "Krem",
+};
+
+/** Setel skala huruf root; 1 = bawaan browser (16px). Aman di lingkungan tanpa DOM. */
+export function terapkanSkalaFont(skala: number): void {
+  if (typeof document === "undefined") return;
+  const sah = SKALA_FONT.includes(skala) ? skala : 1;
+  document.documentElement.style.fontSize = (sah * 100).toString() + "%";
 }
 
-/** Nilai apa pun yang bukan "gelap" dianggap "terang" (aman untuk data lama). */
-export function temaDari(nilai: unknown): Tema {
-  return nilai === "gelap" ? "gelap" : "terang";
+/** Setel tema warna via atribut data-tema pada <html>. */
+export function terapkanTema(tema: Tema): void {
+  if (typeof document === "undefined") return;
+  const sah: Tema = DAFTAR_TEMA.includes(tema) ? tema : "terang";
+  document.documentElement.setAttribute("data-tema", sah);
 }
 
-/** Tulis pilihan tampilan ke elemen <html> supaya CSS langsung menerapkannya. */
-export function terapkanTampilan(
-  ukuranFont: UkuranFont,
-  tema: Tema,
-  akar: HTMLElement = document.documentElement,
-): void {
-  akar.dataset.ukuranFont = ukuranFont;
-  akar.dataset.tema = tema;
+/** Terapkan keduanya sekaligus (dipakai saat app dibuka & setiap setting berubah). */
+export function terapkanTampilan(skala: number, tema: Tema): void {
+  terapkanSkalaFont(skala);
+  terapkanTema(tema);
 }

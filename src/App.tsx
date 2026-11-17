@@ -18,11 +18,15 @@ import AturPin from "./screens/AturPin.tsx";
 import Pesanan from "./screens/Pesanan.tsx";
 import DetailPesanan from "./screens/DetailPesanan.tsx";
 import FormPesanan from "./screens/FormPesanan.tsx";
+import WizardPesananJahit from "./screens/WizardPesananJahit.tsx";
+import DaftarPesananJahit from "./screens/DaftarPesananJahit.tsx";
+import DetailPesananJahit from "./screens/DetailPesananJahit.tsx";
 import Pengaturan from "./screens/Pengaturan.tsx";
 import Resi from "./screens/Resi.tsx";
 import MenuPengaturan from "./screens/MenuPengaturan.tsx";
 import ContohResi from "./screens/ContohResi.tsx";
 import Cadangan from "./screens/Cadangan.tsx";
+import Kasir from "./screens/Kasir.tsx";
 import {
   ambilParkir,
   ambilSettings,
@@ -41,8 +45,8 @@ import {
   type SettingsRecord,
 } from "./db/repositori.ts";
 import { mintaPenyimpananPermanen } from "./pwa/register.ts";
+import { terapkanTampilan } from "./lib/tampilan.ts";
 import { jalankanSeedDemo } from "./db/seedDemo.ts";
-import { terapkanTampilan, temaDari, ukuranFontDari } from "./lib/tampilan.ts";
 import type { OngkirMode } from "./lib/ongkir.ts";
 import type { StatusBayar } from "./lib/keranjang.ts";
 import { khususAdmin, type Peran } from "./lib/peran.ts";
@@ -53,6 +57,7 @@ import type { Ongkir } from "./lib/ongkir.ts";
 import { simpanPenjualan, type JenisBayar, type TransaksiTersimpan } from "./lib/penjualan.ts";
 import { bikinIsiKeranjang, type IsiKeranjang } from "./lib/isiKeranjang.ts";
 import { formatJam } from "./lib/tanggal.ts";
+import { simpanPesananJahit } from "./lib/jahitan.ts";
 
 export type Layar =
   | { nama: "beranda" }
@@ -73,9 +78,13 @@ export type Layar =
   | { nama: "atur-pin" }
   | { nama: "detail-pesanan"; id: string }
   | { nama: "form-pesanan" }
-  | { nama: "pengaturan-isi"; bagian: "profil" | "rekening" | "logo" }
+  | { nama: "daftar-jahit" }
+  | { nama: "wizard-jahit" }
+  | { nama: "detail-jahit"; id: string }
+  | { nama: "pengaturan-isi"; bagian: "profil" | "rekening" | "logo" | "tampilan" }
   | { nama: "resi"; transaksiId: string }
   | { nama: "contoh-resi" }
+  | { nama: "kasir" }
   | { nama: "cadangan" };
 
 interface NilaiKeranjang {
@@ -101,12 +110,6 @@ export default function App() {
   const [settings, setSettings] = useState<SettingsRecord | null>(null);
   const [storagePermanen, setStoragePermanen] = useState<boolean | null>(null);
 
-  // Terapkan ukuran huruf & tema dari Pengaturan ke seluruh aplikasi.
-  // Nilai lama yang belum punya field ini dianggap "normal" / "terang".
-  useEffect(() => {
-    terapkanTampilan(ukuranFontDari(settings?.ukuranFont), temaDari(settings?.tema));
-  }, [settings]);
-
   const [keranjang, setKeranjang] = useState<IsiKeranjang[]>([]);
   const [nilaiKeranjang, setNilaiKeranjang] = useState<NilaiKeranjang>(KERANJANG_AWAL);
   const [namaPembeli, setNamaPembeli] = useState("");
@@ -117,6 +120,9 @@ export default function App() {
   const [biaya, setBiaya] = useState<BiayaBazarRecord[]>([]);
   /** Daftar pesanan (PO) + detail yang sedang dibuka. */
   const [segarkanPesanan, setSegarkanPesanan] = useState(0);
+  /** Alur pesanan jahit (Tante): refresh daftar + id detail yang dibuka. */
+  const [segarkanJahitan, setSegarkanJahitan] = useState(0);
+  const [jahitanDibuka, setJahitanDibuka] = useState<string | null>(null);
   /** "jual" = penjualan biasa; "po" = pre-order (keranjang dipakai lalu ke form PO). */
   const [modeKeranjang, setModeKeranjang] = useState<"jual" | "po">("jual");
   const [pesananDibuka, setPesananDibuka] = useState<PesananLengkap | null>(null);
@@ -154,8 +160,6 @@ export default function App() {
   useEffect(() => {
     let hidup = true;
     (async () => {
-      // Seed demo hanya jalan bila database masih kosong (lihat seedDemo.ts);
-      // bila Tante sudah punya data, fungsi ini tidak mengubah apa pun.
       await jalankanSeedDemo().catch(() => false);
       const s = await ambilSettings().catch(() => null);
       const b = await bazarAktif().catch(() => undefined);
@@ -189,6 +193,11 @@ export default function App() {
     };
   }, []);
 
+  // Terapkan ulang skala huruf & tema setiap kali pengaturan dimuat/diubah.
+  useEffect(() => {
+    if (settings) terapkanTampilan(settings.skalaFont, settings.tema);
+  }, [settings]);
+
   const kembali = useCallback(() => {
     const n = layar.nama;
     if (n === "detail-barang") return setLayar({ nama: "pilih-barang" });
@@ -198,6 +207,11 @@ export default function App() {
     }
     if (n === "form-barang") return setLayar({ nama: "barang" });
     if (n === "alokasi-bazar" || n === "tutup-bazar") return setLayar({ nama: "bazar" });
+    if (n === "daftar-jahit" || n === "wizard-jahit") return setLayar({ nama: "beranda" });
+    if (n === "detail-jahit") {
+      setJahitanDibuka(null);
+      return setLayar({ nama: "daftar-jahit" });
+    }
     setLayar({ nama: "beranda" });
   }, [layar, keranjang.length]);
 
@@ -386,6 +400,10 @@ export default function App() {
     resi: "Resi",
     "contoh-resi": "Contoh Resi",
     cadangan: "Cadangan",
+    kasir: "Kasir",
+    "daftar-jahit": "Pesanan Jahit",
+    "wizard-jahit": "Pesanan Jahit Baru",
+    "detail-jahit": "Detail Pesanan Jahit",
   };
 
   const tampilAppbar = layar.nama !== "beranda" && layar.nama !== "tersimpan";
@@ -730,6 +748,57 @@ export default function App() {
         />
       )}
 
+      {layar.nama === "daftar-jahit" && (
+        <DaftarPesananJahit
+          segarkan={segarkanJahitan}
+          onBaru={() => setLayar({ nama: "wizard-jahit" })}
+          onBuka={(id) => {
+            setJahitanDibuka(id);
+            setLayar({ nama: "detail-jahit", id });
+          }}
+        />
+      )}
+
+      {layar.nama === "wizard-jahit" && (
+        <WizardPesananJahit
+          sibuk={sibukPesanan}
+          pesanGalat={pesanPesanan}
+          onBatal={() => setLayar({ nama: "daftar-jahit" })}
+          onSimpan={(rencana) => {
+            setPesanPesanan(null);
+            setSibukPesanan(true);
+            void simpanPesananJahit(rencana, { rekening: settings?.rekening ?? [] }).then((h) => {
+              setSibukPesanan(false);
+              if (!h.ok) {
+                setPesanPesanan(h.pesan);
+                return;
+              }
+              setSegarkanJahitan((n) => n + 1);
+              setJahitanDibuka(h.pesanan.id);
+              setLayar({ nama: "detail-jahit", id: h.pesanan.id });
+            });
+          }}
+        />
+      )}
+
+      {layar.nama === "detail-jahit" && jahitanDibuka && (
+        <DetailPesananJahit
+          id={jahitanDibuka}
+          segarkan={segarkanJahitan}
+          onKembali={() => {
+            setJahitanDibuka(null);
+            setLayar({ nama: "daftar-jahit" });
+          }}
+        />
+      )}
+
+      {layar.nama === "kasir" && (
+        <Kasir
+          segarkan={segarkanJahitan}
+          onPesananBaru={() => setLayar({ nama: "wizard-jahit" })}
+        />
+      )}
+
       {layar.nama === "masuk-admin" && (
         <MasukAdmin
           pinHash={settings?.pinHash ?? null}
@@ -764,3 +833,4 @@ export default function App() {
     </div>
   );
 }
+

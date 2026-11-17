@@ -10,6 +10,8 @@
  *  3. Kiriman yang tidak valid DITOLAK per-kiriman, bukan menggagalkan seluruh batch.
  */
 
+import type { JenisDokumen, ArahStok } from "../db/schema.ts";
+
 export type JenisKiriman = "transaksi" | "produk" | "bazar";
 
 export interface KirimanTransaksi {
@@ -17,7 +19,9 @@ export interface KirimanTransaksi {
   id: string;
   nomorResi: string;
   waktu: string;
-  jenisTransaksi: "langsung" | "po";
+  jenisDokumen: JenisDokumen;
+  arahStok: ArahStok;
+  pelangganId: string | null;
   statusPesanan: string;
   statusBayar: string;
   bazarId: string | null;
@@ -137,10 +141,10 @@ async function simpanTransaksi(db: DBCloud, k: KirimanTransaksi, sekarang: strin
   await db
     .prepare(
       `INSERT INTO transactions
-        (id, nomor_resi, waktu, jenis, status_pesanan, status_bayar, bazar_id, nama_pemesan,
+        (id, nomor_resi, waktu, jenis_dokumen, arah_stok, pelanggan_id, status_pesanan, status_bayar, bazar_id, nama_pemesan,
          ongkir_mode, ongkir_nominal, subtotal_awal, diskon_item, diskon_total, total,
          dibatalkan_pada, dibuat_pada, diubah_pada)
-       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
        ON CONFLICT(id) DO UPDATE SET
          status_pesanan=excluded.status_pesanan, status_bayar=excluded.status_bayar,
          total=excluded.total, dibatalkan_pada=excluded.dibatalkan_pada,
@@ -150,7 +154,9 @@ async function simpanTransaksi(db: DBCloud, k: KirimanTransaksi, sekarang: strin
       k.id,
       k.nomorResi,
       k.waktu,
-      k.jenisTransaksi,
+      k.jenisDokumen,
+      k.arahStok,
+      k.pelangganId,
       k.statusPesanan,
       k.statusBayar,
       k.bazarId,
