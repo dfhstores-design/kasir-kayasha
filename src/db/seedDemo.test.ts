@@ -1,6 +1,6 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { IDBFactory } from "fake-indexeddb";
-import { jalankanSeedDemo } from "./seedDemo.ts";
+import { ambilLogoDemo, jalankanSeedDemo, LOGO_DEMO_URL } from "./seedDemo.ts";
 import {
   ambilSettings,
   bazarAktif,
@@ -17,8 +17,37 @@ function resetDB() {
 
 describe("seed demo KAYESA", () => {
   beforeEach(resetDB);
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("mengambil logo default dari public/ bila tersedia", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) => {
+        expect(url).toBe(LOGO_DEMO_URL);
+        return { ok: true, blob: async () => new Blob(["logo-png"], { type: "image/png" }) };
+      }),
+    );
+    const logo = await ambilLogoDemo();
+    expect(logo).toBeInstanceOf(Blob);
+    expect(logo?.type).toBe("image/png");
+    expect(logo?.size).toBeGreaterThan(0);
+  });
+
+  it("seed tetap jalan tanpa logo bila fetch logo gagal", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => Promise.reject(new Error("offline"))));
+    expect(await ambilLogoDemo()).toBeNull();
+    expect(await jalankanSeedDemo()).toBe(true);
+    expect((await ambilSettings()).logo).toBeNull();
+    expect((await daftarProduk()).length).toBe(5);
+  });
 
   it("mengisi settings, 5 produk, 1 bazar, 10 penjualan dan 3 PO bila DB kosong", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => ({ ok: true, blob: async () => new Blob(["logo-png"], { type: "image/png" }) })),
+    );
     expect(await jalankanSeedDemo()).toBe(true);
 
     const s = await ambilSettings();
@@ -29,7 +58,14 @@ describe("seed demo KAYESA", () => {
     expect(s.telepon1).toBe("0812 1141 4017");
     expect(s.telepon2).toBe("0821 1376 5892");
     expect(s.teksPenutup).toBe("Terima kasih, sampai jumpa!");
-    expect(s.logo).toBeNull();
+    // fake-indexeddb di lingkungan tes ini mengembalikan Blob hasil
+    // structured clone sebagai objek kosong {}, jadi isi logo (type/size)
+    // tidak bisa dicek lewat ambilSettings() di sini. Yang dicek di sini:
+    // seed menyimpan sesuatu yang bukan null. Isi Blob-nya sendiri dicek
+    // langsung di tes ambilLogoDemo di atas, dan jalur simpan Blob ->
+    // IndexedDB -> URL.createObjectURL adalah jalur yang sama dengan
+    // unggah logo di Pengaturan yang sudah dipakai di produksi.
+    expect(s.logo).not.toBeNull();
     expect(s.pinHash).toBeNull();
     expect(s.rekening).toHaveLength(1);
     expect(s.rekening[0]?.namaBank).toBe("BCA");

@@ -11,8 +11,12 @@
  *
  * Urutan: settings -> produk -> bazar + alokasi -> 10 penjualan (dari saldo
  * bazar, stok berkurang) -> 3 PO (tidak mengurangi stok saat dibuat).
- * Logo TIDAK di-seed: sesuai keputusan di CATATAN-DISKUSI.md, logo diunggah
- * Tante sendiri lewat Pengaturan. PIN juga TIDAK di-seed (pinHash null).
+ * Logo DI-seed dari public/logo-kayesa.png (file logo_kayesya_reference.png
+ * dari Drive, 1200x1200 PNG, 119 KB): Andri memutuskan secara eksplisit pada
+ * 17 Nov 2026 bahwa saat link dibuka logo sudah ada, mengesampingkan
+ * keputusan lama di CATATAN-DISKUSI.md §3.2 (logo diunggah Tante sendiri,
+ * bukan disimpan di repo). Logo tetap bisa diganti/dihapus Tante lewat
+ * Pengaturan -> Logo resi setelahnya. PIN TIDAK di-seed (pinHash null).
  */
 import {
   alokasikanKeBazar,
@@ -113,6 +117,26 @@ const PO_DEMO: PODemo[] = [
   { namaPemesan: "CONTOH – Rina", items: [{ nama: "Kemeja Katun", kuantitas: 2 }, { nama: "Celana Kulot", kuantitas: 1 }], dibayarSekarang: 300000, jenisBayar: "qris", perkiraanSiap: "2026-11-19", jadiSiap: true },
 ];
 
+/** URL logo default yang ikut ter-copy ke dist/ saat build (public/). */
+export const LOGO_DEMO_URL = "/logo-kayesa.png";
+
+/**
+ * Mengambil logo default sebagai Blob. Mengembalikan null bila file tidak
+ * bisa diambil (mis. build tanpa logo) — seed tetap jalan tanpa logo,
+ * supaya satu file yang hilang tidak menggagalkan seluruh demo.
+ */
+export async function ambilLogoDemo(): Promise<Blob | null> {
+  try {
+    const res = await fetch(LOGO_DEMO_URL);
+    if (!res.ok) return null;
+    const blob = await res.blob();
+    if (blob.size === 0 || !blob.type.startsWith("image/")) return null;
+    return blob;
+  } catch {
+    return null;
+  }
+}
+
 /** True bila database masih kosong dan seed boleh jalan. */
 export async function databaseMasihKosong(): Promise<boolean> {
   const [settings, produk, transaksi, bazar] = await Promise.all([
@@ -138,7 +162,8 @@ export async function jalankanSeedDemo(): Promise<boolean> {
   if (!(await databaseMasihKosong())) return false;
 
   const sekarang = new Date().toISOString();
-  await simpanSettings({ ...SETTINGS_DEMO, updatedAt: sekarang });
+  const logo = await ambilLogoDemo();
+  await simpanSettings({ ...SETTINGS_DEMO, logo, updatedAt: sekarang });
 
   const produk: ProdukRecord[] = [];
   for (const d of PRODUK_DEMO) {

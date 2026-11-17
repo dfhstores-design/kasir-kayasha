@@ -5,6 +5,8 @@ node_modules/
 
 # Hasil build
 dist/
+# Logo default dihasilkan saat build dari src/assets/logo-kayesa.png.b64
+public/logo-kayesa.png
 dist-ssr/
 build/
 *.local
