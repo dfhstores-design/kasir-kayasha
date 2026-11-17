@@ -73,3 +73,12 @@ Panel tambahan di bawah judul butik:
 | Ada transaksi tertahan | baris kecil di atas status simpan: **"2 transaksi tertahan"** → Keranjang |
 
 Tombol tujuan **tidak** bertambah menjadi enam; bazar dan parkir masuk lewat panel, bukan tombol baru.
+
+## Pembaruan 17 Nov 2026 — bagian Mini ERP (placeholder)
+
+Keputusan Andri: di bawah tombol utama ditambah bagian **"Mini ERP"** berisi 5 tombol abu-abu
+(`tile--segera`, label kecil "Segera"): Catatan Keuangan, Catat Belanja, Laporan Keuangan,
+Data Pelanggan, Pengeluaran. Semuanya placeholder — belum ada fungsi; saat diketik/diketuk
+menampilkan panel notifikasi "sedang dalam pengembangan". Pengecualian dari aturan
+"Hanya lima tujuan" di atas, khusus untuk bagian ini. Tombol "Pesanan" tetap ada
+(keputusan soal itu masih terbuka).

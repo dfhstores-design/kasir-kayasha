@@ -27,6 +27,8 @@ interface Props {
 export default function Beranda({ settings, storagePermanen, bazar, peran, onMintaAdmin, onKeluarAdmin, onBiayaBazar, buka }: Props) {
   const [jumlahBarang, setJumlahBarang] = useState<number | null>(null);
   const [parkir, setParkir] = useState(0);
+  /** Notifikasi tombol placeholder Mini ERP (belum ada fungsi). */
+  const [pesan, setPesan] = useState<string | null>(null);
 
   useEffect(() => {
     daftarProduk()
@@ -133,6 +135,30 @@ export default function Beranda({ settings, storagePermanen, bazar, peran, onMin
           Kasir hanya mencatat transaksi saat ada bazar aktif.
         </p>
       )}
+
+      <div>
+        <p className="h2" style={{ margin: "1rem 0 0.5rem" }}>
+          Mini ERP
+        </p>
+        <div className="tiles" aria-label="Mini ERP — segera hadir">
+          {["Catatan Keuangan", "Catat Belanja", "Laporan Keuangan", "Data Pelanggan", "Pengeluaran"].map((label) => (
+            <button
+              key={label}
+              type="button"
+              className="tile tile--segera"
+              onClick={() => setPesan("sedang dalam pengembangan")}
+            >
+              <span>{label}</span>
+              <span className="tile__sub">Segera</span>
+            </button>
+          ))}
+        </div>
+        {pesan && (
+          <div className="panel panel--ok" role="status" style={{ marginTop: "0.5rem" }}>
+            {pesan}
+          </div>
+        )}
+      </div>
 
       {peran === "admin" && (
         <>
