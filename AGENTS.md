@@ -1,6 +1,6 @@
-# Aturan Kerja Agent — Kasir KAYESA
+# Aturan Kerja Agent — Kasir KAYESA'S CLOTHING
 
-Proyek: aplikasi kasir offline-first untuk pameran butik Kayasha Clothing.
+Proyek: aplikasi kasir offline-first untuk butik KAYESA'S CLOTHING.
 Pemakai utama: Tante (di atas 62 tahun).
 Pemilik proyek / pengambil keputusan akhir: Andri.
 Berlaku: 17 November 2026. File ini dibaca dulu oleh setiap agent sebelum bekerja.
@@ -8,7 +8,7 @@ Berlaku: 17 November 2026. File ini dibaca dulu oleh setiap agent sebelum bekerj
 ## Nama resmi (dikunci)
 
 Hanya pakai **KAYESA** dan **KAYESA'S CLOTHING**.
-Ejaan lain (Kayasha, Kayesha, KAYESA, dan variasi lain) dilarang dipakai di kode, dokumen, mockup, dan materi.
+Ejaan salah (Kayasha, Kayesha, KAYESYA, Kayesya's, dan variasi salah lain) dilarang dipakai di kode, dokumen, mockup, dan materi.
 
 ## Prinsip dasar
 
@@ -26,12 +26,25 @@ Ejaan lain (Kayasha, Kayesha, KAYESA, dan variasi lain) dilarang dipakai di kode
 
 Satu tim untuk semua project, tapi **satu project aktif dalam satu waktu**. Project lain masuk antrean. Jangan jalankan dua project paralel di tim yang sama.
 
+## Koordinasi 3 agent (DSH, Cue.lm, Muse.ai) — WAJIB baca sebelum kerja
+
+Proyek ini dikerjakan 3 agent di platform berbeda: **DeepSeek Harness (DSH)**, **Cue.lm**, dan **Muse.ai**. Masing-masing bisa mengubah GitHub/Drive secara terpisah, sehingga aturan anti-tumpang-tindih ini wajib dipatuhi:
+
+1. Sebelum mengerjakan apa pun: `git pull` dulu + baca `LOG.md` terakhir + baca entri terbaru `CATATAN-DISKUSI.md` di Drive.
+2. **Satu fitur/tugas = SATU agent.** Kalau `LOG.md` atau GitHub sudah mencatat fitur/tugas itu dikerjakan agent lain, STOP — jangan kerjakan ulang; lapor ke Andri.
+3. **Jangan membuat ulang fitur/modul yang sudah ada.** Cek dulu apakah file/modul/fitur sudah ada di repo sebelum menulis yang baru.
+4. Kalau menemukan kerja ganda (fitur sama dikerjakan dua agent), jangan menimpa — naikkan ke Andri untuk memutuskan versi mana yang dipakai.
+5. Sebelum push, selalu `git pull --rebase` dan pastikan tidak menimpa commit agent lain.
+6. Setelah selesai, tulis entri `LOG.md` dan push, supaya agent lain tahu apa yang sudah selesai.
+
+Contoh nyata (16–17 Nov 2026): fitur "ukuran huruf & tema" dikerjakan dua kali (DSH dan Muse.ai). Muse.ai yang sudah commit+push+deploy lebih dulu yang dipakai; versi DSH disimpan di branch `wip-dsh-2026-11-17` untuk ditinjau, bukan langsung ditimpa. Jangan ulangi pola ini.
+
 ## Source of truth (dibagi, jangan dibalik)
 
 - **Kode: GitHub adalah source of truth.** Repo `dfhstores-design/kasir-kayasha`, branch `main`.
   Kerja di lokal → commit → push ke `main`. Jangan edit kode langsung di Drive, jangan simpan salinan kode di Drive sebagai sumber.
 - **Dokumen / keputusan / log: folder Google Drive project adalah source of truth.**
-  Folder: Kasir Kayesha — https://drive.google.com/drive/folders/1smz94l_o4TCJgcMhQVIuJ8bP9QRij-aE
+  Folder: My Drive → AI GPT → Kasir Kayesha — https://drive.google.com/drive/folders/1smz94l_o4TCJgcMhQVIuJ8bP9QRij-aE
   Di sinilah CATATAN-DISKUSI, blueprint, spesifikasi, dan LOG.md tinggal. Kalau keputusan sudah final, salin ke repo `docs/project-history/` sebagai file baru, jangan menimpa file lama.
 
 Sebelum mulai kerja, sinkron dulu: pastikan kode lokal sudah di-commit dan di-push, dan baca log terakhir. Kalau Git, Drive, dan lokal beda versi, berhenti dan tanya Andri — jangan tebak versi mana yang benar.
