@@ -29,6 +29,8 @@ export const SETTINGS_KOSONG: SettingsRecord = {
   tampilkanNomorResi: true,
   tampilkanRincianDiskon: true,
   tampilkanPembayaranSisa: true,
+  skalaFont: 1,
+  tema: "terang",
   pinHash: null,
   updatedAt: new Date(0).toISOString(),
 };

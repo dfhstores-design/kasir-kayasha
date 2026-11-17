@@ -2,7 +2,7 @@ interface Props {
   namaButik: string;
   jumlahRekening: number;
   adaLogo: boolean;
-  onBuka: (bagian: "profil" | "rekening" | "logo") => void;
+  onBuka: (bagian: "profil" | "rekening" | "logo" | "tampilan") => void;
   onContohResi: () => void;
   onPin: () => void;
   onCadangan: () => void;
@@ -39,6 +39,7 @@ export default function MenuPengaturan({ namaButik, jumlahRekening, adaLogo, onB
         jumlahRekening > 0 ? `${jumlahRekening} rekening` : "Belum ada",
         () => onBuka("rekening"),
       )}
+      {item("Tampilan", "Ukuran huruf & warna tema", () => onBuka("tampilan"))}
       {item("Lihat contoh resi", "Pratinjau dengan data saat ini", onContohResi)}
       {item("PIN Admin", "Kunci menu admin", onPin)}
       {item("Cadangan & pemulihan", "Simpan/ambil data ke berkas", onCadangan)}

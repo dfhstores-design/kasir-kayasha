@@ -1,9 +1,12 @@
-# Panduan Pemilik — Kasir Kayesha
+# Panduan Pemilik — Kasir KAYESA
 
 Panduan ini ditulis untuk **Ibu**, pemilik butik. Tidak perlu pengetahuan teknis.
 Ikuti dari atas ke bawah, sekali saja saat pertama memakai.
 
-**Alamat aplikasi:** `https://kasir-kayesha.pages.dev`
+**Alamat aplikasi:** `https://kasir-KAYESA.pages.dev`
+
+> Catatan: alamat di atas memakai ejaan lama. Nama butik yang benar adalah **KAYESA'S CLOTHING**;
+> alamat akan diselaraskan terpisah.
 
 ---
 
@@ -27,7 +30,7 @@ Bisa dipakai **tanpa internet** setelah dibuka sekali.
 1. Ketuk **Pengaturan** di beranda.
 2. Ketuk **Masuk sebagai Admin** — kalau belum ada PIN, ketuk **Buka sebagai Admin (atur PIN)**.
 3. Ketuk **Nama & kontak butik**, isi:
-   - Nama butik (contoh: Kayesha Clothing)
+   - Nama butik (contoh: KAYESA Clothing)
    - Alamat
    - Kota & kode pos
    - Telepon

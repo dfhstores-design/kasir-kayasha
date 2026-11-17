@@ -22,7 +22,7 @@
 │  │ Cadangan & pemulihan         › │  │
 │  └────────────────────────────────┘  │
 │                                      │
-│  Kasir Kayesha versi 0.x.x           │
+│  Kasir KAYESA versi 0.x.x           │
 │  Tersimpan di perangkat ini          │
 └──────────────────────────────────────┘
 ```

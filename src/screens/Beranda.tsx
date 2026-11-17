@@ -102,6 +102,12 @@ export default function Beranda({ settings, storagePermanen, bazar, peran, onMin
         <button type="button" className="tile" onClick={() => buka("pesanan")}>
           Pesanan
         </button>
+        <button type="button" className="tile" onClick={() => buka("daftar-jahit")}>
+          Pesanan Jahit
+        </button>
+        <button type="button" className="tile" onClick={() => buka("kasir")}>
+          Kasir
+        </button>
 
         {peran === "admin" ? (
           <>

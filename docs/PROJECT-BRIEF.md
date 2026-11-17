@@ -1,10 +1,10 @@
-# Kasir Kayesha — Ringkasan Proyek, Keputusan, dan Rencana Fase
+# Kasir KAYESA — Ringkasan Proyek, Keputusan, dan Rencana Fase
 
 Berkas ini adalah ringkasan tetap dari arah proyek. Dokumen ini bukan catatan historis;
 catatan historis per fase ada di [`docs/project-history/`](project-history/README.md).
 
 Sumber perintah utama (tidak diubah isinya) disimpan di folder kerja lokal:
-`Kasir-Butik-Kayesha/Kasir_Butik_Pameran_—_Master_Prompt_untuk_AI_Agent.md`.
+`Kasir-Butik-KAYESA/Kasir_Butik_Pameran_—_Master_Prompt_untuk_AI_Agent.md`.
 
 ---
 
@@ -12,11 +12,11 @@ Sumber perintah utama (tidak diubah isinya) disimpan di folder kerja lokal:
 
 | Hal | Isi |
 | --- | --- |
-| Nama aplikasi | **Kasir Kayesha** |
-| Pemilik usaha | Kayesha Clothing (butik) |
-| Repositori | <https://github.com/dfhstores-design/kasir-kayesha> (publik) |
-| Folder kerja lokal | `D:\Documents\AI-GPT\Kasir-Butik-Kayesha` |
-| Backup online | Google Drive → `AI GPT/Kasir Kayesha` |
+| Nama aplikasi | **Kasir KAYESA** |
+| Pemilik usaha | KAYESA Clothing (butik) |
+| Repositori | <https://github.com/dfhstores-design/kasir-KAYESA> (publik) |
+| Folder kerja lokal | `D:\Documents\AI-GPT\Kasir-Butik-KAYESA` |
+| Backup online | Google Drive → `AI GPT/Kasir KAYESA` |
 | Mulai proyek | 10 November 2026, waktu Asia/Jakarta |
 
 ## 2. Ruang lingkup (dari perintah utama)
@@ -96,9 +96,9 @@ ongkir yang dibayar langsung ke kurir **tidak** masuk `total_ditagihkan`.
 
 | # | Keputusan | Alasan |
 | --- | --- | --- |
-| D-01 | Nama aplikasi: **Kasir Kayesha** | Sesuai nama repo dan permintaan pemilik. Nama butik di resi tetap dapat diubah di Pengaturan. |
-| D-02 | Folder kerja lokal: `D:\Documents\AI-GPT\Kasir-Butik-Kayesha` | Ditunjuk pemilik sebagai ruang artifact & history. |
-| D-03 | Kode aplikasi di `Kasir-Butik-Kayesha/git/` (clone repo), artefak fase di `Kasir-Butik-Kayesha/artifacts/` | Satu workspace berisi kode, brief, catatan historis, artefak, dan salinan Drive sekaligus. |
+| D-01 | Nama aplikasi: **Kasir KAYESA** | Sesuai nama repo dan permintaan pemilik. Nama butik di resi tetap dapat diubah di Pengaturan. |
+| D-02 | Folder kerja lokal: `D:\Documents\AI-GPT\Kasir-Butik-KAYESA` | Ditunjuk pemilik sebagai ruang artifact & history. |
+| D-03 | Kode aplikasi di `Kasir-Butik-KAYESA/git/` (clone repo), artefak fase di `Kasir-Butik-KAYESA/artifacts/` | Satu workspace berisi kode, brief, catatan historis, artefak, dan salinan Drive sekaligus. |
 | D-04 | Dokumentasi historis wajib di repo (`docs/project-history/`), disalin ke Drive | Aturan perintah utama. |
 | D-05 | Belum ada deployment Cloudflare di Phase 0 | Persetujuan & kredensial cloud harus dipastikan dulu (lihat pertanyaan terbuka Q-02). |
 | D-06 | R2 belum bisa diaktifkan tanpa menautkan kartu | Cloudflare mewajibkan checkout/subscription untuk R2 — lihat bagian 7. |
@@ -137,7 +137,7 @@ IndexedDB di perangkat, foto hanya dikirim ke cloud bila R2 diaktifkan kelak.
 
 | # | Pertanyaan | Dampak pada fase |
 | --- | --- | --- |
-| Q-01 | Nama lengkap butik yang tercetak di resi (mis. "Kayesha Clothing"). | Phase 5 (resi) — bisa diisi nanti lewat Pengaturan. |
+| Q-01 | Nama lengkap butik yang tercetak di resi (mis. "KAYESA Clothing"). | Phase 5 (resi) — bisa diisi nanti lewat Pengaturan. |
 | Q-02 | Boleh menautkan kartu ke Cloudflare untuk mengaktifkan R2 (tetap Rp0 dalam kuota)? | Phase 2/6 — menentukan tempat penyimpanan foto. |
 | Q-03 | Siapa yang masuk ke akun Cloudflare Pages? Hanya pemilik atau dibantu? | Phase 7 (deployment) — perlu akses token saat deploy. |
 | Q-04 | Apakah pameran memerlukan ongkir (pengiriman) atau hanya ambil sendiri? | Phase 4 — memengaruhi desain layar. |
@@ -184,7 +184,7 @@ Implementasi Phase 2 ke atas **mengikuti** dokumen di atas.
 | --- | --- |
 | B-01 | **Stok gudang acuan utama; tiap bazar menetapkan alokasi.** Gudang berkurang saat dialokasikan, penjualan mengurangi saldo bazar |
 | B-02 | Printer **thermal 58/80 mm Bluetooth**; PDF sebagai cadangan |
-| B-03 | Resi "DAPUR OPA" = **contoh format** saja; data diganti Kayesha Clothing |
+| B-03 | Resi "DAPUR OPA" = **contoh format** saja; data diganti KAYESA Clothing |
 | B-04 | **Seluruh larangan perintah utama tetap berlaku** (tanpa diskon persen, tanpa hapus permanen, satu perangkat) |
 | B-05 | **Parkir maksimal 3**, tiap parkir **bernama pembeli** |
 | B-06 | Jenis transaksi: **Tunai / Transfer Bank / QRIS** |
