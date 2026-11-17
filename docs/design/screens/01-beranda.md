@@ -71,12 +71,15 @@ Panel tambahan di bawah judul butik:
 
 Tombol tujuan **tidak** bertambah menjadi enam; bazar dan parkir masuk lewat panel, bukan tombol baru.
 
-## Pembaruan 17 Nov 2026 — bagian Mini ERP dihapus (P1-2)
+## Koreksi 17 Nov 2026 — bagian Mini ERP dikembalikan, admin-only
 
-Keputusan Andri: seluruh bagian **"Mini ERP"** yang ditambahkan pagi ini
-(5 tombol abu-abu `tile--segera` + panel "sedang dalam pengembangan") dihapus
-dari Beranda untuk semua peran. Biaya Bazar (tombol terpisah di bagian admin)
-tetap ada — bukan bagian Mini ERP.
+Koreksi Andri: bagian **"Mini ERP"** (5 tombol abu-abu `tile--segera` +
+panel "sedang dalam pengembangan") seharusnya **hilang dari layar utama
+saat link dibuka (peran kasir) dan dari kasir, tetapi muncul setelah login
+admin**. P0+P1 kemarin sempat menghapusnya total — itu salah, dikembalikan
+dengan syarat tampil **hanya bila `peran === "admin"`**. Kasir tidak melihat
+bagian ini sama sekali. Biaya Bazar (tombol terpisah di bagian admin) tetap
+ada — bukan bagian Mini ERP.
 
 ## Pembaruan 17 Nov 2026 — menu kasir P1-1 & Buka Bazar P1-3
 
