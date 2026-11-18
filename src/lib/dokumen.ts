@@ -397,7 +397,8 @@ export async function simpanKeFoto(pngBlob: Blob, namaFile: string): Promise<voi
   unduhBlob(pngBlob, namaFile);
 }
 
-function unduhBlob(blob: Blob, namaFile: string): void {
+/** Unduh blob sebagai berkas (dipakai "Simpan PDF" dan fallback bagikan). */
+export function unduhBlob(blob: Blob, namaFile: string): void {
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;

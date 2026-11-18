@@ -150,8 +150,9 @@ Lakukan **setiap akhir hari pameran**.
   ke server. Salinan itu hanya untuk keamanan; **HP tetap yang utama**.
 - Meskipun begitu, **cadangan berkala** tetap wajib: bila HP rusak atau hilang, cadangan
   berkas adalah cara paling pasti untuk memulihkan.
-- Printer thermal **belum tersedia**. Resi berupa PDF yang bisa dikirim lewat WhatsApp
-  atau dicetak dari aplikasi lain.
+- Printer thermal **belum tersedia**. Resi yang dibagikan berupa gambar (PNG) yang
+  bisa dikirim lewat WhatsApp atau dicetak dari aplikasi lain; PDF tersedia lewat
+  tombol **Simpan PDF** untuk arsip/cetak.
 - Aplikasi ini **belum bisa dipakai dua HP** secara bersamaan.
 
 ---

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { ambilSettings, daftarBazar, type SettingsRecord } from "../db/repositori.ts";
 import { ambilPesanan, type PesananLengkap } from "../db/pesananOperasi.ts";
-import { susunResi, NAMA_FILE_RESI, NAMA_BUTIK_BAWAAN, subjudulDariNama, type DataResi } from "../lib/resi.ts";
+import { susunResi, NAMA_FILE_RESI, NAMA_FILE_RESI_PNG, NAMA_BUTIK_BAWAAN, subjudulDariNama, type DataResi } from "../lib/resi.ts";
 import PratinjauResi from "../components/PratinjauResi.tsx";
 
 import { sapaanDariWaktu } from "../lib/sapaan.ts";
@@ -12,9 +12,11 @@ interface Props {
 }
 
 /**
- * Layar 6 — Resi (PDF). Pratinjau memakai `susunResi` yang SAMA dengan PDF,
+ * Layar 6 — Resi. Pratinjau memakai `susunResi` yang SAMA dengan PNG & PDF,
  * sehingga yang dilihat pasti sama dengan yang dibagikan. Dibuat di perangkat,
  * jadi tetap bekerja saat offline.
+ * Yang dibagikan adalah PNG (K-01: PNG utama, langsung dibuka di WhatsApp
+ * tanpa aplikasi tambahan); PDF hanya cadangan arsip/cetak ("Simpan PDF").
  */
 export default function Resi({ transaksiId }: Props) {
   const [data, setData] = useState<DataResi | null>(null);
@@ -70,10 +72,30 @@ export default function Resi({ transaksiId }: Props) {
     setSibuk(true);
     setPesan(null);
     try {
-      const { buatPdfResi, bagikanAtauUnduh } = await import("../lib/pdfResi.ts");
+      const { buatPngResi } = await import("../lib/pngResi.ts");
+      const { bagikanDokumen } = await import("../lib/dokumen.ts");
+      const logoBitmap = await buatImageBitmap(logo);
+      const png = await buatPngResi(baris, { logo: logoBitmap });
+      const hasil = await bagikanDokumen(png, NAMA_FILE_RESI_PNG(data.nomorResi));
+      setPesan(hasil === "dibagikan" ? "Resi dibagikan." : "PNG disimpan di folder Unduhan.");
+    } catch {
+      setPesan("Resi belum bisa dibuat. Coba lagi.");
+    } finally {
+      setSibuk(false);
+    }
+  }
+
+  /** PDF cadangan (K-01): diunduh untuk arsip/cetak, bukan dibagikan. */
+  async function simpanPdf() {
+    if (!data) return;
+    setSibuk(true);
+    setPesan(null);
+    try {
+      const { buatPdfResi } = await import("../lib/pdfResi.ts");
+      const { unduhBlob } = await import("../lib/dokumen.ts");
       const blob = await buatPdfResi(baris, { judul: `Resi ${data.nomorResi}`, logo });
-      const hasil = await bagikanAtauUnduh(blob, NAMA_FILE_RESI(data.nomorResi));
-      setPesan(hasil === "dibagikan" ? "Resi dibagikan." : "PDF disimpan di folder Unduhan.");
+      unduhBlob(blob, NAMA_FILE_RESI(data.nomorResi));
+      setPesan("PDF disimpan di folder Unduhan.");
     } catch {
       setPesan("PDF belum bisa dibuat. Coba lagi.");
     } finally {
@@ -97,7 +119,7 @@ export default function Resi({ transaksiId }: Props) {
         <button type="button" className="btn btn--primary" onClick={bagikan} disabled={sibuk}>
           {sibuk ? "Membuat resi…" : "Bagikan Resi"}
         </button>
-        <button type="button" className="btn btn--ghost btn--small" onClick={bagikan} disabled={sibuk}>
+        <button type="button" className="btn btn--ghost btn--small" onClick={simpanPdf} disabled={sibuk}>
           Simpan PDF
         </button>
       </div>
@@ -105,6 +127,16 @@ export default function Resi({ transaksiId }: Props) {
   );
 }
 
+
+/** Logo Blob -> ImageBitmap untuk kanvas PNG; null bila tidak ada/gagal. */
+async function buatImageBitmap(blob: Blob | null): Promise<ImageBitmap | null> {
+  try {
+    if (!blob || typeof createImageBitmap !== "function") return null;
+    return await createImageBitmap(blob);
+  } catch {
+    return null;
+  }
+}
 
 /** Menyusun DataResi dari transaksi tersimpan + pengaturan saat ini. */
 function dariPesanan(l: PesananLengkap, s: SettingsRecord, namaBazar: string | null): DataResi {

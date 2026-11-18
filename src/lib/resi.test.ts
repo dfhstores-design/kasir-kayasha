@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { NAMA_FILE_RESI, dataContoh, dataContohPO, susunResi, teksResi, type DataResi } from "./resi.ts";
+import { NAMA_FILE_RESI, NAMA_FILE_RESI_PNG, dataContoh, dataContohPO, susunResi, teksResi, type DataResi } from "./resi.ts";
 
 const rekening = (over: Partial<{ id: string; namaBank: string; nomor: string; namaPemilik: string; utama: boolean }> = {}) => ({
   id: "r1",
@@ -340,5 +340,12 @@ describe("NAMA_FILE_RESI", () => {
   it("aman untuk sistem berkas", () => {
     expect(NAMA_FILE_RESI("KYS-0012")).toBe("Resi-KYS-0012.pdf");
     expect(NAMA_FILE_RESI("KYS/PO 1")).toBe("Resi-KYS-PO-1.pdf");
+  });
+});
+
+describe("NAMA_FILE_RESI_PNG", () => {
+  it("aman untuk sistem berkas, berekstensi png (K-01: PNG yang dibagikan)", () => {
+    expect(NAMA_FILE_RESI_PNG("KYS-0012")).toBe("Resi-KYS-0012.png");
+    expect(NAMA_FILE_RESI_PNG("KYS/PO 1")).toBe("Resi-KYS-PO-1.png");
   });
 });

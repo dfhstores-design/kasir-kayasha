@@ -549,11 +549,16 @@ export function subjudulDariNama(namaButik: string): string | null {
   return namaButik.trim().toUpperCase() === "KAYESA" ? "KAYESA'S CLOTHING" : null;
 }
 
-export const NAMA_FILE_RESI = (nomor: string) => {
-  const bersih = nomor
+/** Bersihkan nomor agar aman dipakai sebagai nama berkas. */
+function bersihkanNomorResi(nomor: string): string {
+  return nomor
     .split("")
     .map((c) => (/[A-Za-z0-9]/.test(c) || c === "-" ? c : "-"))
     .join("")
     .replace(/-+/g, "-");
-  return `Resi-${bersih}.pdf`;
-};
+}
+
+export const NAMA_FILE_RESI = (nomor: string) => `Resi-${bersihkanNomorResi(nomor)}.pdf`;
+
+/** Nama berkas PNG resi yang dibagikan (K-01: PNG utama, PDF cadangan). */
+export const NAMA_FILE_RESI_PNG = (nomor: string) => `Resi-${bersihkanNomorResi(nomor)}.png`;
