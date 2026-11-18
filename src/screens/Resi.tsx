@@ -95,7 +95,7 @@ export default function Resi({ transaksiId }: Props) {
 
       <div className="bottombar">
         <button type="button" className="btn btn--primary" onClick={bagikan} disabled={sibuk}>
-          {sibuk ? "Membuat PDF…" : "Bagikan PDF"}
+          {sibuk ? "Membuat resi…" : "Bagikan Resi"}
         </button>
         <button type="button" className="btn btn--ghost btn--small" onClick={bagikan} disabled={sibuk}>
           Simpan PDF

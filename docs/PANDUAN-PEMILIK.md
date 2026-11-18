@@ -73,7 +73,7 @@ Setelah ini, saat menjual, aplikasi memakai **stok bazar** (barang yang ada di m
 4. Periksa jumlah dan total.
 5. Ketuk **Simpan**.
 6. Layar bertulisan **Transaksi tersimpan** muncul dengan nomornya.
-7. Ketuk **Buat Resi** → **Bagikan PDF** (kirim lewat WhatsApp) atau **Simpan PDF**.
+7. Ketuk **Buat Resi** → **Bagikan Resi** (kirim lewat WhatsApp) atau **Simpan PDF**.
 
 **Diskon:** isi nominal Rupiah di **Diskon per buah** atau **Diskon total**. Tidak ada diskon persen.
 
