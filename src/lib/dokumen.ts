@@ -10,7 +10,8 @@
  * - Nama resmi TERKUNCI: besar **KAYESA**, logo **KAYESA'S CLOTHING** (K-04).
  * - Rekening SELALU tampil: BCA - 676 017 885 a.n. NARSHITA DEWI (BU-16).
  * - Kop/kaki ikut faktur lama (BU-25, sementara). Ukuran font & layout dokumen FIX.
- * - Penomoran `NO:` PENDING (BU-19/21): pakai placeholder `KC.1-YYYYMMDD`.
+ * - Penomoran `NO:` PENDING (BU-19/21): pakai placeholder `KC.[001-0xx]-YYYYMMDD`
+ *   (usulan Andri 18 Nov 2026; format final menunggu konfirmasi Tante).
  */
 
 import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
@@ -71,13 +72,15 @@ export function sisaDokumen(d: Pick<DataDokumen, "total" | "terbayar">): Rupiah 
   return d.total - d.terbayar;
 }
 
-export function nomorPlaceholder(tanggal: string | Date = new Date()): string {
+export function nomorPlaceholder(tanggal: string | Date = new Date(), urutan = 1): string {
   const d = typeof tanggal === "string" ? new Date(tanggal) : tanggal;
   const y = d.getFullYear();
   const m = String(d.getMonth() + 1).padStart(2, "0");
   const hh = String(d.getDate()).padStart(2, "0");
-  // BELUM FINAL - menunggu keputusan BU-19/21 (contoh nota asli dari Tante).
-  return `KC.1-${y}${m}${hh}`;
+  const urut = String(urutan).padStart(3, "0");
+  // BELUM FINAL - menunggu keputusan BU-19/21 (konfirmasi Tante).
+  // Format usulan Andri 18 Nov 2026: KC.[no urut pesanan 001-0xx]-yyyymmdd.
+  return `KC.${urut}-${y}${m}${hh}`;
 }
 
 export type BarisDokumen =

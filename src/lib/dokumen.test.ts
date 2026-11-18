@@ -48,8 +48,9 @@ describe("sisaDokumen", () => {
 });
 
 describe("nomorPlaceholder", () => {
-  it("memakai format KC.1-YYYYMMDD dan bertanda BELUM FINAL di komentar", () => {
-    expect(nomorPlaceholder("2026-11-16T07:20:00.000Z")).toBe("KC.1-20261116");
+  it("memakai format KC.001-YYYYMMDD dan bertanda BELUM FINAL di komentar", () => {
+    expect(nomorPlaceholder("2026-11-16T07:20:00.000Z")).toBe("KC.001-20261116");
+    expect(nomorPlaceholder("2026-11-16T07:20:00.000Z", 2)).toBe("KC.002-20261116");
   });
 });
 

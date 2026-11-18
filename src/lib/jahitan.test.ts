@@ -117,7 +117,7 @@ describe("simpanPesananJahit (BU-28: pelanggan otomatis)", () => {
     expect(daftar[0]?.namaPemesan).toBe("Ibu Sari");
     expect(daftar[0]?.status).toBe("terbuka");
     expect(daftar[0]?.sisa).toBe(350000);
-    expect(daftar[0]?.nomor).toBe("KC.1-20261116");
+    expect(daftar[0]?.nomor).toBe("KC.001-20261116");
     expect(h.pesanan.pelangganId).toBeTruthy();
   });
 

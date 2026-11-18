@@ -181,8 +181,8 @@ describe("ALUR 3 - cetak resi/nota: invoice (SISA) lalu resi (tanpa SISA)", () =
     expect(t2).toContain("RESI / BUKTI PEMBAYARAN");
   });
 
-  it("nomor placeholder KC.1-YYYYMMDD dan bertanda BELUM FINAL", () => {
-    expect(nomorPlaceholder("2026-11-16T07:20:00.000Z")).toBe("KC.1-20261116");
+  it("nomor placeholder KC.001-YYYYMMDD dan bertanda BELUM FINAL", () => {
+    expect(nomorPlaceholder("2026-11-16T07:20:00.000Z")).toBe("KC.001-20261116");
   });
 
   it("nama resmi KAYESA - bukan ejaan lama", () => {

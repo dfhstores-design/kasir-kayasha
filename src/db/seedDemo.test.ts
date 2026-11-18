@@ -128,6 +128,10 @@ describe("seed demo KAYESA", () => {
     expect(dewi?.sisa).toBe(0);
     expect(dewi?.status).toBe("lunas");
     expect(dewi?.perkiraanSelesai).toBe("2026-11-18");
+    // Kode dokumen unik per urutan pesanan hari itu (usulan Andri 18 Nov 2026:
+    // KC.[001-0xx]-yyyymmdd) — tidak lagi kembar KC.1-20261117.
+    expect(sari?.nomor).toBe("KC.001-20261117");
+    expect(dewi?.nomor).toBe("KC.002-20261117");
   });
 
   it("tidak mengubah apa pun bila dijalankan dua kali", async () => {

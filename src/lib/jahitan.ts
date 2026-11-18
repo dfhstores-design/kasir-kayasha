@@ -14,7 +14,7 @@
  * menyentuh database. Skema TIDAK diubah di sini — dipakai apa adanya dari schema.ts.
  */
 import { getDB, type JournalRecord, type PelangganRecord, type Rekening, type TransaksiRecord, type UUID } from "../db/schema.ts";
-import { buatId } from "../db/repositori.ts";
+import { buatId, daftarTransaksi } from "../db/repositori.ts";
 import { nomorPlaceholder } from "./dokumen.ts";
 import type { Rupiah } from "./money.ts";
 import { sapaanDariWaktu } from "./sapaan.ts";
@@ -164,6 +164,11 @@ export async function simpanPesananJahit(
 
   const waktu = konteks.waktu ?? new Date();
   const iso = waktu.toISOString();
+  const hari = iso.slice(0, 10);
+  // Nomor urut pesanan jahit hari itu (hanya jenisDokumen "jasa" yang dihitung,
+  // supaya penjualan barang tidak ikut menggeser nomor pesanan).
+  const semua = await daftarTransaksi();
+  const urutHariIni = semua.filter((t) => t.waktu.slice(0, 10) === hari && t.jenisDokumen === "jasa").length + 1;
   const id = buatId();
   const pelangganId = buatId();
 
@@ -179,8 +184,8 @@ export async function simpanPesananJahit(
 
   const trx: TransaksiRecord = {
     id,
-    nomorResi: nomorPlaceholder(waktu),
-    nomorUrutHari: 0,
+    nomorResi: nomorPlaceholder(waktu, urutHariIni),
+    nomorUrutHari: urutHariIni,
     waktu: iso,
     jenis: "po",
     jenisDokumen: "jasa",
