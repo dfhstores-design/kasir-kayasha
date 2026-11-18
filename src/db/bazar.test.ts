@@ -10,8 +10,10 @@ import { IDBFactory } from "fake-indexeddb";
 import {
   adaParkirUntukBazar,
   alokasikanKeBazar,
+  bazarAktif,
   buatBazar,
   daftarBazar,
+  daftarBazarAktif,
   daftarProduk,
   itemBazar,
   ringkasanBazar,
@@ -219,6 +221,51 @@ describe("tutupBazar", () => {
     const b2 = await buatBazar("Bazar 2", null, null);
     expect(b2.status).toBe("aktif");
     expect((await daftarBazar()).filter((x) => x.status === "aktif")).toHaveLength(1);
+  });
+});
+
+describe("bazar aktif ganda (18 Nov 2026)", () => {
+  beforeEach(resetDB);
+
+  it("bazar kedua bisa dibuka tanpa menutup yang pertama", async () => {
+    const b1 = await buatBazar("Bazar 1", null, null);
+    const b2 = await buatBazar("Bazar 2", null, null);
+
+    expect(b2.status).toBe("aktif");
+    expect(await daftarBazarAktif()).toHaveLength(2);
+    expect((await daftarBazar()).filter((x) => x.status === "aktif")).toHaveLength(2);
+    expect(b1.id).not.toBe(b2.id);
+  });
+
+  it("bazarAktif() = yang terakhir dibuka; menutupnya mengembalikan yang lama", async () => {
+    const b1 = await buatBazar("Bazar 1", null, null);
+    // createdAt beresolusi milidetik: beri jeda supaya urutan "terakhir" jelas.
+    await new Promise((r) => setTimeout(r, 5));
+    const b2 = await buatBazar("Bazar 2", null, null);
+
+    expect((await bazarAktif())?.id).toBe(b2.id);
+
+    await tutupBazar(b2.id, new Map());
+    expect((await bazarAktif())?.id).toBe(b1.id);
+    expect(await daftarBazarAktif()).toHaveLength(1);
+  });
+
+  it("penjualan tetap jalan di bazar terbaru dan tidak menyentuh saldo bazar lama", async () => {
+    const p = await produkBaru("Blus", 40);
+    const b1 = await buatBazar("Bazar 1", null, null);
+    await alokasikanKeBazar(b1.id, p.id, 10);
+    await new Promise((r) => setTimeout(r, 5));
+    const b2 = await buatBazar("Bazar 2", null, null);
+    await alokasikanKeBazar(b2.id, p.id, 5);
+
+    // Penjualan memakai bazar terbaru (b2).
+    const penjualan = await bazarAktif();
+    expect(penjualan?.id).toBe(b2.id);
+    await simpanTransaksi(trx(b2.id, 200000), [], [], sumberStokUntuk([{ produkId: p.id, kuantitas: 2 }], b2.id));
+
+    expect(await saldoBazarProduk(b2.id, p.id)).toBe(3); // 5 − 2
+    expect(await saldoBazarProduk(b1.id, p.id)).toBe(10); // tidak tersentuh
+    expect(await stokGudang(p.id)).toBe(25); // 40 − 10 − 5
   });
 });
 

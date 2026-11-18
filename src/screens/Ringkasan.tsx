@@ -419,7 +419,7 @@ export default function Ringkasan({ bazar }: Props) {
 /**
  * BUKA RESI (P1-4): App sudah punya layar "resi" ({ nama: "resi", transaksiId })
  * yang menampilkan komponen Resi yang sama dengan yang dipakai setelah penjualan
- * (TransaksiTersimpan → "Buat Resi", DetailPesanan → "Lihat Resi"). Ringkasan
+ * (TransaksiTersimpan → "Buat Resi"). Ringkasan
  * tidak menerima callback navigasi dari App (props hanya `bazar`), dan App.tsx
  * di luar berkas yang boleh diubah tugas ini — jadi pratinjau resi dirender
  * INLINE di sini memakai komponen Resi yang sama, dengan tombol "Kembali ke

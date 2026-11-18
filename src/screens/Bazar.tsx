@@ -17,7 +17,9 @@ interface Props {
 
 /**
  * Layar 15 — Bazar (docs/design/screens/15-bazar.md).
- * Hanya SATU bazar aktif; tombol Buka Bazar nonaktif bila sudah ada yang aktif.
+ * Bazar aktif boleh lebih dari satu (18 Nov 2026): tombol Buka Bazar selalu
+ * bisa dipakai. Penjualan memakai bazar aktif yang TERAKHIR dibuka —
+ * bazar itu ditandai "Bazar penjualan" di daftar bawah.
  */
 export default function Bazar({ onAturBarang, onTutupBazar, onUbah }: Props) {
   const [semua, setSemua] = useState<BazarRecord[] | null>(null);
@@ -26,6 +28,8 @@ export default function Bazar({ onAturBarang, onTutupBazar, onUbah }: Props) {
   const [nama, setNama] = useState("");
   const [galat, setGalat] = useState<string | null>(null);
   const [sibuk, setSibuk] = useState(false);
+  /** Notifikasi tombol placeholder Buka Toko (belum ada fungsi). */
+  const [pesan, setPesan] = useState<string | null>(null);
 
   const [muatUlang, setMuatUlang] = useState(0);
 
@@ -46,7 +50,9 @@ export default function Bazar({ onAturBarang, onTutupBazar, onUbah }: Props) {
     };
   }, [muatUlang]);
 
-  const aktif = semua?.find((b) => b.status === "aktif") ?? null;
+  // daftarBazar() mengurutkan dari yang terakhir dibuka, jadi aktif[0]
+  // adalah bazar penjualan (sama dengan bazarAktif() di repositori).
+  const aktifSemua = semua?.filter((b) => b.status === "aktif") ?? [];
   const selesai = semua?.filter((b) => b.status === "selesai") ?? [];
 
   async function buka() {
@@ -86,29 +92,36 @@ export default function Bazar({ onAturBarang, onTutupBazar, onUbah }: Props) {
           </div>
         )}
 
-        {aktif ? (
-          <div className="card" style={{ borderColor: "var(--accent)", borderWidth: 2 }}>
-            <span className="soft" style={{ fontWeight: 700, color: "var(--accent-ink)" }}>
-              BAZAR AKTIF
-            </span>
-            <p className="h2" style={{ margin: "0.125rem 0" }}>
-              {aktif.nama}
-            </p>
-            <p className="soft" style={{ margin: 0 }}>
-              {ringkas[aktif.id]?.jumlahBarang ?? 0} barang · {ringkas[aktif.id]?.dibawa ?? 0} pcs dibawa
-            </p>
-            <p className="soft" style={{ margin: "0.25rem 0 0" }}>
-              Terjual {ringkas[aktif.id]?.terjualPcs ?? 0} pcs · Sisa {ringkas[aktif.id]?.sisaPcs ?? 0} pcs
-            </p>
-            <div className="grid2" style={{ marginTop: "0.75rem" }}>
-              <button type="button" className="btn btn--ghost btn--small" onClick={() => onAturBarang(aktif)}>
-                Atur Barang
-              </button>
-              <button type="button" className="btn btn--ghost btn--small" onClick={() => onTutupBazar(aktif)}>
-                Tutup Bazar
-              </button>
+        {aktifSemua.length > 0 ? (
+          aktifSemua.map((b, i) => (
+            <div key={b.id} className="card" style={{ borderColor: "var(--accent)", borderWidth: i === 0 ? 2 : 1 }}>
+              <span className="soft" style={{ fontWeight: 700, color: "var(--accent-ink)" }}>
+                {i === 0 ? "BAZAR PENJUALAN" : "BAZAR AKTIF"}
+              </span>
+              <p className="h2" style={{ margin: "0.125rem 0" }}>
+                {b.nama}
+              </p>
+              <p className="soft" style={{ margin: 0 }}>
+                {ringkas[b.id]?.jumlahBarang ?? 0} barang · {ringkas[b.id]?.dibawa ?? 0} pcs dibawa
+              </p>
+              <p className="soft" style={{ margin: "0.25rem 0 0" }}>
+                Terjual {ringkas[b.id]?.terjualPcs ?? 0} pcs · Sisa {ringkas[b.id]?.sisaPcs ?? 0} pcs
+              </p>
+              {i === 0 && aktifSemua.length > 1 && (
+                <p className="soft" style={{ margin: "0.25rem 0 0" }}>
+                  Penjualan memakai bazar ini (terakhir dibuka).
+                </p>
+              )}
+              <div className="grid2" style={{ marginTop: "0.75rem" }}>
+                <button type="button" className="btn btn--ghost btn--small" onClick={() => onAturBarang(b)}>
+                  Atur Barang
+                </button>
+                <button type="button" className="btn btn--ghost btn--small" onClick={() => onTutupBazar(b)}>
+                  Tutup Bazar
+                </button>
+              </div>
             </div>
-          </div>
+          ))
         ) : (
           <div className="panel panel--ok">
             <strong>Belum ada bazar aktif.</strong>
@@ -135,17 +148,26 @@ export default function Bazar({ onAturBarang, onTutupBazar, onUbah }: Props) {
             </div>
           </div>
         ) : (
-          <button
-            type="button"
-            className="btn btn--primary"
-            disabled={!!aktif}
-            onClick={() => setFormBuka(true)}
-          >
-            + Buka Bazar
-          </button>
+          <div className="grid2">
+            <button type="button" className="btn btn--primary" onClick={() => setFormBuka(true)}>
+              + Buka Bazar
+            </button>
+            <button
+              type="button"
+              className="btn btn--ghost"
+              style={{ opacity: 0.6 }}
+              onClick={() => setPesan("sedang dalam pengembangan")}
+            >
+              Buka Toko · Segera
+            </button>
+          </div>
         )}
 
-        {aktif && <p className="hint">Tutup bazar yang sekarang dulu sebelum membuka bazar baru.</p>}
+        {pesan && (
+          <div className="panel panel--ok" role="status" style={{ marginTop: "0.5rem" }}>
+            {pesan}
+          </div>
+        )}
 
         {selesai.length > 0 && (
           <>

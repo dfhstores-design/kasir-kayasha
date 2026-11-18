@@ -10,6 +10,14 @@ interface Props {
   storagePermanen: boolean | null;
   /** Bazar yang sedang aktif (null = penjualan memakai stok gudang). */
   bazar: BazarRecord | null;
+  /** Jumlah bazar aktif (boleh lebih dari satu). */
+  jumlahBazarAktif: number;
+  /**
+   * True selama pemuatan awal (seed + bazar) belum selesai. Selama ini
+   * Beranda TIDAK boleh menyimpulkan "belum ada bazar" — itu quirk
+   * first-load 17 Nov 2026: banner salah sebelum seed selesai dimuat.
+   */
+  memuatAwal: boolean;
   /** Peran aktif: kasir dibatasi pada transaksi bazar aktif saja. */
   peran: "kasir" | "admin";
   onMintaAdmin: () => void;
@@ -26,7 +34,7 @@ interface Props {
  * Ringkasan, Pengaturan, dan bagian Mini ERP (admin-only). Panel bazar dan
  * status simpan. Tidak ada menu tersembunyi.
  */
-export default function Beranda({ settings, storagePermanen, bazar, peran, onMintaAdmin, onKeluarAdmin, onBiayaBazar, buka }: Props) {
+export default function Beranda({ settings, storagePermanen, bazar, jumlahBazarAktif, memuatAwal, peran, onMintaAdmin, onKeluarAdmin, onBiayaBazar, buka }: Props) {
   const [jumlahBarang, setJumlahBarang] = useState<number | null>(null);
   const [parkir, setParkir] = useState(0);
   /** Notifikasi tombol placeholder Mini ERP (belum ada fungsi; admin-only). */
@@ -59,7 +67,11 @@ export default function Beranda({ settings, storagePermanen, bazar, peran, onMin
         </div>
       )}
 
-      {bazar ? (
+      {memuatAwal ? (
+        <div className="panel" role="status">
+          Memuat bazar…
+        </div>
+      ) : bazar ? (
         <button
           type="button"
           className="card"
@@ -73,8 +85,8 @@ export default function Beranda({ settings, storagePermanen, bazar, peran, onMin
           <span className="soft">
             {peran === "admin" ? "Ketuk untuk mengatur barang & biaya bazar" : "Ketuk untuk melihat bazar"}
           </span>
-          {peran === "admin" && (
-            <span className="soft">Untuk membuka bazar baru, tutup bazar ini dulu di layar Bazar.</span>
+          {peran === "admin" && jumlahBazarAktif > 1 && (
+            <span className="soft">Ada {jumlahBazarAktif} bazar aktif. Penjualan memakai bazar ini (terakhir dibuka).</span>
           )}
         </button>
       ) : peran === "admin" ? (
@@ -97,7 +109,11 @@ export default function Beranda({ settings, storagePermanen, bazar, peran, onMin
       )}
 
       <div className="tiles">
-        {peran === "admin" || bazar ? (
+        {memuatAwal ? (
+          <button type="button" className="tile tile--hero" disabled aria-describedby="alasan-jual">
+            Penjualan
+          </button>
+        ) : peran === "admin" || bazar ? (
           <button type="button" className="tile tile--hero" onClick={() => buka("pilih-barang")}>
             Penjualan
           </button>
@@ -129,7 +145,7 @@ export default function Beranda({ settings, storagePermanen, bazar, peran, onMin
         )}
       </div>
 
-      {peran === "kasir" && !bazar && (
+      {peran === "kasir" && !memuatAwal && !bazar && (
         <p className="hint" id="alasan-jual" style={{ margin: 0 }}>
           Kasir hanya mencatat transaksi saat ada bazar aktif.
         </p>

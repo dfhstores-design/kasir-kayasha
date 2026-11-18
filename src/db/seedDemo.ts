@@ -12,9 +12,10 @@
  * Urutan: settings -> produk -> bazar + alokasi -> 10 penjualan (dari saldo
  * bazar, stok berkurang) -> 2 pesanan jahit (1 Belum Lunas dengan DP,
  * 1 Lunas; tidak mengurangi stok).
- * Logo DI-seed dari public/logo-kayesa.png (file logo_kayesya_reference.png
- * dari Drive, 1200x1200 PNG, 119 KB): Andri memutuskan secara eksplisit pada
- * 17 Nov 2026 bahwa saat link dibuka logo sudah ada, mengesampingkan
+ * Logo DI-seed dari public/logo-kayesa.png (file logo_butik_tante_sita.png
+ * dari Andri, 18 Nov 2026, 2300x2332 PNG, 1,4 MB, monogram KC silver,
+ * cincin teks "KAYESA'S CLOTHING" sudah benar): Andri memutuskan secara
+ * eksplisit pada 17 Nov 2026 bahwa saat link dibuka logo sudah ada, mengesampingkan
  * keputusan lama di CATATAN-DISKUSI.md §3.2 (logo diunggah Tante sendiri,
  * bukan disimpan di repo). Logo tetap bisa diganti/dihapus Tante lewat
  * Pengaturan -> Logo resi setelahnya. PIN TIDAK di-seed (pinHash null).

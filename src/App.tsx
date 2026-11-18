@@ -1,8 +1,7 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Beranda from "./screens/Beranda.tsx";
 
-import PilihBarang from "./screens/PilihBarang.tsx";
-import DetailBarang from "./screens/DetailBarang.tsx";
+import PilihBarang from "./screens/PilihBarang.tsx";import DetailBarang from "./screens/DetailBarang.tsx";
 import Keranjang, { MAKS_PARKIR_TAMPIL, type ParkirRingkas } from "./screens/Keranjang.tsx";
 import DaftarBarang from "./screens/DaftarBarang.tsx";
 import FormBarang from "./screens/FormBarang.tsx";
@@ -15,9 +14,6 @@ import BiayaBazar from "./screens/BiayaBazar.tsx";
 import Ringkasan from "./screens/Ringkasan.tsx";
 import { AksesAdminSaja } from "./screens/AksesAdmin.tsx";
 import AturPin from "./screens/AturPin.tsx";
-import Pesanan from "./screens/Pesanan.tsx";
-import DetailPesanan from "./screens/DetailPesanan.tsx";
-import FormPesanan from "./screens/FormPesanan.tsx";
 import WizardPesananJahit from "./screens/WizardPesananJahit.tsx";
 import DaftarPesananJahit from "./screens/DaftarPesananJahit.tsx";
 import DetailPesananJahit from "./screens/DetailPesananJahit.tsx";
@@ -33,6 +29,7 @@ import {
   ambilSettings,
   bazarAktif,
   buatId,
+  daftarBazarAktif,
   daftarBiaya,
   daftarParkir,
   hapusParkir,
@@ -51,10 +48,6 @@ import { jalankanSeedDemo } from "./db/seedDemo.ts";
 import type { OngkirMode } from "./lib/ongkir.ts";
 import type { StatusBayar } from "./lib/keranjang.ts";
 import { khususAdmin, type Peran } from "./lib/peran.ts";
-import { ambilPesanan, batalkanTransaksi, catatPembayaran, isiOngkir, ubahStatusPesanan, type PesananLengkap } from "./db/pesananOperasi.ts";
-import { simpanPO } from "./db/pesanan.ts";
-import { pesanKonfirmasiBatal, type RencanaPO, type StatusPesanan } from "./lib/pesanan.ts";
-import type { Ongkir } from "./lib/ongkir.ts";
 import { simpanPenjualan, type JenisBayar, type TransaksiTersimpan } from "./lib/penjualan.ts";
 import { bikinIsiKeranjang, type IsiKeranjang } from "./lib/isiKeranjang.ts";
 import { formatJam } from "./lib/tanggal.ts";
@@ -66,7 +59,6 @@ export type Layar =
   | { nama: "detail-barang"; produk: ProdukRecord }
   | { nama: "keranjang" }
   | { nama: "tersimpan"; transaksi: TransaksiTersimpan }
-  | { nama: "pesanan" }
   | { nama: "barang" }
   | { nama: "form-barang"; produk: ProdukRecord | null }
   | { nama: "bazar" }
@@ -77,8 +69,6 @@ export type Layar =
   | { nama: "masuk-admin" }
   | { nama: "biaya-bazar"; bazar: BazarRecord }
   | { nama: "atur-pin" }
-  | { nama: "detail-pesanan"; id: string }
-  | { nama: "form-pesanan" }
   | { nama: "daftar-jahit" }
   | { nama: "wizard-jahit" }
   | { nama: "detail-jahit"; id: string }
@@ -120,20 +110,26 @@ export default function App() {
   /** Peran aktif. Bawaan kasir; naik ke admin setelah PIN benar. */
   const [peran, setPeran] = useState<Peran>("kasir");
   const [biaya, setBiaya] = useState<BiayaBazarRecord[]>([]);
-  /** Daftar pesanan (PO) + detail yang sedang dibuka. */
-  const [segarkanPesanan, setSegarkanPesanan] = useState(0);
   /** Alur pesanan jahit (Tante): refresh daftar + id detail yang dibuka. */
   const [segarkanJahitan, setSegarkanJahitan] = useState(0);
   const [jahitanDibuka, setJahitanDibuka] = useState<string | null>(null);
-  /** "jual" = penjualan biasa; "po" = pre-order (keranjang dipakai lalu ke form PO). */
-  const [modeKeranjang, setModeKeranjang] = useState<"jual" | "po">("jual");
-  const [pesananDibuka, setPesananDibuka] = useState<PesananLengkap | null>(null);
   const [sibukPesanan, setSibukPesanan] = useState(false);
   const [pesanPesanan, setPesanPesanan] = useState<string | null>(null);
   const [pesanSimpan, setPesanSimpan] = useState<string | null>(null);
 
   /** Bazar aktif + saldo per barang. Saat null, penjualan memakai stok gudang. */
   const [bazar, setBazar] = useState<BazarRecord | null>(null);
+  /** Jumlah bazar aktif (boleh lebih dari satu). */
+  const [jumlahBazarAktif, setJumlahBazarAktif] = useState(0);
+  /**
+   * True sampai pemuatan awal selesai (seed demo + settings + bazar).
+   * Beranda memakai ini supaya render pertama tidak menyimpulkan
+   * "belum ada bazar" padahal seed/bazar belum selesai dimuat (quirk
+   * first-load 17 Nov 2026).
+   */
+  const [memuatAwal, setMemuatAwal] = useState(true);
+  /** True setelah pemuatan awal pertama selesai (untuk muat-ulang Beranda). */
+  const sudahMuatAwal = useRef(false);
   const [saldoBazar, setSaldoBazar] = useState<Map<string, number>>(new Map());
   /** Barang yang baru disimpan saat bazar aktif — pemicu ajakan alokasi di DaftarBarang. */
   const [barangBaruDisimpan, setBarangBaruDisimpan] = useState<ProdukRecord | null>(null);
@@ -158,32 +154,45 @@ export default function App() {
     const b = await bazarAktif();
     setBazar(b ?? null);
     setSaldoBazar(b ? await saldoSemuaBazar(b.id) : new Map());
+    setJumlahBazarAktif((await daftarBazarAktif().catch(() => [] as BazarRecord[])).length);
     await muatParkir();
   }, [muatParkir]);
 
   useEffect(() => {
     let hidup = true;
     (async () => {
-      await jalankanSeedDemo().catch(() => false);
-      const s = await ambilSettings().catch(() => null);
-      const b = await bazarAktif().catch(() => undefined);
-      const saldo = b ? await saldoSemuaBazar(b.id).catch(() => new Map<string, number>()) : new Map<string, number>();
-      const daftar = await daftarParkir().catch(() => []);
-      const daftarBiayaBazar = b ? await daftarBiaya(b.id).catch(() => []) : [];
-      if (!hidup) return;
-      setSettings(s);
-      setBazar(b ?? null);
-      setSaldoBazar(saldo);
-      setBiaya(daftarBiayaBazar);
-      setParkir(
-        daftar.map((p) => ({
-          id: p.id,
-          namaPembeli: p.namaPembeli,
-          jumlahBarang: p.isi.reduce((n, i) => n + i.kuantitas, 0),
-          total: p.isi.reduce((n, i) => n + i.hargaSatuan * i.kuantitas - i.diskonPerUnit * i.kuantitas, 0),
-          jam: formatJam(p.dibuatPada),
-        })),
-      );
+      try {
+        await jalankanSeedDemo().catch(() => false);
+        const s = await ambilSettings().catch(() => null);
+        const b = await bazarAktif().catch(() => undefined);
+        const saldo = b ? await saldoSemuaBazar(b.id).catch(() => new Map<string, number>()) : new Map<string, number>();
+        const daftar = await daftarParkir().catch(() => []);
+        const daftarBiayaBazar = b ? await daftarBiaya(b.id).catch(() => []) : [];
+        const jumlahAktif = await daftarBazarAktif().catch(() => [] as BazarRecord[]);
+        if (!hidup) return;
+        setSettings(s);
+        setBazar(b ?? null);
+        setSaldoBazar(saldo);
+        setBiaya(daftarBiayaBazar);
+        setJumlahBazarAktif(jumlahAktif.length);
+        setParkir(
+          daftar.map((p) => ({
+            id: p.id,
+            namaPembeli: p.namaPembeli,
+            jumlahBarang: p.isi.reduce((n, i) => n + i.kuantitas, 0),
+            total: p.isi.reduce((n, i) => n + i.hargaSatuan * i.kuantitas - i.diskonPerUnit * i.kuantitas, 0),
+            jam: formatJam(p.dibuatPada),
+          })),
+        );
+      } finally {
+        // Pemuatan awal selesai (atau gagal): Beranda kini boleh
+        // menyimpulkan status bazar. Tanpa ini, render pertama selalu
+        // menampilkan "Belum ada bazar aktif" selama seed masih jalan.
+        if (hidup) {
+          sudahMuatAwal.current = true;
+          setMemuatAwal(false);
+        }
+      }
     })();
     mintaPenyimpananPermanen()
       .then((v) => {
@@ -201,6 +210,14 @@ export default function App() {
   useEffect(() => {
     if (settings) terapkanTampilan(settings.skalaFont, settings.tema);
   }, [settings]);
+
+  // Setiap kembali ke Beranda, muat ulang status bazar (bazar aktif + saldo
+  // + jumlah) supaya banner & tombol Penjualan selalu mencerminkan kondisi
+  // terbaru — termasuk bila bazar baru saja dibuka/ditutup di layar Bazar.
+  // Dilewati pada render pertama: pemuatan awal di atas sudah menanganinya.
+  useEffect(() => {
+    if (layar.nama === "beranda" && sudahMuatAwal.current) void muat();
+  }, [layar, muat]);
 
   const kembali = useCallback(() => {
     const n = layar.nama;
@@ -397,7 +414,6 @@ export default function App() {
     "pilih-barang": "Pilih Barang",
     "detail-barang": "Detail Barang",
     keranjang: "Keranjang",
-    pesanan: "Pesanan",
     barang: "Barang",
     "form-barang": layar.nama === "form-barang" && layar.produk ? "Ubah Barang" : "Barang Baru",
     bazar: "Bazar",
@@ -449,6 +465,8 @@ export default function App() {
           settings={settings}
           storagePermanen={storagePermanen}
           bazar={bazar}
+          jumlahBazarAktif={jumlahBazarAktif}
+          memuatAwal={memuatAwal}
           peran={peran}
           onMintaAdmin={() => setLayar({ nama: "masuk-admin" })}
           onBiayaBazar={() => {
@@ -465,7 +483,6 @@ export default function App() {
               return;
             }
             // Kasir hanya menjual bila ada bazar aktif.
-            if (nama === "pilih-barang") setModeKeranjang("jual");
             if (peran !== "admin" && nama === "pilih-barang" && !bazar) {
               setLayar({ nama: "beranda" });
               return;
@@ -489,13 +506,9 @@ export default function App() {
               <button
                 type="button"
                 className="btn btn--primary"
-                onClick={() =>
-                  modeKeranjang === "po" ? setLayar({ nama: "form-pesanan" }) : setLayar({ nama: "keranjang" })
-                }
+                onClick={() => setLayar({ nama: "keranjang" })}
               >
-                {modeKeranjang === "po"
-                  ? `Lanjut Pesanan (${keranjang.reduce((n, k) => n + k.kuantitas, 0)} barang)`
-                  : `Keranjang (${keranjang.reduce((n, k) => n + k.kuantitas, 0)} barang)`}
+                {`Keranjang (${keranjang.reduce((n, k) => n + k.kuantitas, 0)} barang)`}
               </button>
             </div>
           )}
@@ -662,116 +675,6 @@ export default function App() {
           <AksesAdminSaja bazarAktifAda={!!bazar} onMintaAdmin={() => setLayar({ nama: "masuk-admin" })} />
         ))}
 
-      {layar.nama === "pesanan" && (
-        <Pesanan
-          segarkan={segarkanPesanan}
-          onPesananBaru={() => {
-            // PO diawali dengan memilih barang dari katalog; keranjang dikosongkan dulu
-            // agar PO tidak tercampur barang sisa penjualan biasa.
-            setKeranjang([]);
-            setModeKeranjang("po");
-            setLayar({ nama: "pilih-barang" });
-          }}
-          onBuka={(id) => {
-            void ambilPesanan(id).then((p) => {
-              if (p) {
-                setPesananDibuka(p);
-                setLayar({ nama: "detail-pesanan", id });
-              }
-            });
-          }}
-        />
-      )}
-
-      {layar.nama === "form-pesanan" && (
-        <FormPesanan
-          items={keranjang.map((k) => ({
-            produkId: k.produkId,
-            nama: k.nama,
-            hargaSatuan: k.hargaSatuan,
-            kuantitas: k.kuantitas,
-            diskonPerUnit: k.diskonPerUnit,
-          }))}
-          total={keranjang.reduce((n, k) => n + (k.hargaSatuan - k.diskonPerUnit) * k.kuantitas, 0)}
-          bazarId={bazar?.id ?? null}
-          sibuk={sibukPesanan}
-          pesanGalat={pesanPesanan}
-          onBatal={() => setLayar({ nama: "pesanan" })}
-          onSimpan={(rencana: RencanaPO) => {
-            setPesanPesanan(null);
-            setSibukPesanan(true);
-            void simpanPO(rencana, { rekening: settings?.rekening ?? [] }).then(async (h) => {
-              setSibukPesanan(false);
-              if (!h.ok) {
-                setPesanPesanan(h.pesan);
-                return;
-              }
-              setKeranjang([]);
-              setSegarkanPesanan((n) => n + 1);
-              await muat();
-              const p = await ambilPesanan(h.pesanan.id);
-              if (p) setPesananDibuka(p);
-              setLayar({ nama: "detail-pesanan", id: h.pesanan.id });
-            });
-          }}
-        />
-      )}
-
-      {layar.nama === "detail-pesanan" && pesananDibuka && (
-        <DetailPesanan
-          pesanan={pesananDibuka}
-          sibuk={sibukPesanan}
-          onLihatResi={() => setLayar({ nama: "resi", transaksiId: pesananDibuka.transaksi.id })}
-          onCatatPembayaran={(nominal, metode) => {
-            setSibukPesanan(true);
-            void catatPembayaran(pesananDibuka.transaksi.id, {
-              nominal,
-              waktu: new Date().toISOString(),
-              metode,
-              catatan: null,
-            }).then(async (r) => {
-              setSibukPesanan(false);
-              if (!r.ok) {
-                setPesanPesanan(r.pesan);
-                return;
-              }
-              const p = await ambilPesanan(pesananDibuka.transaksi.id);
-              if (p) setPesananDibuka(p);
-              setSegarkanPesanan((n) => n + 1);
-            });
-          }}
-          onUbahStatus={(ke: StatusPesanan) => {
-            if (ke === "dibatalkan" && !window.confirm(pesanKonfirmasiBatal(pesananDibuka.transaksi.nomorResi))) return;
-            setSibukPesanan(true);
-            const aksi = ke === "dibatalkan" ? batalkanTransaksi(pesananDibuka.transaksi.id) : ubahStatusPesanan(pesananDibuka.transaksi.id, ke);
-            void aksi.then(async (r) => {
-              setSibukPesanan(false);
-              if (!r.ok) {
-                setPesanPesanan(r.pesan);
-                return;
-              }
-              const p = await ambilPesanan(pesananDibuka.transaksi.id);
-              if (p) setPesananDibuka(p);
-              setSegarkanPesanan((n) => n + 1);
-              await muat();
-            });
-          }}
-          onIsiOngkir={(ongkir: Ongkir) => {
-            setSibukPesanan(true);
-            void isiOngkir(pesananDibuka.transaksi.id, ongkir).then(async (r) => {
-              setSibukPesanan(false);
-              if (!r.ok) {
-                setPesanPesanan(r.pesan);
-                return;
-              }
-              const p = await ambilPesanan(pesananDibuka.transaksi.id);
-              if (p) setPesananDibuka(p);
-              setSegarkanPesanan((n) => n + 1);
-            });
-          }}
-        />
-      )}
-
       {layar.nama === "daftar-jahit" && (
         <DaftarPesananJahit
           segarkan={segarkanJahitan}
@@ -836,7 +739,6 @@ export default function App() {
             // menjual bila ada bazar aktif. Null = tombol Penjualan nonaktif.
             peran === "admin" || bazar
               ? () => {
-                  setModeKeranjang("jual");
                   setLayar({ nama: "pilih-barang" });
                 }
               : null

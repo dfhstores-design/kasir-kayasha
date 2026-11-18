@@ -18,7 +18,7 @@ CREATE TABLE IF NOT EXISTS transactions (
   nomor_resi        TEXT NOT NULL,
   waktu             TEXT NOT NULL,
   jenis             TEXT,                    -- deprecated: langsung | po (dipetakan dari jenis_dokumen)
-  jenis_dokumen     TEXT NOT NULL,           -- penjualan | pesanan | jasa
+  jenis_dokumen     TEXT NOT NULL,           -- penjualan | pesanan (DEPRECATED 18 Nov 2026: PO barang dihapus, dipertahankan demi riwayat lama) | jasa
   arah_stok         TEXT NOT NULL,           -- keluar | masuk | tidak_ada
   pelanggan_id      TEXT,                    -- UUID pelanggan (CRM, BU-28); null = belum ditautkan
   status_pesanan    TEXT NOT NULL,

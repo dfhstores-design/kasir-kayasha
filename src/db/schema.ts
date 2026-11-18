@@ -8,7 +8,7 @@
  *   settings        profil usaha, logo, rekening, sapaan (1 record kunci "utama")
  *   products        barang + stok gudang (stok bazar disimpan terpisah)
  *   product_photos  foto terkompresi, urutan 1–3 per barang
- *   bazars          satu bazar aktif pada satu waktu
+ *   bazars          bazar; aktif boleh lebih dari satu (18 Nov 2026), penjualan memakai yang terakhir dibuka
  *   bazar_items     saldo bazar per barang (dibawa/terjual/ditarik)
  *   transactions    transaksi + snapshot total
  *   transaction_items  baris transaksi (snapshot nama/harga/diskon)
@@ -42,8 +42,10 @@ export type UUID = string;
  *
  * Daftar tertutup + versi: menambah anggota di sini cukup satu tempat;
  * validasi sinkronisasi memakai union yang sama (hindari enum jadi dua — risiko B-2).
- * Anggota awal: "penjualan" (barang siap jual), "pesanan" (pre-order),
- * "jasa" (pesanan jahit, tak mengurangi stok).
+ * Anggota awal: "penjualan" (barang siap jual), "jasa" (pesanan jahit,
+ * tak mengurangi stok), dan "pesanan" (DEPRECATED 18 Nov 2026: pre-order
+ * barang; fitur PO barang dihapus total, tapi anggota enum dipertahankan
+ * demi kompatibilitas data/riwayat lama — jangan dipakai untuk dokumen baru).
  */
 export const JENIS_DOKUMEN = ["penjualan", "pesanan", "jasa"] as const;
 export type JenisDokumen = (typeof JENIS_DOKUMEN)[number];
@@ -128,7 +130,8 @@ export interface BazarRecord {
   lokasi: string | null;
   /** Catatan bebas (opsional). */
   catatan: string | null;
-  /** "aktif" atau "selesai". Hanya satu yang aktif. */
+  /** "aktif" atau "selesai". Bazar aktif boleh lebih dari satu (18 Nov 2026);
+   *  penjualan memakai yang terakhir dibuka. */
   status: "aktif" | "selesai";
   ringkasanTerjual: number | null;
   ringkasanDibawa: number | null;
@@ -186,7 +189,9 @@ export interface TransaksiRecord {
   waktu: string;
   /** LAMA (deprecated): "langsung" (barang siap jual) atau "po" (pre-order).
    *  Dipertahankan agar data lama tidak rusak (risiko B-1); jangan dibaca untuk
-   *  logika baru — pakai `jenisDokumen` di bawah. */
+   *  logika baru — pakai `jenisDokumen` di bawah. Catatan 18 Nov 2026: nilai
+   *  "po" juga dipakai pesanan JAHIT baru sebagai penanda pesanan (bukan PO
+   *  barang) — lihat `lib/jahitan.ts` dan `lib/resi.ts`; jangan dihapus. */
   jenis: "langsung" | "po";
   /** Jenis dokumen (satu sumber kebenaran) — lihat {@link JENIS_DOKUMEN}. */
   jenisDokumen: JenisDokumen;

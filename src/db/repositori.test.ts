@@ -6,6 +6,7 @@ import {
   alokasikanKeBazar,
   ambilSettings,
   buatBazar,
+  daftarBazar,
   daftarParkir,
   daftarProduk,
   hapusParkir,
@@ -94,9 +95,11 @@ describe("foto produk", () => {
 describe("bazar", () => {
   beforeEach(resetDB);
 
-  it("hanya boleh satu bazar aktif", async () => {
+  it("bazar kedua boleh dibuka tanpa menutup yang pertama (18 Nov 2026)", async () => {
     await buatBazar("Bazar A", null, null);
-    await expect(buatBazar("Bazar B", null, null)).rejects.toThrow(/bazar aktif/i);
+    const b = await buatBazar("Bazar B", null, null);
+    expect(b.status).toBe("aktif");
+    expect((await daftarBazar()).filter((x) => x.status === "aktif")).toHaveLength(2);
   });
 
   it("alokasi mengurangi stok gudang dan menambah saldo bazar", async () => {

@@ -120,10 +120,22 @@ export async function hapusFoto(id: UUID): Promise<void> {
 
 /* ------------------------------------------------------------------ bazar */
 
+/**
+ * Bazar penjualan: bazar aktif yang TERAKHIR dibuka (createdAt terbaru).
+ * Bazar aktif boleh lebih dari satu (18 Nov 2026): penjualan, alokasi, dan
+ * saldo selalu memakai bazar ini, supaya kasir tidak perlu memilih.
+ * Bazar aktif lain tetap tercatat dan bisa ditutup dari layar Bazar.
+ */
 export async function bazarAktif(): Promise<BazarRecord | undefined> {
+  const aktif = await daftarBazarAktif();
+  return aktif[0];
+}
+
+/** Semua bazar aktif, diurutkan dari yang terakhir dibuka. */
+export async function daftarBazarAktif(): Promise<BazarRecord[]> {
   const db = await getDB();
   const aktif = await db.getAllFromIndex("bazars", "by-status", "aktif");
-  return aktif[0];
+  return aktif.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
 }
 
 export async function daftarBazar(): Promise<BazarRecord[]> {
@@ -139,12 +151,9 @@ export async function buatBazar(
   detail: { lokasi?: string | null; catatan?: string | null } = {},
 ): Promise<BazarRecord> {
   const db = await getDB();
-  const tx = db.transaction("bazars", "readwrite");
-  const sudahAktif = await tx.store.index("by-status").getAll("aktif");
-  if (sudahAktif.length > 0) {
-    await tx.done;
-    throw new Error("Masih ada bazar aktif. Tutup dulu sebelum membuka bazar baru.");
-  }
+  // Bazar aktif boleh lebih dari satu (18 Nov 2026): admin boleh membuka
+  // bazar baru tanpa menutup yang sudah ada. Yang terakhir dibuka menjadi
+  // bazar penjualan (lihat bazarAktif()).
   const bazar: BazarRecord = {
     id: buatId(),
     nama,
@@ -159,8 +168,7 @@ export async function buatBazar(
     ditutupPada: null,
     createdAt: new Date().toISOString(),
   };
-  await tx.store.put(bazar);
-  await tx.done;
+  await db.put("bazars", bazar);
   return bazar;
 }
 
