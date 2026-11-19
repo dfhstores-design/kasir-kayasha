@@ -471,8 +471,7 @@ function PratinjauDokumenJahit({ transaksiId }: { transaksiId: string }) {
         nomor: t.nomorResi,
         tanggal: t.waktu,
         namaPemesan: t.namaPemesan ?? "(tanpa nama)",
-        items: pesanan.items.map((i) => ({ nama: i.nama, kuantitas: i.kuantitas, harga: i.harga })),
-        ukuran: ukuranDariCatatan(t.catatanPesanan),
+        items: pesanan.items.map((i) => ({ nama: i.nama, kuantitas: i.kuantitas, harga: i.harga, ukuran: i.ukuran })),
         perkiraanSelesai: t.perkiraanSiap,
         biayaLain: pesanan.biayaLain,
         total: t.total,
@@ -553,10 +552,4 @@ function PratinjauDokumenJahit({ transaksiId }: { transaksiId: string }) {
       </div>
     </>
   );
-}
-
-/** Ukuran dari catatan jahitan ("model · ukuran · ...") — cerminan DetailPesananJahit. */
-function ukuranDariCatatan(catatan: string | null): string | null {
-  const bagian = catatan?.split(" · ")[1]?.trim();
-  return bagian && !bagian.includes(":") ? bagian : null;
 }

@@ -93,8 +93,6 @@ export default function KasirDetail({ id, onKembali }: Props) {
       : null;
   const nominalSah = nominalAngka.ok && nominalAngka.value > 0 && data.status === "terbuka";
 
-  const ukuran = ukuranDariCatatan(t.catatanPesanan);
-
   async function simpanPembayaran() {
     if (!nominalSah) return;
     setSibuk(true);
@@ -116,8 +114,7 @@ export default function KasirDetail({ id, onKembali }: Props) {
       nomor: t.nomorResi,
       tanggal: t.waktu,
       namaPemesan: t.namaPemesan ?? "(tanpa nama)",
-      items: penuh.items.map((i) => ({ nama: i.nama, kuantitas: i.kuantitas, harga: i.harga })),
-      ukuran,
+      items: penuh.items.map((i) => ({ nama: i.nama, kuantitas: i.kuantitas, harga: i.harga, ukuran: i.ukuran })),
       perkiraanSelesai: t.perkiraanSiap,
       biayaLain: penuh.biayaLain,
       total: t.total,
@@ -206,20 +203,22 @@ export default function KasirDetail({ id, onKembali }: Props) {
 
         <div className="card">
           {penuh.items.map((it, i) => (
-            <div className="ringkas" key={i} style={i > 0 ? { marginTop: "0.25rem" } : undefined}>
-              <span className="soft">
-                {it.nama}
-                {it.kuantitas > 1 ? ` ×${it.kuantitas}` : ""}
-              </span>
-              <span>{formatRupiah(it.harga * it.kuantitas)}</span>
+            <div key={i} style={i > 0 ? { marginTop: "0.5rem" } : undefined}>
+              <div className="ringkas">
+                <span className="soft">
+                  {it.nama}
+                  {it.kuantitas > 1 ? ` ×${it.kuantitas}` : ""}
+                </span>
+                <span>{formatRupiah(it.harga * it.kuantitas)}</span>
+              </div>
+              {it.ukuran && (
+                <div className="ringkas" style={{ marginTop: "0.25rem" }}>
+                  <span className="soft">Ukuran/catatan khusus</span>
+                  <span>{it.ukuran}</span>
+                </div>
+              )}
             </div>
           ))}
-          {ukuran && (
-            <div className="ringkas" style={{ marginTop: "0.25rem" }}>
-              <span className="soft">Ukuran</span>
-              <span>{ukuran}</span>
-            </div>
-          )}
           {t.perkiraanSiap && (
             <div className="ringkas" style={{ marginTop: "0.25rem" }}>
               <span className="soft">Perkiraan selesai</span>
@@ -340,11 +339,6 @@ export default function KasirDetail({ id, onKembali }: Props) {
       </div>
     </>
   );
-}
-
-function ukuranDariCatatan(catatan: string | null): string | null {
-  const bagian = catatan?.split(" · ")[1]?.trim();
-  return bagian && !bagian.includes(":") ? bagian : null;
 }
 
 async function buatImageBitmap(blob: Blob): Promise<ImageBitmap | null> {

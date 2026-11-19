@@ -17,8 +17,7 @@ const dasar = (over: Partial<DataDokumen> = {}): DataDokumen => ({
   nomor: "KC.00001-20261116",
   tanggal: "2026-11-16T07:20:00.000Z",
   namaPemesan: "Ibu Sari",
-  items: [{ nama: "Gaun Pesta", kuantitas: 1, harga: 300000 }],
-  ukuran: "M",
+  items: [{ nama: "Gaun Pesta", kuantitas: 1, harga: 300000, ukuran: "M" }],
   perkiraanSelesai: "2026-11-23",
   biayaLain: [{ nama: "Bahan payet", nominal: 50000 }],
   total: 350000,
@@ -83,15 +82,21 @@ describe("susunDokumen - isi (invoice)", () => {
     expect(s).toContain("KEPADA YTH. Ibu Sari");
   });
 
-  it("detail jahitan tampil", () => {
+  it("detail jahitan tampil (BU-56: ukuran menempel di item)", () => {
     const s = t();
-    expect(s).toContain("Ukuran M");
+    expect(s).toContain("Gaun Pesta · M Rp300.000");
     expect(s).toContain("Perkiraan Selesai 2026-11-23");
+  });
+
+  it("item tanpa ukuran tampil tanpa tambahan (BU-56)", () => {
+    const s = teksDokumen(susunDokumen(dasar({ items: [{ nama: "Gaun Pesta", kuantitas: 1, harga: 300000, ukuran: null }] })));
+    expect(s).toContain("Gaun Pesta Rp300.000");
+    expect(s).not.toContain(" · ");
   });
 
   it("item + biaya lain + TOTAL + terbayar + SISA", () => {
     const s = t();
-    expect(s).toContain("Gaun Pesta Rp300.000");
+    expect(s).toContain("Gaun Pesta · M Rp300.000");
     expect(s).toContain("Bahan payet Rp50.000");
     expect(s).toContain("TOTAL Rp350.000");
     expect(s).toContain("Terbayar Rp150.000");
@@ -103,15 +108,15 @@ describe("susunDokumen - isi (invoice)", () => {
       susunDokumen(
         dasar({
           items: [
-            { nama: "Gaun Panjang", kuantitas: 1, harga: 2500000 },
-            { nama: "Dres tunik", kuantitas: 2, harga: 2500000 },
+            { nama: "Gaun Panjang", kuantitas: 1, harga: 2500000, ukuran: "L" },
+            { nama: "Dres tunik", kuantitas: 2, harga: 2500000, ukuran: null },
           ],
           total: 7500000,
           terbayar: 0,
         }),
       ),
     );
-    expect(s).toContain("Gaun Panjang Rp2.500.000");
+    expect(s).toContain("Gaun Panjang · L Rp2.500.000");
     expect(s).toContain("Dres tunik ×2 Rp5.000.000");
     expect(s).toContain("TOTAL Rp7.500.000");
   });

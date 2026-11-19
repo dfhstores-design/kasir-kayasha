@@ -1,7 +1,9 @@
 ﻿import { beforeEach, describe, expect, it } from "vitest";
 import { IDBFactory } from "fake-indexeddb";
-import { resetKoneksiDB, type Rekening } from "../db/schema.ts";
+import { getDB, resetKoneksiDB, type Rekening } from "../db/schema.ts";
+import { terimaPembayaranKasir } from "../db/kasirOperasi.ts";
 import {
+  ambilPesananJahit,
   bacaBiayaLainTersimpan,
   biayaLainDariTransaksi,
   catatPengiriman,
@@ -12,6 +14,8 @@ import {
   simpanBiayaLainTersimpan,
   simpanPesananJahit,
   statusJahitan,
+  ubahPesananJahit,
+  uraiCatatanLama,
   type RencanaJahitan,
 } from "./jahitan.ts";
 
@@ -37,8 +41,7 @@ function rencana(over: Partial<RencanaJahitan> = {}): RencanaJahitan {
   return {
     namaPemesan: "Ibu Sari",
     kontak: "0812 0000 0000",
-    items: [{ nama: "Gaun pesta", harga: 300000, kuantitas: 1 }],
-    ukuran: "M",
+    items: [{ nama: "Gaun pesta", harga: 300000, kuantitas: 1, ukuran: "M" }],
     perkiraanSelesai: "2026-11-23",
     catatan: null,
     biayaLain: [{ nama: "Bahan payet", nominal: 50000 }],
@@ -56,12 +59,12 @@ describe("periksaRencanaJahitan", () => {
   });
 
   it("menolak item tanpa nama", () => {
-    expect(periksaRencanaJahitan(rencana({ items: [{ nama: " ", harga: 100000, kuantitas: 1 }] })).ok).toBe(false);
+    expect(periksaRencanaJahitan(rencana({ items: [{ nama: " ", harga: 100000, kuantitas: 1, ukuran: null }] })).ok).toBe(false);
   });
 
   it("menolak harga item <= 0", () => {
-    expect(periksaRencanaJahitan(rencana({ items: [{ nama: "Gaun", harga: 0, kuantitas: 1 }] })).ok).toBe(false);
-    expect(periksaRencanaJahitan(rencana({ items: [{ nama: "Gaun", harga: -1, kuantitas: 1 }] })).ok).toBe(false);
+    expect(periksaRencanaJahitan(rencana({ items: [{ nama: "Gaun", harga: 0, kuantitas: 1, ukuran: null }] })).ok).toBe(false);
+    expect(periksaRencanaJahitan(rencana({ items: [{ nama: "Gaun", harga: -1, kuantitas: 1, ukuran: null }] })).ok).toBe(false);
   });
 
   it("menghitung total = item + biayaLain", () => {
@@ -74,8 +77,8 @@ describe("periksaRencanaJahitan", () => {
     const h = periksaRencanaJahitan(
       rencana({
         items: [
-          { nama: "Gaun Panjang", harga: 2500000, kuantitas: 1 },
-          { nama: "Dres tunik", harga: 2500000, kuantitas: 2 },
+          { nama: "Gaun Panjang", harga: 2500000, kuantitas: 1, ukuran: "L" },
+          { nama: "Dres tunik", harga: 2500000, kuantitas: 2, ukuran: null },
         ],
         biayaLain: [],
       }),
@@ -153,8 +156,8 @@ describe("simpanPesananJahit (BU-28: pelanggan otomatis)", () => {
     const h = await simpanPesananJahit(
       rencana({
         items: [
-          { nama: "Gaun Panjang", harga: 2500000, kuantitas: 1 },
-          { nama: "Dres tunik", harga: 2500000, kuantitas: 2 },
+          { nama: "Gaun Panjang", harga: 2500000, kuantitas: 1, ukuran: "L" },
+          { nama: "Dres tunik", harga: 2500000, kuantitas: 2, ukuran: null },
         ],
         biayaLain: [],
       }),
@@ -180,7 +183,7 @@ describe("daftarPerluDitagih & catatPengiriman", () => {
     await simpanPesananJahit(rencana({ perkiraanSelesai: "2020-01-01" }), { rekening: [rekening] });
     await simpanPesananJahit(
       rencana({
-        items: [{ nama: "Kebaya", harga: 300000, kuantitas: 1 }],
+        items: [{ nama: "Kebaya", harga: 300000, kuantitas: 1, ukuran: null }],
         perkiraanSelesai: "2099-01-01",
       }),
       { rekening: [rekening] },
@@ -206,5 +209,133 @@ describe("biayaLainDariTransaksi", () => {
       { nama: "Bahan payet", nominal: 50000 },
       { nama: "Kancing", nominal: 10000 },
     ]);
+  });
+});
+
+describe("ukuran/catatan khusus per item (BU-56)", () => {
+  beforeEach(resetDB);
+
+  it("simpan menyimpan ukuran per item, catatan tidak lagi memuat ukuran", async () => {
+    const h = await simpanPesananJahit(
+      rencana({
+        items: [
+          { nama: "Kebaya brokat", harga: 850000, kuantitas: 1, ukuran: "M" },
+          { nama: "Gaun pesta", harga: 500000, kuantitas: 1, ukuran: "bahu lebar" },
+        ],
+        biayaLain: [],
+      }),
+      { rekening: [rekening], waktu: new Date("2026-11-16T07:20:00.000Z") },
+    );
+    expect(h.ok).toBe(true);
+    if (!h.ok) return;
+    const lengkap = await ambilPesananJahit(h.pesanan.id);
+    expect(lengkap?.items.map((i) => i.ukuran)).toEqual(["M", "bahu lebar"]);
+    expect(lengkap?.transaksi.catatanPesanan).toBe("Kebaya brokat");
+  });
+});
+
+describe("uraiCatatanLama (BU-56)", () => {
+  it("format lama: ukuran di [1], biaya lain, lalu catatan bebas", () => {
+    const r = uraiCatatanLama("Kebaya brokat · M · Payet:125000 · tolong cepat", { ukuranDiCatatan: true });
+    expect(r).toEqual({ ukuranLama: "M", catatanBebas: "tolong cepat" });
+  });
+
+  it("format baru: segmen [1] tanpa ':' adalah catatan bebas, bukan ukuran", () => {
+    const r = uraiCatatanLama("Gaun pesta · tolong cepat", { ukuranDiCatatan: false });
+    expect(r).toEqual({ ukuranLama: null, catatanBebas: "tolong cepat" });
+  });
+
+  it("tanpa catatan -> keduanya null", () => {
+    expect(uraiCatatanLama(null, { ukuranDiCatatan: true })).toEqual({ ukuranLama: null, catatanBebas: null });
+    expect(uraiCatatanLama("Gaun pesta", { ukuranDiCatatan: true })).toEqual({ ukuranLama: null, catatanBebas: null });
+  });
+});
+
+describe("ambilPesananJahit - pesanan lama (BU-56)", () => {
+  beforeEach(resetDB);
+
+  it("ukuran lama di catatan pindah ke item pertama, catatan bebas tetap terbaca", async () => {
+    const h = await simpanPesananJahit(rencana(), { rekening: [rekening], waktu: new Date("2026-11-16T07:20:00.000Z") });
+    expect(h.ok).toBe(true);
+    if (!h.ok) return;
+    // Ubah data tersimpan menjadi format lama: ukuran di catatan, tanpa ukuran di baris.
+    const db = await getDB();
+    const t = await db.get("transactions", h.pesanan.id);
+    if (!t) return;
+    db.put("transactions", { ...t, catatanPesanan: "Gaun pesta · M · Bahan payet:50000 · tolong cepat" });
+    const baris = await db.getAllFromIndex("transaction_items", "by-transaksi", h.pesanan.id);
+    for (const b of baris) {
+      const tanpaUkuran = { ...b };
+      delete tanpaUkuran.ukuran;
+      db.put("transaction_items", tanpaUkuran);
+    }
+
+    const lengkap = await ambilPesananJahit(h.pesanan.id);
+    expect(lengkap?.items[0]?.ukuran).toBe("M");
+    expect(lengkap?.catatan).toBe("tolong cepat");
+    expect(lengkap?.biayaLain).toEqual([{ nama: "Bahan payet", nominal: 50000 }]);
+  });
+});
+
+describe("ubahPesananJahit (BU-56)", () => {
+  beforeEach(resetDB);
+
+  it("mengubah nama, item, ukuran, dan total; nomor KC tetap", async () => {
+    const h = await simpanPesananJahit(rencana(), { rekening: [rekening], waktu: new Date("2026-11-16T07:20:00.000Z") });
+    expect(h.ok).toBe(true);
+    if (!h.ok) return;
+    const u = await ubahPesananJahit(
+      h.pesanan.id,
+      rencana({
+        namaPemesan: "Ibu Dewi",
+        items: [{ nama: "Kebaya brokat", harga: 850000, kuantitas: 1, ukuran: "L" }],
+        biayaLain: [],
+      }),
+    );
+    expect(u.ok).toBe(true);
+    if (!u.ok) return;
+    expect(u.pesanan.nomor).toBe("KC.00001-20261116");
+    expect(u.pesanan.namaPemesan).toBe("Ibu Dewi");
+    expect(u.pesanan.total).toBe(850000);
+    const lengkap = await ambilPesananJahit(h.pesanan.id);
+    expect(lengkap?.items).toEqual([{ nama: "Kebaya brokat", harga: 850000, kuantitas: 1, ukuran: "L" }]);
+    expect(lengkap?.transaksi.namaPemesan).toBe("Ibu Dewi");
+    expect(await daftarPesananJahit()).toHaveLength(1);
+  });
+
+  it("pembayaran yang sudah masuk tidak berubah; sisa dihitung ulang", async () => {
+    const h = await simpanPesananJahit(rencana(), { rekening: [rekening], waktu: new Date("2026-11-16T07:20:00.000Z") });
+    expect(h.ok).toBe(true);
+    if (!h.ok) return;
+    const dp = await terimaPembayaranKasir(h.pesanan.id, 150000, "tunai");
+    expect(dp.ok).toBe(true);
+    const u = await ubahPesananJahit(
+      h.pesanan.id,
+      rencana({ items: [{ nama: "Gaun pesta", harga: 400000, kuantitas: 1, ukuran: "M" }], biayaLain: [] }),
+    );
+    expect(u.ok).toBe(true);
+    const lengkap = await ambilPesananJahit(h.pesanan.id);
+    expect(lengkap?.terbayar).toBe(150000);
+    expect(lengkap?.sisa).toBe(250000);
+  });
+
+  it("menolak total baru di bawah yang sudah terbayar", async () => {
+    const h = await simpanPesananJahit(rencana(), { rekening: [rekening], waktu: new Date("2026-11-16T07:20:00.000Z") });
+    expect(h.ok).toBe(true);
+    if (!h.ok) return;
+    const dp = await terimaPembayaranKasir(h.pesanan.id, 300000, "tunai");
+    expect(dp.ok).toBe(true);
+    const u = await ubahPesananJahit(
+      h.pesanan.id,
+      rencana({ items: [{ nama: "Gaun pesta", harga: 200000, kuantitas: 1, ukuran: "M" }], biayaLain: [] }),
+    );
+    expect(u.ok).toBe(false);
+    const lengkap = await ambilPesananJahit(h.pesanan.id);
+    expect(lengkap?.transaksi.total).toBe(350000);
+  });
+
+  it("menolak id yang tidak ada", async () => {
+    const u = await ubahPesananJahit("tidak-ada", rencana());
+    expect(u.ok).toBe(false);
   });
 });

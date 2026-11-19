@@ -47,11 +47,13 @@ export interface BiayaLain {
   nominal: Rupiah;
 }
 
-/** Satu baris item pesanan jahit (BU-55): nama + jumlah + harga satuan. */
+/** Satu baris item pesanan jahit (BU-55, BU-56): nama + jumlah + harga satuan + ukuran/catatan khusus. */
 export interface ItemDokumen {
   nama: string;
   kuantitas: number;
   harga: Rupiah;
+  /** Ukuran/catatan khusus per item (BU-56); null bila kosong. */
+  ukuran: string | null;
 }
 
 /** Satu baris rekening untuk dokumen (nama bank + nomor + pemilik). */
@@ -66,9 +68,8 @@ export interface DataDokumen {
   nomor: string;
   tanggal: string | Date;
   namaPemesan: string;
-  /** Daftar item (BU-55); pesanan lama yang hanya 1 item tetap 1 baris. */
+  /** Daftar item (BU-55, BU-56); ukuran/catatan khusus ada di tiap item. */
   items: readonly ItemDokumen[];
-  ukuran: string | null;
   perkiraanSelesai: string | null;
   biayaLain: readonly BiayaLain[];
   total: Rupiah;
@@ -136,14 +137,14 @@ export function susunDokumen(d: DataDokumen): BarisDokumen[] {
 
   b.push({ jenis: "judul", teks: labelJudul(jenis) });
 
-  if (d.ukuran && d.ukuran.trim()) b.push({ jenis: "kiriKanan", kiri: "Ukuran", kanan: d.ukuran.trim() });
   if (d.perkiraanSelesai && d.perkiraanSelesai.trim())
     b.push({ jenis: "kiriKanan", kiri: "Perkiraan Selesai", kanan: d.perkiraanSelesai.trim() });
-  if (d.ukuran?.trim() || d.perkiraanSelesai?.trim()) b.push({ jenis: "garis" });
+  if (d.perkiraanSelesai?.trim()) b.push({ jenis: "garis" });
 
-  // Item pesanan (BU-55): satu baris per item, jumlah hanya bila > 1.
+  // Item pesanan (BU-55, BU-56): satu baris per item, jumlah hanya bila > 1,
+  // ukuran/catatan khusus menempel di nama item bila ada.
   for (const item of d.items) {
-    const nama = item.kuantitas > 1 ? `${item.nama} ×${item.kuantitas}` : item.nama;
+    const nama = `${item.nama}${item.ukuran?.trim() ? ` · ${item.ukuran.trim()}` : ""}${item.kuantitas > 1 ? ` ×${item.kuantitas}` : ""}`;
     b.push({ jenis: "kiriKanan", kiri: nama, kanan: formatRupiahResi(item.harga * item.kuantitas) });
   }
   for (const lain of d.biayaLain) {
@@ -479,8 +480,7 @@ export function dataContohDokumen(sekarang: Date = new Date()): DataDokumen {
     nomor: nomorPlaceholder(sekarang),
     tanggal: sekarang,
     namaPemesan: "Ibu Sari",
-    items: [{ nama: "Gaun Pesta", kuantitas: 1, harga: 300000 }],
-    ukuran: "M",
+    items: [{ nama: "Gaun Pesta", kuantitas: 1, harga: 300000, ukuran: "M" }],
     perkiraanSelesai: formatTanggal(new Date(sekarang.getTime() + 7 * 24 * 60 * 60 * 1000)),
     biayaLain: [{ nama: "Bahan payet", nominal: 50000 }],
     total,

@@ -10,7 +10,7 @@
  *
  * Naikkan CACHE_VERSION setiap deploy agar cache lama dibersihkan.
  */
-const CACHE_VERSION = "kayasha-v1";
+const CACHE_VERSION = "kayasha-v2";
 const SHELL = ["./", "./index.html", "./manifest.webmanifest"];
 
 self.addEventListener("install", (event) => {

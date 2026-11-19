@@ -562,6 +562,9 @@ export async function ambilTransaksi(id: UUID): Promise<TransaksiLengkap | undef
     db.getAllFromIndex("transaction_items", "by-transaksi", id),
     db.getAllFromIndex("payments", "by-transaksi", id),
   ]);
+  // Urutkan baris sesuai urutan input bila ada (BU-56); baris tanpa urutan
+  // tetap di belakang dengan urutan baca apa adanya.
+  item.sort((a, b) => (a.urutan ?? Number.MAX_SAFE_INTEGER) - (b.urutan ?? Number.MAX_SAFE_INTEGER));
   return { transaksi: trx, item, pembayaran };
 }
 

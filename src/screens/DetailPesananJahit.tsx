@@ -21,6 +21,8 @@ interface Props {
   segarkan: number;
   /** Buka layar terima pembayaran (KasirDetail) untuk pesanan ini. */
   onTerimaPembayaran?: () => void;
+  /** Buka form ubah pesanan (BU-56). */
+  onUbah?: () => void;
 }
 
 /**
@@ -28,7 +30,7 @@ interface Props {
  * Invoice menampilkan SISA (BU-26.C) untuk menagih sopan; judul otomatis invoice/resi
  * (K-02). Log pengiriman dicatat otomatis (BU-27/BU-28).
  */
-export default function DetailPesananJahit({ id, onKembali, segarkan, onTerimaPembayaran }: Props) {
+export default function DetailPesananJahit({ id, onKembali, segarkan, onTerimaPembayaran, onUbah }: Props) {
   const [data, setData] = useState<PesananJahitLengkap | null>(null);
   const [settings, setSettings] = useState<SettingsRecord | null>(null);
   const [sibuk, setSibuk] = useState(false);
@@ -68,8 +70,7 @@ export default function DetailPesananJahit({ id, onKembali, segarkan, onTerimaPe
     nomor: t.nomorResi,
     tanggal: t.waktu,
     namaPemesan: t.namaPemesan ?? "(tanpa nama)",
-    items: data.items.map((i) => ({ nama: i.nama, kuantitas: i.kuantitas, harga: i.harga })),
-    ukuran: ukuranDariCatatan(t.catatanPesanan),
+    items: data.items.map((i) => ({ nama: i.nama, kuantitas: i.kuantitas, harga: i.harga, ukuran: i.ukuran })),
     perkiraanSelesai: t.perkiraanSiap,
     biayaLain: data.biayaLain,
     total: t.total,
@@ -126,20 +127,22 @@ export default function DetailPesananJahit({ id, onKembali, segarkan, onTerimaPe
 
         <div className="card">
           {dokumen.items.map((it, i) => (
-            <div className="ringkas" key={i} style={i > 0 ? { marginTop: "0.25rem" } : undefined}>
-              <span className="soft">
-                {it.nama}
-                {it.kuantitas > 1 ? ` ×${it.kuantitas}` : ""}
-              </span>
-              <span>{formatRupiah(it.harga * it.kuantitas)}</span>
+            <div key={i} style={i > 0 ? { marginTop: "0.5rem" } : undefined}>
+              <div className="ringkas">
+                <span className="soft">
+                  {it.nama}
+                  {it.kuantitas > 1 ? ` ×${it.kuantitas}` : ""}
+                </span>
+                <span>{formatRupiah(it.harga * it.kuantitas)}</span>
+              </div>
+              {it.ukuran && (
+                <div className="ringkas" style={{ marginTop: "0.25rem" }}>
+                  <span className="soft">Ukuran/catatan khusus</span>
+                  <span>{it.ukuran}</span>
+                </div>
+              )}
             </div>
           ))}
-          {dokumen.ukuran && (
-            <div className="ringkas" style={{ marginTop: "0.25rem" }}>
-              <span className="soft">Ukuran</span>
-              <span>{dokumen.ukuran}</span>
-            </div>
-          )}
           {dokumen.perkiraanSelesai && (
             <div className="ringkas" style={{ marginTop: "0.25rem" }}>
               <span className="soft">Perkiraan selesai</span>
@@ -185,6 +188,11 @@ export default function DetailPesananJahit({ id, onKembali, segarkan, onTerimaPe
         <button type="button" className="btn btn--primary" onClick={bagikan} disabled={sibuk}>
           {sibuk ? "Membuat dokumen…" : data.sisa > 0 ? "Lihat & Bagikan Invoice" : "Lihat & Bagikan Resi"}
         </button>
+        {data.status !== "batal" && onUbah && (
+          <button type="button" className="btn btn--ghost" onClick={onUbah}>
+            Ubah Pesanan
+          </button>
+        )}
         <button type="button" className="btn btn--ghost btn--small" onClick={onKembali}>
           Kembali
         </button>
@@ -201,9 +209,4 @@ async function buatImageBitmap(blob: Blob | null): Promise<ImageBitmap | null> {
   } catch {
     return null;
   }
-}
-
-function ukuranDariCatatan(catatan: string | null): string | null {
-  const bagian = catatan?.split(" · ")[1]?.trim();
-  return bagian && !bagian.includes(":") ? bagian : null;
 }

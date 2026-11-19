@@ -51,7 +51,7 @@ import { khususAdmin, type Peran } from "./lib/peran.ts";
 import { simpanPenjualan, type JenisBayar, type TransaksiTersimpan } from "./lib/penjualan.ts";
 import { bikinIsiKeranjang, type IsiKeranjang } from "./lib/isiKeranjang.ts";
 import { formatJam } from "./lib/tanggal.ts";
-import { simpanPesananJahit } from "./lib/jahitan.ts";
+import { simpanPesananJahit, ubahPesananJahit } from "./lib/jahitan.ts";
 import { layarAwalDariUrl } from "./lib/modeInput.ts";
 
 export type Layar =
@@ -71,7 +71,7 @@ export type Layar =
   | { nama: "biaya-bazar"; bazar: BazarRecord }
   | { nama: "atur-pin" }
   | { nama: "daftar-jahit" }
-  | { nama: "wizard-jahit" }
+  | { nama: "wizard-jahit"; editId?: string }
   | { nama: "detail-jahit"; id: string }
   | { nama: "kasir-detail"; id: string }
   | { nama: "pengaturan-isi"; bagian: "profil" | "rekening" | "logo" | "tampilan" }
@@ -236,7 +236,12 @@ export default function App() {
     }
     if (n === "form-barang") return setLayar({ nama: "barang" });
     if (n === "alokasi-bazar" || n === "tutup-bazar") return setLayar({ nama: "bazar" });
-    if (n === "daftar-jahit" || n === "wizard-jahit") return setLayar({ nama: "beranda" });
+    if (n === "daftar-jahit") return setLayar({ nama: "beranda" });
+    if (n === "wizard-jahit") {
+      // Mode ubah (BU-56): kembali ke detail pesanan, bukan beranda.
+      if (layar.editId) return setLayar({ nama: "detail-jahit", id: layar.editId });
+      return setLayar({ nama: "beranda" });
+    }
     if (n === "detail-jahit") {
       setJahitanDibuka(null);
       return setLayar({ nama: "daftar-jahit" });
@@ -435,7 +440,8 @@ export default function App() {
     cadangan: "Cadangan",
     kasir: "Kasir",
     "daftar-jahit": "Pesanan Jahit",
-    "wizard-jahit": "Pesanan Jahit Baru",
+    "wizard-jahit":
+      layar.nama === "wizard-jahit" && layar.editId ? "Ubah Pesanan Jahit" : "Pesanan Jahit Baru",
     "detail-jahit": "Detail Pesanan Jahit",
     "kasir-detail": "Terima Pembayaran",
   };
@@ -698,11 +704,19 @@ export default function App() {
         <WizardPesananJahit
           sibuk={sibukPesanan}
           pesanGalat={pesanPesanan}
-          onBatal={() => setLayar({ nama: "daftar-jahit" })}
+          editId={layar.editId}
+          onBatal={() => {
+            if (layar.editId) return setLayar({ nama: "detail-jahit", id: layar.editId });
+            setLayar({ nama: "daftar-jahit" });
+          }}
           onSimpan={(rencana) => {
             setPesanPesanan(null);
             setSibukPesanan(true);
-            void simpanPesananJahit(rencana, { rekening: settings?.rekening ?? [] }).then((h) => {
+            // Mode ubah (BU-56): ubah pesanan lama, nomor + pembayaran tidak berubah.
+            const simpan = layar.editId
+              ? ubahPesananJahit(layar.editId, rencana)
+              : simpanPesananJahit(rencana, { rekening: settings?.rekening ?? [] });
+            void simpan.then((h) => {
               setSibukPesanan(false);
               if (!h.ok) {
                 setPesanPesanan(h.pesan);
@@ -721,6 +735,7 @@ export default function App() {
           id={jahitanDibuka}
           segarkan={segarkanJahitan}
           onTerimaPembayaran={() => setLayar({ nama: "kasir-detail", id: jahitanDibuka })}
+          onUbah={() => setLayar({ nama: "wizard-jahit", editId: jahitanDibuka })}
           onKembali={() => {
             setJahitanDibuka(null);
             setLayar({ nama: "daftar-jahit" });

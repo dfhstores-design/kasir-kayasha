@@ -44,8 +44,7 @@ function rencana(over: Partial<RencanaJahitan> = {}): RencanaJahitan {
   return {
     namaPemesan: "Ibu Sari",
     kontak: "0812 0000 0000",
-    items: [{ nama: "Gaun pesta", harga: 300000, kuantitas: 1 }],
-    ukuran: "M",
+    items: [{ nama: "Gaun pesta", harga: 300000, kuantitas: 1, ukuran: "M" }],
     perkiraanSelesai: "2027-01-01",
     catatan: null,
     biayaLain: [{ nama: "Bahan payet", nominal: 50000 }],
@@ -64,8 +63,7 @@ function dokumenDari(data: {
     nomor: data.nomor,
     tanggal: "2026-11-16T07:20:00.000Z",
     namaPemesan: data.namaPemesan,
-    items: [{ nama: data.model, kuantitas: 1, harga: 300000 }],
-    ukuran: "M",
+    items: [{ nama: data.model, kuantitas: 1, harga: 300000, ukuran: "M" }],
     perkiraanSelesai: "2026-11-23",
     biayaLain: [{ nama: "Bahan payet", nominal: 50000 }],
     total: data.total,
@@ -136,7 +134,7 @@ describe("ALUR 2 - tante: wizard lalu daftar lalu perlu ditagih lalu detail", ()
 
     const lewat = await simpanPesananJahit(
       rencana({
-        items: [{ nama: "Kebaya", harga: 300000, kuantitas: 1 }],
+        items: [{ nama: "Kebaya", harga: 300000, kuantitas: 1, ukuran: null }],
         perkiraanSelesai: "2020-01-01",
       }),
       {

@@ -1,7 +1,8 @@
-﻿import { useMemo, useState } from "react";
+﻿import { useEffect, useMemo, useState } from "react";
 import { formatRupiah, parseRupiah } from "../lib/money.ts";
 import { dalamRupiah } from "../lib/ketikUang.ts";
 import {
+  ambilPesananJahit,
   bacaBiayaLainTersimpan,
   periksaRencanaJahitan,
   type BiayaLainInput,
@@ -14,6 +15,8 @@ interface Props {
   pesanGalat: string | null;
   onSimpan: (rencana: RencanaJahitan) => void;
   onBatal: () => void;
+  /** Bila diisi, form mengisi ulang pesanan ini (BU-56: ubah pesanan jahit). */
+  editId?: string | undefined;
 }
 
 type Langkah = 1 | 2 | 3 | 4;
@@ -27,7 +30,8 @@ type BiayaLainTerenun = BiayaLainInput & { tersimpan: boolean };
  *
  * Mode wizard (BU-22.A): langkah berurutan, satu pertanyaan per layar.
  *   1. nama pemesan + kontak
- *   2. item jahitan (BU-55: bisa banyak — nama + harga + jumlah) + ukuran + perkiraan selesai
+ *   2. item jahitan (BU-55: bisa banyak — nama + harga + jumlah;
+ *      BU-56: tiap item punya "Ukuran/catatan khusus" sendiri) + perkiraan selesai
  *   3. biaya lain (BU-15; nama yang pernah dipakai ditawarkan kembali)
  *   4. ringkas & simpan
  * Mode satu layar: keempat bagian di atas tampil sekaligus di satu layar
@@ -35,16 +39,24 @@ type BiayaLainTerenun = BiayaLainInput & { tersimpan: boolean };
  * Bawaan sejak 19 Nov 2026: satu layar (keputusan Tante, "Menggunakan
  * 1 layar"); wizard tetap bisa dipilih lewat tombol ganti mode atau
  * param URL ?mode=wizard.
+ *
+ * Ubah pesanan (BU-56): bila `editId` diisi, form dimuat dari pesanan lama
+ * (nama, kontak, item + ukuran/catatan khusus, biaya lain, perkiraan,
+ * catatan) dan tombol simpan menjadi "Simpan Perubahan".
  */
 
 interface ItemTerenun {
   nama: string;
   hargaTeks: string;
   kuantitas: number;
+  /** Ukuran/catatan khusus per item (BU-56); ukuran asli ada di buku khusus Tante. */
+  ukuran: string;
 }
-export default function WizardPesananJahit({ sibuk, pesanGalat, onSimpan, onBatal }: Props) {
+export default function WizardPesananJahit({ sibuk, pesanGalat, onSimpan, onBatal, editId }: Props) {
   const [langkah, setLangkah] = useState<Langkah>(1);
   const [galat, setGalat] = useState<string | null>(null);
+  /** Mode ubah: form diisi dari pesanan lama dulu sebelum bisa diisi. */
+  const [memuatAwal, setMemuatAwal] = useState(!!editId);
 
   // Mode input (BU-22): wizard atau satu layar. Mode awal dari param URL
   // (?mode=wizard / ?mode=satu-layar, untuk link pembanding), lalu pilihan
@@ -76,15 +88,44 @@ export default function WizardPesananJahit({ sibuk, pesanGalat, onSimpan, onBata
 
   const [nama, setNama] = useState("");
   const [kontak, setKontak] = useState("");
-  const [items, setItems] = useState<ItemTerenun[]>([{ nama: "", hargaTeks: "", kuantitas: 1 }]);
-  const [ukuran, setUkuran] = useState("");
+  const [items, setItems] = useState<ItemTerenun[]>([{ nama: "", hargaTeks: "", kuantitas: 1, ukuran: "" }]);
   const [perkiraan, setPerkiraan] = useState("");
   const [catatan, setCatatan] = useState("");
   const [biayaLain, setBiayaLain] = useState<BiayaLainTerenun[]>([]);
 
+  // Mode ubah (BU-56): isi form dari pesanan lama; form baru langsung siap.
+  useEffect(() => {
+    if (!editId) return;
+    let hidup = true;
+    ambilPesananJahit(editId)
+      .then((lengkap) => {
+        if (!hidup || !lengkap) return;
+        setNama(lengkap.transaksi.namaPemesan ?? "");
+        setKontak(lengkap.transaksi.kontak ?? "");
+        setItems(
+          lengkap.items.map((i) => ({
+            nama: i.nama,
+            hargaTeks: dalamRupiah(String(i.harga)),
+            kuantitas: i.kuantitas,
+            ukuran: i.ukuran ?? "",
+          })),
+        );
+        setPerkiraan(lengkap.transaksi.perkiraanSiap ?? "");
+        setCatatan(lengkap.catatan ?? "");
+        setBiayaLain(lengkap.biayaLain.map((b) => ({ ...b, tersimpan: false })));
+        setMemuatAwal(false);
+      })
+      .catch(() => {
+        if (hidup) setMemuatAwal(false);
+      });
+    return () => {
+      hidup = false;
+    };
+  }, [editId]);
+
   const itemsAngka = items.map((i) => {
     const p = parseRupiah(i.hargaTeks);
-    return { nama: i.nama.trim(), harga: p.ok ? p.value : 0, kuantitas: i.kuantitas };
+    return { nama: i.nama.trim(), harga: p.ok ? p.value : 0, kuantitas: i.kuantitas, ukuran: i.ukuran.trim() || null };
   });
   const itemsValid = itemsAngka.filter((i) => i.nama.length >= 2 && i.harga > 0);
   const subtotalItems = itemsValid.reduce((n, i) => n + i.harga * (i.kuantitas >= 1 ? i.kuantitas : 1), 0);
@@ -94,8 +135,12 @@ export default function WizardPesananJahit({ sibuk, pesanGalat, onSimpan, onBata
   const rencana: RencanaJahitan = {
     namaPemesan: nama.trim(),
     kontak: kontak.trim() || null,
-    items: itemsValid.map((i) => ({ nama: i.nama, harga: i.harga, kuantitas: i.kuantitas >= 1 ? i.kuantitas : 1 })),
-    ukuran: ukuran.trim() || null,
+    items: itemsValid.map((i) => ({
+      nama: i.nama,
+      harga: i.harga,
+      kuantitas: i.kuantitas >= 1 ? i.kuantitas : 1,
+      ukuran: i.ukuran,
+    })),
     perkiraanSelesai: perkiraan || null,
     catatan: catatan.trim() || null,
     biayaLain: biayaLain
@@ -155,6 +200,14 @@ export default function WizardPesananJahit({ sibuk, pesanGalat, onSimpan, onBata
       return;
     }
     onSimpan(rencana);
+  }
+
+  if (memuatAwal) {
+    return (
+      <div className="content">
+        <p className="soft">Memuat pesanan…</p>
+      </div>
+    );
   }
 
   return (
@@ -271,6 +324,16 @@ export default function WizardPesananJahit({ sibuk, pesanGalat, onSimpan, onBata
                       {it.kuantitas > 1 ? ` × ${it.kuantitas} = ${formatRupiah(p.value * it.kuantitas)}` : ""}
                     </p>
                   )}
+                  <div style={{ marginTop: "0.5rem" }}>
+                    <label htmlFor={`jht-ukuran-${i}`}>Ukuran/catatan khusus (opsional)</label>
+                    <input
+                      id={`jht-ukuran-${i}`}
+                      value={it.ukuran}
+                      onChange={(e) => ubahItem(i, { ukuran: e.target.value })}
+                      placeholder="Contoh: M"
+                      autoComplete="off"
+                    />
+                  </div>
                 </div>
               );
             })}
@@ -279,21 +342,11 @@ export default function WizardPesananJahit({ sibuk, pesanGalat, onSimpan, onBata
               type="button"
               className="btn btn--ghost btn--small"
               style={{ width: "100%", marginTop: "0.75rem" }}
-              onClick={() => setItems((d) => [...d, { nama: "", hargaTeks: "", kuantitas: 1 }])}
+              onClick={() => setItems((d) => [...d, { nama: "", hargaTeks: "", kuantitas: 1, ukuran: "" }])}
             >
               + Tambah item
             </button>
 
-            <div style={{ marginTop: "0.75rem" }}>
-              <label htmlFor="jht-ukuran">Ukuran (opsional)</label>
-              <input
-                id="jht-ukuran"
-                value={ukuran}
-                onChange={(e) => setUkuran(e.target.value)}
-                placeholder="Contoh: M"
-                autoComplete="off"
-              />
-            </div>
             <div style={{ marginTop: "0.75rem" }}>
               <label htmlFor="jht-perkiraan">Perkiraan selesai (opsional)</label>
               <input
@@ -397,20 +450,22 @@ export default function WizardPesananJahit({ sibuk, pesanGalat, onSimpan, onBata
                 </span>
               </div>
               {itemsValid.map((it, i) => (
-                <div className="ringkas" key={i} style={{ marginTop: "0.25rem" }}>
-                  <span className="soft">
-                    {it.nama}
-                    {it.kuantitas > 1 ? ` ×${it.kuantitas}` : ""}
-                  </span>
-                  <span>{formatRupiah(it.harga * it.kuantitas)}</span>
+                <div key={i}>
+                  <div className="ringkas" style={{ marginTop: "0.25rem" }}>
+                    <span className="soft">
+                      {it.nama}
+                      {it.kuantitas > 1 ? ` ×${it.kuantitas}` : ""}
+                    </span>
+                    <span>{formatRupiah(it.harga * it.kuantitas)}</span>
+                  </div>
+                  {it.ukuran && (
+                    <div className="ringkas" style={{ marginTop: "0.25rem" }}>
+                      <span className="soft">Ukuran/catatan khusus</span>
+                      <span>{it.ukuran}</span>
+                    </div>
+                  )}
                 </div>
               ))}
-              {ukuran && (
-                <div className="ringkas" style={{ marginTop: "0.25rem" }}>
-                  <span className="soft">Ukuran</span>
-                  <span>{ukuran}</span>
-                </div>
-              )}
               {perkiraan && (
                 <div className="ringkas" style={{ marginTop: "0.25rem" }}>
                   <span className="soft">Perkiraan selesai</span>
@@ -449,7 +504,7 @@ export default function WizardPesananJahit({ sibuk, pesanGalat, onSimpan, onBata
       <div className="bottombar">
         {mode === "satu-layar" ? (
           <button type="button" className="btn btn--primary" onClick={simpan} disabled={sibuk}>
-            {sibuk ? "Menyimpan…" : "Simpan Pesanan"}
+            {sibuk ? "Menyimpan…" : editId ? "Simpan Perubahan" : "Simpan Pesanan"}
           </button>
         ) : langkah < 4 ? (
           <button type="button" className="btn btn--primary" onClick={lanjut}>
@@ -457,7 +512,7 @@ export default function WizardPesananJahit({ sibuk, pesanGalat, onSimpan, onBata
           </button>
         ) : (
           <button type="button" className="btn btn--primary" onClick={simpan} disabled={sibuk}>
-            {sibuk ? "Menyimpan…" : "Simpan Pesanan"}
+            {sibuk ? "Menyimpan…" : editId ? "Simpan Perubahan" : "Simpan Pesanan"}
           </button>
         )}
 

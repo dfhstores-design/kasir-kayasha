@@ -1,5 +1,5 @@
 /**
- * Pesanan jahit (BU-12, BU-13, BU-14, BU-15, BU-22, BU-28) — fungsi murni + persistensi.
+ * Pesanan jahit (BU-12, BU-13, BU-14, BU-15, BU-22, BU-28, BU-56) — fungsi murni + persistensi.
  *
  * Satu pesanan jahit = SATU dokumen `jenisDokumen:"jasa"` + `arahStok:"tidak_ada"`.
  * Tidak mengurangi stok. Pembayaran bertahap (DP/pelunasan) adalah baris `payments`
@@ -10,8 +10,13 @@
  * beban input Tante, dan `TransaksiRecord.pelangganId` menunjuk entitas itu untuk
  * CRM di tahap lanjut.
  *
- * Bagian murni (tanpa IndexedDB) bisa diuji lepas; hanya `simpanPesananJahit` yang
- * menyentuh database. Skema TIDAK diubah di sini — dipakai apa adanya dari schema.ts.
+ * Ukuran/catatan khusus (BU-56, 19 Nov 2026): SATU per baris item, bukan satu per
+ * pesanan — ukuran asli dicatat manual Tante di buku khusus, kolom ini hanya
+ * catatan bebas per item. Pesanan bisa diubah lewat `ubahPesananJahit`.
+ *
+ * Bagian murni (tanpa IndexedDB) bisa diuji lepas; hanya `simpanPesananJahit` dan
+ * `ubahPesananJahit` yang menyentuh database. Skema TIDAK diubah di sini — dipakai
+ * apa adanya dari schema.ts.
  */
 import { getDB, type JournalRecord, type PelangganRecord, type Rekening, type TransaksiRecord, type UUID } from "../db/schema.ts";
 import { buatId, daftarTransaksi } from "../db/repositori.ts";
@@ -26,11 +31,13 @@ export interface BiayaLainInput {
   nominal: Rupiah;
 }
 
-/** Satu baris item pesanan jahit (BU-55): nama + harga satuan + jumlah. */
+/** Satu baris item pesanan jahit (BU-55, BU-56): nama + harga satuan + jumlah + ukuran/catatan khusus. */
 export interface ItemJahitanInput {
   nama: string;
   harga: Rupiah;
   kuantitas: number;
+  /** Ukuran/catatan khusus per item (BU-56) — bebas, opsional; ukuran asli ada di buku khusus Tante. */
+  ukuran: string | null;
 }
 
 /** Masukan wizard pesanan jahit (BU-22.A: langkah pemesan → jahitan → biaya → simpan). */
@@ -39,7 +46,6 @@ export interface RencanaJahitan {
   kontak: string | null;
   /** Daftar item (BU-55); minimal 1 item. */
   items: readonly ItemJahitanInput[];
-  ukuran: string | null;
   perkiraanSelesai: string | null;
   catatan: string | null;
   biayaLain: readonly BiayaLainInput[];
@@ -94,7 +100,8 @@ export interface PesananJahitTersimpan {
   total: Rupiah;
   items: readonly ItemJahitanInput[];
   biayaLain: readonly BiayaLainInput[];
-  pelangganId: UUID;
+  /** Null bila pesanan lama tidak punya pelanggan tercatat. */
+  pelangganId: UUID | null;
 }
 
 export type HasilSimpanJahitan =
@@ -124,6 +131,8 @@ export interface PesananJahitLengkap {
   /** Item dari transaction_items (BU-55); pesanan lama selalu 1 baris. */
   items: readonly ItemJahitanInput[];
   biayaLain: readonly BiayaLainInput[];
+  /** Catatan bebas pesanan (BU-56, untuk isi ulang form saat ubah). */
+  catatan: string | null;
   pelanggan: PelangganRecord | null;
   terbayar: Rupiah;
   sisa: Rupiah;
@@ -203,6 +212,7 @@ export async function simpanPesananJahit(
       nama: i.nama.trim().slice(0, 60),
       harga: i.harga,
       kuantitas: Number.isInteger(i.kuantitas) && i.kuantitas >= 1 ? i.kuantitas : 1,
+      ukuran: i.ukuran?.trim().slice(0, 40) || null,
     }));
 
   const biayaLainBersih: BiayaLainInput[] = rencana.biayaLain
@@ -247,7 +257,9 @@ export async function simpanPesananJahit(
   db.put("pelanggan", pelanggan);
   db.put("transactions", trx);
   // Satu baris transaction_items per item (BU-55); pesanan 1 item = 1 baris.
-  for (const item of itemsBersih) {
+  // Ukuran/catatan khusus ikut di baris item (BU-56); urutan dicatat supaya
+  // urutan item tidak berubah-ubah saat dibaca (id baris acak).
+  for (const [idx, item] of itemsBersih.entries()) {
     db.put("transaction_items", {
       id: buatId(),
       transaksiId: id,
@@ -257,6 +269,8 @@ export async function simpanPesananJahit(
       kuantitas: item.kuantitas,
       diskonPerUnit: 0,
       subtotalBersih: item.harga * item.kuantitas,
+      ukuran: item.ukuran,
+      urutan: idx,
     });
   }
 
@@ -288,11 +302,169 @@ function susunCatatanJahitan(
 ): string | null {
   const bagian: string[] = [];
   // Segmen pertama = nama item pertama (dipakai daftar sebagai "model").
+  // Ukuran TIDAK lagi di sini (BU-56): ukuran/catatan khusus ada di baris item.
   if (itemsBersih.length > 0) bagian.push(itemsBersih[0]!.nama);
-  if (rencana.ukuran?.trim()) bagian.push(rencana.ukuran.trim());
   if (biayaLainBersih.length > 0) bagian.push(biayaLainBersih.map((b) => `${b.nama}:${b.nominal}`).join("|"));
   if (rencana.catatan?.trim()) bagian.push(rencana.catatan.trim());
   return bagian.length > 0 ? bagian.join(" · ") : null;
+}
+
+/**
+ * Mengubah pesanan jahit yang sudah tersimpan (BU-56).
+ *
+ * Yang berubah: nama pemesan, kontak, item (nama/harga/jumlah/ukuran), biaya
+ * lain, perkiraan selesai, catatan, dan total. Yang TIDAK berubah: nomor KC,
+ * tanggal pesanan, pembayaran yang sudah masuk, dan jurnal (jurnal hanya
+ * mencatat uang yang benar-benar diterima, jadi tidak ikut berubah).
+ *
+ * Penjaga: total baru tidak boleh kurang dari yang sudah terbayar — kalau
+ * kurang, ubah ditolak supaya sisa tidak jadi negatif. Semua tulisan dalam
+ * satu transaksi IndexedDB: berhasil bersama atau tidak sama sekali.
+ */
+export async function ubahPesananJahit(id: UUID, rencana: RencanaJahitan): Promise<HasilSimpanJahitan> {
+  const cek = periksaRencanaJahitan(rencana);
+  if (!cek.ok) return { ok: false, pesan: cek.pesan };
+
+  const db = await getDB();
+  const lama = await db.get("transactions", id);
+  if (!lama || lama.jenisDokumen !== "jasa") {
+    return { ok: false, pesan: "Pesanan tidak ditemukan." };
+  }
+  const pembayaran = await db.getAllFromIndex("payments", "by-transaksi", id);
+  const terbayar = pembayaran.reduce((n, p) => n + p.nominal, 0);
+  if (cek.total < terbayar) {
+    return {
+      ok: false,
+      pesan: `Total baru (${formatRupiahSingkat(cek.total)}) kurang dari yang sudah dibayar (${formatRupiahSingkat(terbayar)}).`,
+    };
+  }
+
+  const itemsBersih: ItemJahitanInput[] = rencana.items
+    .filter((i) => i.nama.trim().length >= 2 && Number.isInteger(i.harga) && i.harga > 0)
+    .map((i) => ({
+      nama: i.nama.trim().slice(0, 60),
+      harga: i.harga,
+      kuantitas: Number.isInteger(i.kuantitas) && i.kuantitas >= 1 ? i.kuantitas : 1,
+      ukuran: i.ukuran?.trim().slice(0, 40) || null,
+    }));
+
+  const biayaLainBersih: BiayaLainInput[] = rencana.biayaLain
+    .filter((b) => b.nama.trim().length > 0 && b.nominal > 0)
+    .map((b) => ({ nama: b.nama.trim().slice(0, 40), nominal: b.nominal }));
+
+  const sekarang = new Date().toISOString();
+  // SATU transaksi tulis (BU-56): semua perubahan berhasil bersama atau tidak
+  // sama sekali — pesanan tidak bisa tinggal setengah diubah kalau HP mati di
+  // tengah simpan. Yang ditulis hanya pesanan ini; pesanan lain, pembayaran,
+  // dan jurnal tidak disentuh.
+  const tx = db.transaction(["transactions", "pelanggan", "transaction_items"], "readwrite");
+  await tx.objectStore("transactions").put({
+    ...lama,
+    namaPemesan: rencana.namaPemesan.trim(),
+    kontak: rencana.kontak?.trim() || null,
+    perkiraanSiap: rencana.perkiraanSelesai || null,
+    catatanPesanan: susunCatatanJahitan(rencana, itemsBersih, biayaLainBersih),
+    subtotalAwal: cek.total,
+    total: cek.total,
+    updatedAt: sekarang,
+  });
+
+  if (lama.pelangganId) {
+    const pelanggan = await tx.objectStore("pelanggan").get(lama.pelangganId);
+    if (pelanggan) {
+      await tx.objectStore("pelanggan").put({
+        ...pelanggan,
+        nama: rencana.namaPemesan.trim(),
+        kontak: rencana.kontak?.trim() || null,
+      });
+    }
+  }
+
+  // Ganti baris item lama dengan yang baru (nomor + pembayaran tidak tersentuh).
+  const barisLama = await tx.objectStore("transaction_items").index("by-transaksi").getAll(id);
+  for (const baris of barisLama) await tx.objectStore("transaction_items").delete(baris.id);
+  for (const [idx, item] of itemsBersih.entries()) {
+    await tx.objectStore("transaction_items").put({
+      id: buatId(),
+      transaksiId: id,
+      produkId: null,
+      namaSnapshot: item.nama,
+      hargaSatuan: item.harga,
+      kuantitas: item.kuantitas,
+      diskonPerUnit: 0,
+      subtotalBersih: item.harga * item.kuantitas,
+      ukuran: item.ukuran,
+      urutan: idx,
+    });
+  }
+  await tx.done;
+
+  for (const b of biayaLainBersih) simpanBiayaLainTersimpan(b.nama, b.nominal);
+
+  return {
+    ok: true,
+    pesanan: {
+      id,
+      nomor: lama.nomorResi,
+      namaPemesan: rencana.namaPemesan.trim(),
+      total: cek.total,
+      items: itemsBersih,
+      biayaLain: biayaLainBersih,
+      pelangganId: lama.pelangganId,
+    },
+  };
+}
+
+function formatRupiahSingkat(v: Rupiah): string {
+  return `Rp${v.toLocaleString("id-ID")}`;
+}
+
+/**
+ * Urai catatan pesanan format LAMA (BU-56): "model · ukuran · biayaLain · catatan".
+ *
+ * Pesanan baru tidak lagi menyimpan ukuran di catatan (ukuran ada di baris item),
+ * tapi pesanan yang disimpan sebelum BU-56 masih punya segmen ukuran di [1].
+ * `ukuranDiCatatan` benar hanya bila tidak ada baris item yang membawa ukuran
+ * (pesanan lama); untuk pesanan baru segmen [1] tanpa ":" adalah catatan bebas.
+ *
+ * Batas yang diketahui: pesanan lama TANPA ukuran tapi DENGAN catatan bebas
+ * ("Gaun · tolong cepat") tidak bisa dibedakan dari pesanan lama dengan ukuran —
+ * segmen [1]-nya terbaca sebagai ukuran (cacat yang sama seperti
+ * ukuranDariCatatan lama). Teksnya tidak hilang, hanya pindah ke kolom ukuran
+ * item pertama, dan Tante bisa memperbaikinya saat ubah.
+ */
+export function uraiCatatanLama(
+  catatan: string | null,
+  opsi: { ukuranDiCatatan: boolean },
+): { ukuranLama: string | null; catatanBebas: string | null } {
+  const bagian = (catatan ?? "")
+    .split(" · ")
+    .map((s) => s.trim())
+    .filter((s) => s.length > 0);
+  if (bagian.length === 0) return { ukuranLama: null, catatanBebas: null };
+  let ukuranLama: string | null = null;
+  const bebas: string[] = [];
+  // [0] selalu nama item pertama.
+  for (let i = 1; i < bagian.length; i++) {
+    const seg = bagian[i]!;
+    if (opsi.ukuranDiCatatan && i === 1 && !seg.includes(":")) {
+      ukuranLama = seg;
+      continue;
+    }
+    if (adalahSegmenBiayaLain(seg)) continue;
+    bebas.push(seg);
+  }
+  return { ukuranLama, catatanBebas: bebas.length > 0 ? bebas.join(" · ") : null };
+}
+
+/** Satu segmen biaya lain: "nama:nominal", atau beberapa dipisah "|". */
+function adalahSegmenBiayaLain(seg: string): boolean {
+  return seg.split("|").every((piece) => {
+    const idx = piece.indexOf(":");
+    if (idx <= 0) return false;
+    const nominal = Number(piece.slice(idx + 1));
+    return Number.isInteger(nominal) && nominal > 0;
+  });
 }
 
 export async function daftarPesananJahit(): Promise<RingkasanJahitan[]> {
@@ -338,10 +510,28 @@ export async function ambilPesananJahit(id: UUID): Promise<PesananJahitLengkap |
   ]);
   const terbayar = pembayaran.reduce((n, p) => n + p.nominal, 0);
 
+  // Ukuran/catatan khusus dari baris item (BU-56). Pesanan lama (sebelum BU-56)
+  // tidak punya ukuran di baris — pakai segmen ukuran lama dari catatan untuk
+  // item pertama, supaya tampilannya tidak hilang.
+  const adaUkuranBaris = itemRows.some((r) => (r.ukuran ?? null) !== null);
+  const uraian = uraiCatatanLama(t.catatanPesanan, { ukuranDiCatatan: !adaUkuranBaris });
+  // Urutkan baris sesuai urutan input (BU-56); baris lama tanpa urutan tetap
+  // di belakang dengan urutan baca apa adanya.
+  const itemTerurut = [...itemRows].sort(
+    (a, b) => (a.urutan ?? Number.MAX_SAFE_INTEGER) - (b.urutan ?? Number.MAX_SAFE_INTEGER),
+  );
+  const items: ItemJahitanInput[] = itemTerurut.map((r, i) => ({
+    nama: r.namaSnapshot,
+    harga: r.hargaSatuan,
+    kuantitas: r.kuantitas,
+    ukuran: (r.ukuran ?? null) || (i === 0 ? uraian.ukuranLama : null),
+  }));
+
   return {
     transaksi: t,
-    items: itemRows.map((r) => ({ nama: r.namaSnapshot, harga: r.hargaSatuan, kuantitas: r.kuantitas })),
+    items,
     biayaLain: biayaLainDariTransaksi(t),
+    catatan: uraian.catatanBebas,
     pelanggan: pelanggan ?? null,
     terbayar,
     sisa: hitungSisa(t.total, terbayar),

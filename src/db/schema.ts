@@ -238,6 +238,12 @@ export interface ItemTransaksiRecord {
   kuantitas: number;
   diskonPerUnit: number;
   subtotalBersih: number;
+  /** Ukuran/catatan khusus per baris item pesanan jahit (BU-56); null bila kosong.
+   *  Opsional: baris lama (sebelum BU-56) tidak punya kolom ini. */
+  ukuran?: string | null;
+  /** Urutan baris seperti diinput (BU-56): id baris acak, jadi tanpa ini urutan
+   *  item bisa berubah-ubah tiap dibaca. Opsional: baris lama tidak punya. */
+  urutan?: number;
 }
 
 export interface PembayaranRecord {
