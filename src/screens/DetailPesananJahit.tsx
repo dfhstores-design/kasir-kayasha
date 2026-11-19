@@ -7,6 +7,7 @@ import {
   catatPengiriman,
   type PesananJahitLengkap,
 } from "../lib/jahitan.ts";
+import { ambilSettings, type SettingsRecord } from "../db/repositori.ts";
 import {
   NAMA_FILE_DOKUMEN,
   renderPng,
@@ -29,6 +30,7 @@ interface Props {
  */
 export default function DetailPesananJahit({ id, onKembali, segarkan, onTerimaPembayaran }: Props) {
   const [data, setData] = useState<PesananJahitLengkap | null>(null);
+  const [settings, setSettings] = useState<SettingsRecord | null>(null);
   const [sibuk, setSibuk] = useState(false);
   const [pesan, setPesan] = useState<string | null>(null);
 
@@ -40,6 +42,13 @@ export default function DetailPesananJahit({ id, onKembali, segarkan, onTerimaPe
       })
       .catch(() => {
         if (hidup) setData(null);
+      });
+    ambilSettings()
+      .then((s) => {
+        if (hidup) setSettings(s);
+      })
+      .catch(() => {
+        if (hidup) setSettings(null);
       });
     return () => {
       hidup = false;
@@ -76,7 +85,8 @@ export default function DetailPesananJahit({ id, onKembali, segarkan, onTerimaPe
     setSibuk(true);
     setPesan(null);
     try {
-      const png = await renderPng(dokumen);
+      const logo = settings?.logo ? await buatImageBitmap(settings.logo) : null;
+      const png = await renderPng(dokumen, { logo });
       const hasil = await bagikanDokumen(png, NAMA_FILE_DOKUMEN(t.nomorResi));
       await catatPengiriman(t.id, t.pelangganId, jenisJudul, hasil === "dibagikan" ? "whatsapp" : "galeri");
       setPesan(hasil === "dibagikan" ? "Dokumen siap dibagikan." : "Dokumen disimpan ke galeri.");
@@ -173,6 +183,16 @@ export default function DetailPesananJahit({ id, onKembali, segarkan, onTerimaPe
       </div>
     </>
   );
+}
+
+/** Logo Blob -> ImageBitmap untuk kanvas PNG; null bila tidak ada/gagal. */
+async function buatImageBitmap(blob: Blob | null): Promise<ImageBitmap | null> {
+  try {
+    if (!blob || typeof createImageBitmap !== "function") return null;
+    return await createImageBitmap(blob);
+  } catch {
+    return null;
+  }
 }
 
 function modelDariCatatan(catatan: string | null): string {

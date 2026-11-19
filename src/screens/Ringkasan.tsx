@@ -3,6 +3,7 @@
   tanpa berkas lib baru (tugas P1-4 hanya membolehkan Ringkasan.tsx + tes). */
 import { useEffect, useMemo, useState } from "react";
 import {
+  ambilSettings,
   ambilTransaksi,
   daftarBiaya as ambilBiaya,
   daftarBazar,
@@ -10,6 +11,7 @@ import {
   itemBazar,
   type BazarRecord,
   type BiayaBazarRecord,
+  type SettingsRecord,
 } from "../db/repositori.ts";
 import type { ItemTransaksiRecord, JenisDokumen, PembayaranRecord, TransaksiRecord } from "../db/schema.ts";
 import { formatRupiah } from "../lib/money.ts";
@@ -432,6 +434,16 @@ export default function Ringkasan({ bazar }: Props) {
  * tidak mengenal biaya lain jahitan (hanya tersimpan di catatanPesanan) sehingga
  * rincian item di resi itu tidak cocok dengan totalnya.
  */
+/** Logo Blob -> ImageBitmap untuk kanvas PNG; null bila tidak ada/gagal. */
+async function buatImageBitmap(blob: Blob | null): Promise<ImageBitmap | null> {
+  try {
+    if (!blob || typeof createImageBitmap !== "function") return null;
+    return await createImageBitmap(blob);
+  } catch {
+    return null;
+  }
+}
+
 function PratinjauDokumenJahit({ transaksiId }: { transaksiId: string }) {
   const [png, setPng] = useState<Blob | null>(null);
   const [url, setUrl] = useState<string | null>(null);
@@ -449,6 +461,9 @@ function PratinjauDokumenJahit({ transaksiId }: { transaksiId: string }) {
         if (hidup) setPesan("Dokumen tidak dapat dimuat.");
         return;
       }
+      // Logo pengaturan (bila gagal dibaca, pratinjau tetap jalan tanpa logo).
+      const s: SettingsRecord | null = await ambilSettings().catch(() => null);
+      const logo = s?.logo ? await buatImageBitmap(s.logo) : null;
       const t = lengkap.transaksi;
       const biayaLainTotal = pesanan.biayaLain.reduce((n, b) => n + b.nominal, 0);
       // Susunan DataDokumen mengikuti DetailPesananJahit persis: biaya jasa =
@@ -465,7 +480,7 @@ function PratinjauDokumenJahit({ transaksiId }: { transaksiId: string }) {
         total: t.total,
         terbayar: pesanan.terbayar,
       };
-      const blob = await renderPng(d);
+      const blob = await renderPng(d, { logo });
       if (!hidup) return;
       objectUrl = URL.createObjectURL(blob);
       setPng(blob);
