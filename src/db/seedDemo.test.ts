@@ -47,10 +47,12 @@ describe("seed demo KAYESA", () => {
     expect(await ambilLogoDemo()).toBeNull();
     expect(await jalankanSeedDemo()).toBe(true);
     expect((await ambilSettings()).logo).toBeNull();
-    expect((await daftarProduk()).length).toBe(5);
+    expect((await daftarProduk()).length).toBe(0);
+    expect((await daftarTransaksi()).length).toBe(0);
+    expect(await bazarAktif()).toBeUndefined();
   });
 
-  it("mengisi settings, 5 produk, 1 bazar, 10 penjualan dan 2 pesanan jahit bila DB kosong", async () => {
+  it("mengisi settings usaha saja, tanpa data contoh, bila DB kosong (serah terima 19 Nov 2026)", async () => {
     vi.stubGlobal(
       "fetch",
       vi.fn(async () => ({ ok: true, blob: async () => new Blob(["logo-png"], { type: "image/png" }) })),
@@ -86,64 +88,19 @@ describe("seed demo KAYESA", () => {
     expect(s.rekening[1]?.namaPemilik).toBe("NARSHITA DEWI");
     expect(s.rekening[1]?.utama).toBe(false);
 
-    const produk = await daftarProduk();
-    expect(produk).toHaveLength(5);
-    expect(produk.map((p) => p.nama).sort()).toEqual([
-      "Blus Linen",
-      "Celana Kulot",
-      "Dress Batik",
-      "Kemeja Katun",
-      "Rok Plisket",
-    ]);
-    // Stok gudang berkurang sebesar yang dialokasikan ke bazar.
-    expect(produk.find((p) => p.nama === "Blus Linen")?.stokGudang).toBe(4);
-
-    const bazar = await bazarAktif();
-    expect(bazar?.nama).toBe("Demo Bazar KAYESA");
-    expect(bazar?.status).toBe("aktif");
-
-    const semua = await daftarTransaksi();
-    expect(semua).toHaveLength(12);
-    const penjualan = semua.filter((t) => t.jenis === "langsung");
-    const jahit = semua.filter((t) => t.jenisDokumen === "jasa");
-    expect(penjualan).toHaveLength(10);
-    // Seed TIDAK lagi membuat PO barang stok (BU-24: Pesanan = pesanan jahit).
-    expect(semua.filter((t) => t.jenis === "po" && t.jenisDokumen !== "jasa")).toHaveLength(0);
-    expect(jahit).toHaveLength(2);
-    expect(jahit.map((t) => t.namaPemesan).sort()).toEqual(["CONTOH – Dewi", "CONTOH – Sari"]);
-    expect(jahit.every((t) => t.namaPemesan?.startsWith("CONTOH – "))).toBe(true);
-    expect(jahit.every((t) => t.bazarId === null)).toBe(true);
-    expect(penjualan.every((t) => t.bazarId === bazar?.id)).toBe(true);
-
-    const pesananJahit = await daftarPesananJahit();
-    expect(pesananJahit).toHaveLength(2);
-    const sari = pesananJahit.find((p) => p.namaPemesan === "CONTOH – Sari");
-    const dewi = pesananJahit.find((p) => p.namaPemesan === "CONTOH – Dewi");
-    // Sari: Kebaya brokat 600.000 + Kain brokat 250.000 + Payet 125.000 = 975.000, DP 300.000.
-    expect(sari?.model).toBe("Kebaya brokat");
-    expect(sari?.total).toBe(975000);
-    expect(sari?.terbayar).toBe(300000);
-    expect(sari?.sisa).toBe(675000);
-    expect(sari?.status).toBe("terbuka");
-    expect(sari?.perkiraanSelesai).toBe("2026-11-19");
-    // Dewi: Gaun Pesta 350.000, bayar penuh.
-    expect(dewi?.model).toBe("Gaun Pesta");
-    expect(dewi?.total).toBe(350000);
-    expect(dewi?.terbayar).toBe(350000);
-    expect(dewi?.sisa).toBe(0);
-    expect(dewi?.status).toBe("lunas");
-    expect(dewi?.perkiraanSelesai).toBe("2026-11-18");
-    // Kode dokumen unik per urutan pesanan dalam bulan itu (BU-19/21, 19 Nov 2026:
-    // KC.[00001-99999]-yyyymmdd) — tidak lagi kembar KC.1-20261117.
-    expect(sari?.nomor).toBe("KC.00001-20261117");
-    expect(dewi?.nomor).toBe("KC.00002-20261117");
+    // Tidak ada lagi data contoh: produk, bazar, transaksi, pesanan jahit
+    // semuanya kosong — hanya detail usaha yang terisi.
+    expect(await daftarProduk()).toHaveLength(0);
+    expect(await bazarAktif()).toBeUndefined();
+    expect(await daftarTransaksi()).toHaveLength(0);
+    expect(await daftarPesananJahit()).toHaveLength(0);
   });
 
   it("tidak mengubah apa pun bila dijalankan dua kali", async () => {
     expect(await jalankanSeedDemo()).toBe(true);
     expect(await jalankanSeedDemo()).toBe(false);
-    expect((await daftarProduk()).length).toBe(5);
-    expect((await daftarTransaksi()).length).toBe(12);
+    expect((await daftarProduk()).length).toBe(0);
+    expect((await daftarTransaksi()).length).toBe(0);
   });
 
   it("tidak jalan bila sudah ada produk", async () => {
