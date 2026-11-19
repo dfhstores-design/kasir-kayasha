@@ -254,13 +254,18 @@ export async function simpanPesananJahit(
 
   const db = await getDB();
 
-  db.put("pelanggan", pelanggan);
-  db.put("transactions", trx);
+  // Semua tulisan dalam satu transaksi (BU-56, sama seperti ubahPesananJahit):
+  // simpan baru kembali sesudah data benar-benar tertulis — layar berikut
+  // tidak bisa membaca daftar sebelum pesanan tersimpan, dan pesanan tidak
+  // bisa hilang kalau tab ditutup tepat sesudah tombol ditekan.
+  const tx = db.transaction(["pelanggan", "transactions", "transaction_items", "journal"], "readwrite");
+  await tx.objectStore("pelanggan").put(pelanggan);
+  await tx.objectStore("transactions").put(trx);
   // Satu baris transaction_items per item (BU-55); pesanan 1 item = 1 baris.
   // Ukuran/catatan khusus ikut di baris item (BU-56); urutan dicatat supaya
   // urutan item tidak berubah-ubah saat dibaca (id baris acak).
   for (const [idx, item] of itemsBersih.entries()) {
-    db.put("transaction_items", {
+    await tx.objectStore("transaction_items").put({
       id: buatId(),
       transaksiId: id,
       produkId: null,
@@ -276,8 +281,9 @@ export async function simpanPesananJahit(
 
   for (const b of recomputeJurnalDariDokumen({ id, total: cek.total }, [])) {
     const baris: JournalRecord = { ...b, id: buatId() };
-    db.put("journal", baris);
+    await tx.objectStore("journal").put(baris);
   }
+  await tx.done;
 
   for (const b of biayaLainBersih) simpanBiayaLainTersimpan(b.nama, b.nominal);
 
