@@ -308,7 +308,7 @@ export default function Pengaturan({ onSimpan, onLihatContohResi, bagian }: Prop
                     aria-pressed={r.utama}
                     onClick={() => jadikanUtama(r.id)}
                   >
-                    {r.utama ? "✓ Dipakai di resi" : "Pakai di resi"}
+                    {r.utama ? "✓ Utama (paling atas di resi)" : "Jadikan utama"}
                   </button>
                   <button type="button" className="pilihan__item" onClick={() => hapusRekening(r.id)}>
                     Hapus
@@ -320,7 +320,7 @@ export default function Pengaturan({ onSimpan, onLihatContohResi, bagian }: Prop
               + Tambah rekening
             </button>
             <p className="hint">
-              Maksimal 2 rekening dicetak di resi. Rekening hanya muncul bila masih ada sisa tagihan.
+              Semua rekening yang diisi dicetak di resi (yang utama paling atas).
               Nomor rekening tidak pernah ditulis ke log.
             </p>
           </>

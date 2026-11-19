@@ -44,11 +44,10 @@ function rencana(over: Partial<RencanaJahitan> = {}): RencanaJahitan {
   return {
     namaPemesan: "Ibu Sari",
     kontak: "0812 0000 0000",
-    model: "Gaun pesta",
+    items: [{ nama: "Gaun pesta", harga: 300000, kuantitas: 1 }],
     ukuran: "M",
     perkiraanSelesai: "2027-01-01",
     catatan: null,
-    biayaJasa: 300000,
     biayaLain: [{ nama: "Bahan payet", nominal: 50000 }],
     ...over,
   };
@@ -65,10 +64,9 @@ function dokumenDari(data: {
     nomor: data.nomor,
     tanggal: "2026-11-16T07:20:00.000Z",
     namaPemesan: data.namaPemesan,
-    model: data.model,
+    items: [{ nama: data.model, kuantitas: 1, harga: 300000 }],
     ukuran: "M",
     perkiraanSelesai: "2026-11-23",
-    biayaJasa: 300000,
     biayaLain: [{ nama: "Bahan payet", nominal: 50000 }],
     total: data.total,
     terbayar: data.terbayar,
@@ -136,9 +134,15 @@ describe("ALUR 2 - tante: wizard lalu daftar lalu perlu ditagih lalu detail", ()
     expect(daftar[0]?.model).toBe("Gaun pesta");
     expect(daftar[0]?.sisa).toBe(350000);
 
-    const lewat = await simpanPesananJahit(rencana({ model: "Kebaya", perkiraanSelesai: "2020-01-01" }), {
-      rekening: [rekening],
-    });
+    const lewat = await simpanPesananJahit(
+      rencana({
+        items: [{ nama: "Kebaya", harga: 300000, kuantitas: 1 }],
+        perkiraanSelesai: "2020-01-01",
+      }),
+      {
+        rekening: [rekening],
+      },
+    );
     expect(lewat.ok).toBe(true);
 
     const tagih = await daftarPerluDitagih(new Date("2026-11-16T00:00:00.000Z"));
@@ -181,8 +185,8 @@ describe("ALUR 3 - cetak resi/nota: invoice (SISA) lalu resi (tanpa SISA)", () =
     expect(t2).toContain("RESI / BUKTI PEMBAYARAN");
   });
 
-  it("nomor placeholder KC.001-YYYYMMDD dan bertanda BELUM FINAL", () => {
-    expect(nomorPlaceholder("2026-11-16T07:20:00.000Z")).toBe("KC.001-20261116");
+  it("nomor placeholder KC.00001-YYYYMMDD, urutan bulanan 5 digit (BU-19/21)", () => {
+    expect(nomorPlaceholder("2026-11-16T07:20:00.000Z")).toBe("KC.00001-20261116");
   });
 
   it("nama resmi KAYESA - bukan ejaan lama", () => {

@@ -37,11 +37,10 @@ function rencana(over: Partial<RencanaJahitan> = {}): RencanaJahitan {
   return {
     namaPemesan: "Ibu Sari",
     kontak: "0812 0000 0000",
-    model: "Gaun pesta",
+    items: [{ nama: "Gaun pesta", harga: 300000, kuantitas: 1 }],
     ukuran: "M",
     perkiraanSelesai: "2026-11-23",
     catatan: null,
-    biayaJasa: 300000,
     biayaLain: [{ nama: "Bahan payet", nominal: 50000 }],
     ...over,
   };
@@ -52,19 +51,37 @@ describe("periksaRencanaJahitan", () => {
     expect(periksaRencanaJahitan(rencana({ namaPemesan: " " })).ok).toBe(false);
   });
 
-  it("menolak model kosong", () => {
-    expect(periksaRencanaJahitan(rencana({ model: "" })).ok).toBe(false);
+  it("menolak tanpa item", () => {
+    expect(periksaRencanaJahitan(rencana({ items: [] })).ok).toBe(false);
   });
 
-  it("menolak biaya jasa <= 0", () => {
-    expect(periksaRencanaJahitan(rencana({ biayaJasa: 0 })).ok).toBe(false);
-    expect(periksaRencanaJahitan(rencana({ biayaJasa: -1 })).ok).toBe(false);
+  it("menolak item tanpa nama", () => {
+    expect(periksaRencanaJahitan(rencana({ items: [{ nama: " ", harga: 100000, kuantitas: 1 }] })).ok).toBe(false);
   });
 
-  it("menghitung total = biayaJasa + biayaLain", () => {
+  it("menolak harga item <= 0", () => {
+    expect(periksaRencanaJahitan(rencana({ items: [{ nama: "Gaun", harga: 0, kuantitas: 1 }] })).ok).toBe(false);
+    expect(periksaRencanaJahitan(rencana({ items: [{ nama: "Gaun", harga: -1, kuantitas: 1 }] })).ok).toBe(false);
+  });
+
+  it("menghitung total = item + biayaLain", () => {
     const h = periksaRencanaJahitan(rencana());
     expect(h.ok).toBe(true);
     if (h.ok) expect(h.total).toBe(350000);
+  });
+
+  it("menghitung total banyak item (BU-55)", () => {
+    const h = periksaRencanaJahitan(
+      rencana({
+        items: [
+          { nama: "Gaun Panjang", harga: 2500000, kuantitas: 1 },
+          { nama: "Dres tunik", harga: 2500000, kuantitas: 2 },
+        ],
+        biayaLain: [],
+      }),
+    );
+    expect(h.ok).toBe(true);
+    if (h.ok) expect(h.total).toBe(7500000);
   });
 
   it("menolak biaya lain negatif", () => {
@@ -117,8 +134,36 @@ describe("simpanPesananJahit (BU-28: pelanggan otomatis)", () => {
     expect(daftar[0]?.namaPemesan).toBe("Ibu Sari");
     expect(daftar[0]?.status).toBe("terbuka");
     expect(daftar[0]?.sisa).toBe(350000);
-    expect(daftar[0]?.nomor).toBe("KC.001-20261116");
+    expect(daftar[0]?.nomor).toBe("KC.00001-20261116");
     expect(h.pesanan.pelangganId).toBeTruthy();
+  });
+
+  it("nomor urut bulanan 5 digit, reset tiap bulan (BU-19/21)", async () => {
+    const w1 = new Date("2026-11-16T07:20:00.000Z");
+    const w2 = new Date("2026-12-01T07:20:00.000Z");
+    const a = await simpanPesananJahit(rencana(), { rekening: [rekening], waktu: w1 });
+    const b = await simpanPesananJahit(rencana({ namaPemesan: "Ibu Dewi" }), { rekening: [rekening], waktu: w1 });
+    const c = await simpanPesananJahit(rencana({ namaPemesan: "Ibu Ani" }), { rekening: [rekening], waktu: w2 });
+    expect(a.ok && a.pesanan.nomor).toBe("KC.00001-20261116");
+    expect(b.ok && b.pesanan.nomor).toBe("KC.00002-20261116");
+    expect(c.ok && c.pesanan.nomor).toBe("KC.00001-20261201");
+  });
+
+  it("menyimpan banyak item sebagai baris transaction_items (BU-55)", async () => {
+    const h = await simpanPesananJahit(
+      rencana({
+        items: [
+          { nama: "Gaun Panjang", harga: 2500000, kuantitas: 1 },
+          { nama: "Dres tunik", harga: 2500000, kuantitas: 2 },
+        ],
+        biayaLain: [],
+      }),
+      { rekening: [rekening], waktu: new Date("2026-11-16T07:20:00.000Z") },
+    );
+    expect(h.ok).toBe(true);
+    if (!h.ok) return;
+    expect(h.pesanan.total).toBe(7500000);
+    expect(h.pesanan.items).toHaveLength(2);
   });
 
   it("menolak rencana tidak valid (tanpa menulis)", async () => {
@@ -133,7 +178,13 @@ describe("daftarPerluDitagih & catatPengiriman", () => {
 
   it("perlu ditagih hanya yang perkiraan selesai lewat & belum lunas", async () => {
     await simpanPesananJahit(rencana({ perkiraanSelesai: "2020-01-01" }), { rekening: [rekening] });
-    await simpanPesananJahit(rencana({ model: "Kebaya", perkiraanSelesai: "2099-01-01" }), { rekening: [rekening] });
+    await simpanPesananJahit(
+      rencana({
+        items: [{ nama: "Kebaya", harga: 300000, kuantitas: 1 }],
+        perkiraanSelesai: "2099-01-01",
+      }),
+      { rekening: [rekening] },
+    );
     const t = await daftarPerluDitagih(new Date("2026-11-16T00:00:00.000Z"));
     expect(t).toHaveLength(1);
     expect(t[0]?.model).toBe("Gaun pesta");

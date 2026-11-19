@@ -43,8 +43,8 @@ const dasar = (over: Partial<DataResi> = {}): DataResi => ({
 const pengaturanContoh = {
   namaButik: "KAYESA",
   alamatBaris1: "Jl. Tarumanegara No. 41",
-  alamatBaris2: "Sebelah Pempak Nyai",
-  kotaKodePos: "Ploso Ciptum 15419",
+  alamatBaris2: "Pisangan, Ciputat Timur - 15419",
+  kotaKodePos: "",
   telepon1: "0812 1141 4017",
   telepon2: "0821 1376 5892",
   teksPenutup: "Terima kasih, sampai jumpa!",
@@ -64,6 +64,13 @@ describe("susunResi — urutan & isi (contoh v8/v9/v4)", () => {
     expect(potong).toContain("KAYESA CLOTHING");
     expect(potong).toContain("Jl. Melati No. 12");
     expect(potong).toContain("0812-1111-2222");
+  });
+
+  it("alamat baris 2 dicetak sebagai baris sendiri, tanpa kurung (BU-52)", () => {
+    const t = teksResi(susunResi(dasar()));
+    expect(t).toContain("Jl. Melati No. 12");
+    expect(t).toContain("JAKARTA 12130");
+    expect(t).not.toContain("Jl. Melati No. 12 (JAKARTA 12130)");
   });
 
   it("tanpa logo tetap rapi dengan nama butik sebagai judul", () => {
@@ -156,7 +163,7 @@ describe("susunResi — status bayar & rekening", () => {
     expect(t).toContain("Rp360.000");
   });
 
-  it("hanya rekening utama yang dicetak", () => {
+  it("semua rekening dicetak, utama paling atas (BU-53)", () => {
     const t = teksResi(
       susunResi(
         dasar({
@@ -171,9 +178,11 @@ describe("susunResi — status bayar & rekening", () => {
         }),
       ),
     );
-    expect(t).toContain("BNI");
-    expect(t).not.toContain("BCA");
-    expect(t).not.toContain("Mandiri");
+    expect(t).toContain("BNI · 0971092588");
+    expect(t).toContain("BCA · 8810295431");
+    expect(t).toContain("Mandiri · 999");
+    // Utama (BNI) tampil sebelum yang lain.
+    expect(t.indexOf("BNI")).toBeLessThan(t.indexOf("BCA"));
   });
 
   it("kembalian ditampilkan saat tunai melebihi total", () => {

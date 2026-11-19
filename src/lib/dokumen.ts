@@ -8,10 +8,14 @@
  * - Satu dokumen dua wajah (K-02): `sisa > 0` -> INVOICE/NOTA PESANAN (total, terbayar,
  *   SISA); `sisa = 0` -> RESI/BUKTI PEMBAYARAN (tanpa baris sisa).
  * - Nama resmi TERKUNCI: besar **KAYESA**, logo **KAYESA'S CLOTHING** (K-04).
- * - Rekening SELALU tampil: BCA - 676 017 885 a.n. NARSHITA DEWI (BU-16).
+ * - Rekening SELALU tampil: semua rekening yang diisi di Pengaturan, utama
+ *   paling atas (BU-16, BU-53); bawaan BCA - 676 017 885 a.n. NARSHITA DEWI.
  * - Kop/kaki ikut faktur lama (BU-25, sementara). Ukuran font & layout dokumen FIX.
- * - Penomoran `NO:` PENDING (BU-19/21): pakai placeholder `KC.[001-0xx]-YYYYMMDD`
- *   (usulan Andri 18 Nov 2026; format final menunggu konfirmasi Tante).
+ * - Penomoran `NO:` FINAL (BU-19/21, diputuskan Tante 19 Nov 2026):
+ *   `KC.[no urut pesanan di bulan yang sama 00001-99999]-yyyymmdd`.
+ * - Alamat usaha (BU-51): "Jl. Tarumanegara No. 41" + "Pisangan, Ciputat
+ *   Timur - 15419"; baris 2 dicetak apa adanya, tanpa kurung (BU-52).
+ * - Penutup lengkap (BU-54): "Hormat Kami," + "KAYESA" + teks penutup.
  */
 
 import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
@@ -19,15 +23,15 @@ import type { Rupiah } from "./money.ts";
 import { formatRupiahTanpaRp } from "./money.ts";
 import { formatTanggal } from "./tanggal.ts";
 
-/** Kop tetap, mengikuti faktur lama (BU-25 sementara). */
+/** Kop tetap, mengikuti faktur lama (BU-25 sementara) + revisi alamat trial (BU-51). */
 export const KOP_DOKUMEN = {
   namaBesar: "KAYESA",
   namaLogo: "KAYESA'S CLOTHING",
-  alamat: ["Jl. Tarumanegara No. 41 (Sebelah Pempak Nyai)", "Ploso Ciptum 15419"],
+  alamat: ["Jl. Tarumanegara No. 41", "Pisangan, Ciputat Timur - 15419"],
   telepon: ["WA 0812 1141 4017 / 0821 1376 5892"],
 } as const;
 
-/** Rekening resmi yang SELALU tampil (BU-16). */
+/** Rekening bawaan bila Pengaturan belum diisi (BU-16). */
 export const REKENING_BAWAAN = {
   namaBank: "BCA",
   nomor: "676 017 885",
@@ -43,18 +47,38 @@ export interface BiayaLain {
   nominal: Rupiah;
 }
 
+/** Satu baris item pesanan jahit (BU-55): nama + jumlah + harga satuan. */
+export interface ItemDokumen {
+  nama: string;
+  kuantitas: number;
+  harga: Rupiah;
+}
+
+/** Satu baris rekening untuk dokumen (nama bank + nomor + pemilik). */
+export interface RekeningDokumen {
+  namaBank: string;
+  nomor: string;
+  namaPemilik: string;
+}
+
 /** Satu sumber konten dokumen pesanan jahit - dipakai PNG & PDF (K-01). */
 export interface DataDokumen {
   nomor: string;
   tanggal: string | Date;
   namaPemesan: string;
-  model: string;
+  /** Daftar item (BU-55); pesanan lama yang hanya 1 item tetap 1 baris. */
+  items: readonly ItemDokumen[];
   ukuran: string | null;
   perkiraanSelesai: string | null;
-  biayaJasa: Rupiah;
   biayaLain: readonly BiayaLain[];
   total: Rupiah;
   terbayar: Rupiah;
+  /** Dari Pengaturan; bila kosong dipakai bawaan KOP_DOKUMEN / REKENING_BAWAAN. */
+  alamat?: readonly string[];
+  telepon?: readonly string[];
+  rekening?: readonly RekeningDokumen[];
+  /** Teks penutup dari Pengaturan; bila kosong dipakai penutup bawaan (BU-54). */
+  teksPenutup?: string;
 }
 
 export type JenisJudul = "invoice" | "resi";
@@ -77,9 +101,9 @@ export function nomorPlaceholder(tanggal: string | Date = new Date(), urutan = 1
   const y = d.getFullYear();
   const m = String(d.getMonth() + 1).padStart(2, "0");
   const hh = String(d.getDate()).padStart(2, "0");
-  const urut = String(urutan).padStart(3, "0");
-  // BELUM FINAL - menunggu keputusan BU-19/21 (konfirmasi Tante).
-  // Format usulan Andri 18 Nov 2026: KC.[no urut pesanan 001-0xx]-yyyymmdd.
+  const urut = String(urutan).padStart(5, "0");
+  // FINAL - diputuskan Tante 19 Nov 2026 (BU-19/21): KC.[no urut pesanan di
+  // bulan yang sama 00001-99999]-yyyymmdd. `urutan` = nomor urut dalam bulan.
   return `KC.${urut}-${y}${m}${hh}`;
 }
 
@@ -90,14 +114,19 @@ export type BarisDokumen =
   | { jenis: "garis" }
   | { jenis: "total"; kiri: string; kanan: string };
 
+/** Penutup bawaan bila Pengaturan kosong (cerminan resi barang - BU-54). */
+export const TEKS_PENUTUP_BAWAAN = "Terima kasih telah mempercayakan pesanan jahit kepada KAYESA.";
+
 export function susunDokumen(d: DataDokumen): BarisDokumen[] {
   const sisa = sisaDokumen(d);
   const jenis = judulDokumen(sisa);
   const b: BarisDokumen[] = [];
 
   b.push({ jenis: "judul", teks: "KAYESA" });
-  for (const a of KOP_DOKUMEN.alamat) b.push({ jenis: "teks", teks: a });
-  for (const t of KOP_DOKUMEN.telepon) b.push({ jenis: "teks", teks: t });
+  const alamat = (d.alamat ?? KOP_DOKUMEN.alamat).filter((a) => a.trim());
+  // Baris alamat dicetak apa adanya, satu baris satu baris (BU-52: tanpa kurung).
+  for (const a of alamat) b.push({ jenis: "teks", teks: a });
+  for (const t of (d.telepon ?? KOP_DOKUMEN.telepon).filter((x) => x.trim())) b.push({ jenis: "teks", teks: t });
   b.push({ jenis: "garis" });
 
   b.push({ jenis: "kiriKanan", kiri: "NO:", kanan: d.nomor });
@@ -107,13 +136,16 @@ export function susunDokumen(d: DataDokumen): BarisDokumen[] {
 
   b.push({ jenis: "judul", teks: labelJudul(jenis) });
 
-  b.push({ jenis: "kiriKanan", kiri: "Model / Jenis", kanan: d.model });
   if (d.ukuran && d.ukuran.trim()) b.push({ jenis: "kiriKanan", kiri: "Ukuran", kanan: d.ukuran.trim() });
   if (d.perkiraanSelesai && d.perkiraanSelesai.trim())
     b.push({ jenis: "kiriKanan", kiri: "Perkiraan Selesai", kanan: d.perkiraanSelesai.trim() });
-  b.push({ jenis: "garis" });
+  if (d.ukuran?.trim() || d.perkiraanSelesai?.trim()) b.push({ jenis: "garis" });
 
-  b.push({ jenis: "kiriKanan", kiri: "Biaya Jasa", kanan: formatRupiahResi(d.biayaJasa) });
+  // Item pesanan (BU-55): satu baris per item, jumlah hanya bila > 1.
+  for (const item of d.items) {
+    const nama = item.kuantitas > 1 ? `${item.nama} ×${item.kuantitas}` : item.nama;
+    b.push({ jenis: "kiriKanan", kiri: nama, kanan: formatRupiahResi(item.harga * item.kuantitas) });
+  }
   for (const lain of d.biayaLain) {
     if (lain.nominal <= 0) continue;
     b.push({ jenis: "kiriKanan", kiri: lain.nama.trim() || "Biaya lain", kanan: formatRupiahResi(lain.nominal) });
@@ -124,12 +156,20 @@ export function susunDokumen(d: DataDokumen): BarisDokumen[] {
   if (jenis === "invoice") b.push({ jenis: "kiriKanan", kiri: "SISA", kanan: formatRupiahResi(sisa), tebal: true });
 
   b.push({ jenis: "garis" });
-  b.push({ jenis: "teks", teks: `REK ${REKENING_BAWAAN.namaBank} ${REKENING_BAWAAN.nomor}` });
-  b.push({ jenis: "teks", teks: `a.n. ${REKENING_BAWAAN.namaPemilik}` });
+  // Rekening (BU-16, BU-53): semua rekening yang diisi, utama tidak dibedakan
+  // di sini (urutan dari Pengaturan: utama paling atas).
+  const rekening = (d.rekening ?? [REKENING_BAWAAN]).filter((r) => r.namaBank.trim() && r.nomor.trim());
+  for (const r of rekening) {
+    b.push({ jenis: "teks", teks: `REK ${r.namaBank} ${r.nomor}` });
+    if (r.namaPemilik.trim()) b.push({ jenis: "teks", teks: `a.n. ${r.namaPemilik}` });
+  }
 
   b.push({ jenis: "garis" });
   b.push({ jenis: "teks", teks: TEKS_PERHATIAN, tebal: true });
+  // Penutup lengkap (BU-54): Hormat Kami + nama + kalimat terima kasih.
   b.push({ jenis: "teks", teks: "Hormat Kami," });
+  b.push({ jenis: "teks", teks: "KAYESA", tebal: true });
+  b.push({ jenis: "teks", teks: d.teksPenutup?.trim() || TEKS_PENUTUP_BAWAAN });
 
   return b;
 }
@@ -164,9 +204,18 @@ const FONT_BESAR = 22;
 const FONT_SEDANG = 15;
 const FONT_KECIL = 13;
 
+/** Tinggi logo di PNG (px), diskalakan ke maks 72 seperti di PDF (BU-54). */
+export function tinggiLogoPng(logo: ImageBitmap | null | undefined): number {
+  if (!logo) return 0;
+  const skala = Math.min(72 / logo.width, 72 / logo.height);
+  return logo.height * skala + 10;
+}
+
 export async function renderPng(d: DataDokumen, opsi: { logo?: ImageBitmap | null } = {}): Promise<Blob> {
   const baris = susunDokumen(d);
-  const tinggi = hitungTinggiPng(baris);
+  // Tinggi kanvas HARUS menghitung logo (BU-54): tanpanya bagian bawah
+  // dokumen terpotong (pernah terjadi 19 Nov 2026 setelah logo masuk).
+  const tinggi = hitungTinggiPng(baris, tinggiLogoPng(opsi.logo));
 
   const canvas = document.createElement("canvas");
   canvas.width = LEBAR_PNG;
@@ -234,8 +283,9 @@ export async function renderPng(d: DataDokumen, opsi: { logo?: ImageBitmap | nul
   return blob;
 }
 
-function hitungTinggiPng(baris: readonly BarisDokumen[]): number {
-  let tinggi = PAD * 2;
+/** Tinggi total kanvas PNG (diekspos untuk tes BU-54). */
+export function hitungTinggiPng(baris: readonly BarisDokumen[], tinggiLogo = 0): number {
+  let tinggi = PAD * 2 + tinggiLogo;
   for (const r of baris) {
     switch (r.jenis) {
       case "judul":
@@ -429,10 +479,9 @@ export function dataContohDokumen(sekarang: Date = new Date()): DataDokumen {
     nomor: nomorPlaceholder(sekarang),
     tanggal: sekarang,
     namaPemesan: "Ibu Sari",
-    model: "Gaun Pesta",
+    items: [{ nama: "Gaun Pesta", kuantitas: 1, harga: 300000 }],
     ukuran: "M",
     perkiraanSelesai: formatTanggal(new Date(sekarang.getTime() + 7 * 24 * 60 * 60 * 1000)),
-    biayaJasa: 300000,
     biayaLain: [{ nama: "Bahan payet", nominal: 50000 }],
     total,
     terbayar,

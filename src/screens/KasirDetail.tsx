@@ -39,14 +39,32 @@ export default function KasirDetail({ id, onKembali }: Props) {
   const [alasan, setAlasan] = useState("");
 
   const muat = useCallback(async () => {
-    const [p, s] = await Promise.all([ambilPesananJahit(id), ambilSettings()]);
-    setData(p ?? null);
-    setSettings(s);
+    try {
+      const [p, s] = await Promise.all([ambilPesananJahit(id), ambilSettings()]);
+      setData(p ?? null);
+      setSettings(s);
+    } catch {
+      setGalat("Data pesanan tidak dapat dimuat.");
+    }
   }, [id]);
 
   useEffect(() => {
-    void muat().catch(() => setGalat("Data pesanan tidak dapat dimuat."));
-  }, [muat]);
+    // Pola sama seperti DetailPesananJahit: setState hanya di dalam
+    // callback promise (bukan langsung di badan effect).
+    let hidup = true;
+    Promise.all([ambilPesananJahit(id), ambilSettings()])
+      .then(([p, s]) => {
+        if (!hidup) return;
+        setData(p ?? null);
+        setSettings(s);
+      })
+      .catch(() => {
+        if (hidup) setGalat("Data pesanan tidak dapat dimuat.");
+      });
+    return () => {
+      hidup = false;
+    };
+  }, [id]);
 
   if (galat && !data) {
     return (
@@ -71,13 +89,10 @@ export default function KasirDetail({ id, onKembali }: Props) {
   const nominalAngka = parseRupiah(nominalTeks);
   const pratinjau =
     nominalAngka.ok && nominalAngka.value > 0
-      ? terimaPembayaran(t.total, data.terbayar, nominalAngka.value, metode)
+      ? terimaPembayaran(t.total, data.terbayar, nominalAngka.value)
       : null;
   const nominalSah = nominalAngka.ok && nominalAngka.value > 0 && data.status === "terbuka";
 
-  const biayaLainTotal = data.biayaLain.reduce((n, b) => n + b.nominal, 0);
-  const biayaJasa = Math.max(0, t.total - biayaLainTotal);
-  const model = modelDariCatatan(t.catatanPesanan);
   const ukuran = ukuranDariCatatan(t.catatanPesanan);
 
   async function simpanPembayaran() {
@@ -101,13 +116,20 @@ export default function KasirDetail({ id, onKembali }: Props) {
       nomor: t.nomorResi,
       tanggal: t.waktu,
       namaPemesan: t.namaPemesan ?? "(tanpa nama)",
-      model,
+      items: penuh.items.map((i) => ({ nama: i.nama, kuantitas: i.kuantitas, harga: i.harga })),
       ukuran,
       perkiraanSelesai: t.perkiraanSiap,
-      biayaJasa,
       biayaLain: penuh.biayaLain,
       total: t.total,
       terbayar: penuh.terbayar,
+      ...(settings
+        ? {
+            alamat: [settings.alamatBaris1, settings.alamatBaris2, settings.kotaKodePos],
+            telepon: [settings.telepon1, settings.telepon2],
+            rekening: settings.rekening,
+            teksPenutup: settings.teksPenutup,
+          }
+        : {}),
     };
   }
 
@@ -183,10 +205,15 @@ export default function KasirDetail({ id, onKembali }: Props) {
         </div>
 
         <div className="card">
-          <div className="ringkas">
-            <span className="soft">Model / Jenis</span>
-            <strong>{model}</strong>
-          </div>
+          {penuh.items.map((it, i) => (
+            <div className="ringkas" key={i} style={i > 0 ? { marginTop: "0.25rem" } : undefined}>
+              <span className="soft">
+                {it.nama}
+                {it.kuantitas > 1 ? ` ×${it.kuantitas}` : ""}
+              </span>
+              <span>{formatRupiah(it.harga * it.kuantitas)}</span>
+            </div>
+          ))}
           {ukuran && (
             <div className="ringkas" style={{ marginTop: "0.25rem" }}>
               <span className="soft">Ukuran</span>
@@ -313,10 +340,6 @@ export default function KasirDetail({ id, onKembali }: Props) {
       </div>
     </>
   );
-}
-
-function modelDariCatatan(catatan: string | null): string {
-  return catatan?.split(" · ")[0]?.trim() || "Jasa jahit";
 }
 
 function ukuranDariCatatan(catatan: string | null): string | null {

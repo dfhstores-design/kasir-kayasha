@@ -7,6 +7,7 @@ import {
   type BiayaLainInput,
   type RencanaJahitan,
 } from "../lib/jahitan.ts";
+import { bacaModeInput, KUNCI_MODE_INPUT, type ModeInput } from "../lib/modeInput.ts";
 
 interface Props {
   sibuk: boolean;
@@ -20,47 +21,95 @@ type Langkah = 1 | 2 | 3 | 4;
 type BiayaLainTerenun = BiayaLainInput & { tersimpan: boolean };
 
 /**
- * Wizard input pesanan jahit (BU-22.A): langkah berurutan, satu pertanyaan per layar,
- * teks besar dan tombol besar agar Tante (>62 th) cukup melihat & mengetuk.
+ * Input pesanan jahit (BU-22): dua mode yang bisa diganti-ganti, isian dipakai
+ * bersama — teks besar dan tombol besar agar Tante (>62 th) cukup melihat
+ * & mengetuk.
  *
- * Langkah:
+ * Mode wizard (BU-22.A): langkah berurutan, satu pertanyaan per layar.
  *   1. nama pemesan + kontak
- *   2. model/jenis + ukuran + perkiraan selesai
- *   3. biaya jasa + biaya lain (BU-15; nama yang pernah dipakai ditawarkan kembali)
+ *   2. item jahitan (BU-55: bisa banyak — nama + harga + jumlah) + ukuran + perkiraan selesai
+ *   3. biaya lain (BU-15; nama yang pernah dipakai ditawarkan kembali)
  *   4. ringkas & simpan
+ * Mode satu layar: keempat bagian di atas tampil sekaligus di satu layar
+ * yang bisa digulir, dengan satu tombol Simpan Pesanan.
  */
+
+interface ItemTerenun {
+  nama: string;
+  hargaTeks: string;
+  kuantitas: number;
+}
 export default function WizardPesananJahit({ sibuk, pesanGalat, onSimpan, onBatal }: Props) {
   const [langkah, setLangkah] = useState<Langkah>(1);
   const [galat, setGalat] = useState<string | null>(null);
 
+  // Mode input (BU-22): wizard atau satu layar. Mode awal dari param URL
+  // (?mode=wizard / ?mode=satu-layar, untuk link pembanding), lalu pilihan
+  // terakhir yang tersimpan, bawaan wizard. Ganti mode tidak menghapus
+  // isian — semua state form dipakai bersama kedua mode.
+  const [mode, setMode] = useState<ModeInput>(() => {
+    let tersimpan: string | null = null;
+    try {
+      tersimpan = localStorage.getItem(KUNCI_MODE_INPUT);
+    } catch {
+      // localStorage tidak tersedia: pakai bawaan.
+    }
+    return bacaModeInput(window.location.search, tersimpan);
+  });
+
+  function gantiMode(m: ModeInput) {
+    setMode(m);
+    try {
+      localStorage.setItem(KUNCI_MODE_INPUT, m);
+    } catch {
+      // localStorage tidak tersedia: mode tetap jalan untuk sesi ini.
+    }
+  }
+
+  /** Bagian yang tampil: satu langkah di mode wizard, semuanya di mode satu layar. */
+  function tampil(n: Langkah): boolean {
+    return mode === "satu-layar" || langkah === n;
+  }
+
   const [nama, setNama] = useState("");
   const [kontak, setKontak] = useState("");
-  const [model, setModel] = useState("");
+  const [items, setItems] = useState<ItemTerenun[]>([{ nama: "", hargaTeks: "", kuantitas: 1 }]);
   const [ukuran, setUkuran] = useState("");
   const [perkiraan, setPerkiraan] = useState("");
-  const [biayaJasaTeks, setBiayaJasaTeks] = useState("");
   const [catatan, setCatatan] = useState("");
   const [biayaLain, setBiayaLain] = useState<BiayaLainTerenun[]>([]);
 
-  const biayaJasaAngka = parseRupiah(biayaJasaTeks);
+  const itemsAngka = items.map((i) => {
+    const p = parseRupiah(i.hargaTeks);
+    return { nama: i.nama.trim(), harga: p.ok ? p.value : 0, kuantitas: i.kuantitas };
+  });
+  const itemsValid = itemsAngka.filter((i) => i.nama.length >= 2 && i.harga > 0);
+  const subtotalItems = itemsValid.reduce((n, i) => n + i.harga * (i.kuantitas >= 1 ? i.kuantitas : 1), 0);
 
   const tersimpan = useMemo(() => bacaBiayaLainTersimpan(), []);
 
   const rencana: RencanaJahitan = {
     namaPemesan: nama.trim(),
     kontak: kontak.trim() || null,
-    model: model.trim(),
+    items: itemsValid.map((i) => ({ nama: i.nama, harga: i.harga, kuantitas: i.kuantitas >= 1 ? i.kuantitas : 1 })),
     ukuran: ukuran.trim() || null,
     perkiraanSelesai: perkiraan || null,
     catatan: catatan.trim() || null,
-    biayaJasa: biayaJasaAngka.ok ? biayaJasaAngka.value : 0,
     biayaLain: biayaLain
       .filter((b) => b.nama.trim().length > 0)
       .map((b) => ({ nama: b.nama.trim(), nominal: b.nominal })),
   };
 
   const totalBiayaLain = biayaLain.reduce((n, b) => n + (b.nama.trim() ? b.nominal : 0), 0);
-  const totalKeseluruhan = (biayaJasaAngka.ok ? biayaJasaAngka.value : 0) + totalBiayaLain;
+  const totalKeseluruhan = subtotalItems + totalBiayaLain;
+
+  function ubahItem(index: number, patch: Partial<ItemTerenun>) {
+    setItems((d) => d.map((it, i) => (i === index ? { ...it, ...patch } : it)));
+  }
+
+  function hapusItem(index: number) {
+    setItems((d) => (d.length > 1 ? d.filter((_, i) => i !== index) : d));
+  }
 
   function lanjut() {
     setGalat(null);
@@ -68,12 +117,8 @@ export default function WizardPesananJahit({ sibuk, pesanGalat, onSimpan, onBata
       setGalat("Isi nama pemesan dulu, Tante.");
       return;
     }
-    if (langkah === 2 && model.trim().length < 2) {
-      setGalat("Isi model atau jenis jahitan.");
-      return;
-    }
-    if (langkah === 3 && (!biayaJasaAngka.ok || biayaJasaAngka.value <= 0)) {
-      setGalat("Isi biaya jasa (angka lebih dari 0).");
+    if (langkah === 2 && itemsValid.length < 1) {
+      setGalat("Isi minimal satu item: nama + harga.");
       return;
     }
     setLangkah((l) => (l + 1) as Langkah);
@@ -111,11 +156,22 @@ export default function WizardPesananJahit({ sibuk, pesanGalat, onSimpan, onBata
 
   return (
     <>
-      <div className="content">
-        {/* Langkah berapa dari 4 */}
+      <div
+        className="content"
+        style={mode === "satu-layar" ? { display: "flex", flexDirection: "column", gap: "1.5rem" } : undefined}
+      >
+        {/* Mode input + tombol ganti mode (BU-22) */}
         <div className="status" role="status">
           <span className="dot" aria-hidden="true" />
-          <span>Langkah {langkah} dari 4</span>
+          <span>{mode === "wizard" ? `Langkah ${langkah} dari 4` : "Satu layar — semua isian"}</span>
+          <button
+            type="button"
+            className="btn btn--ghost btn--small"
+            style={{ marginLeft: "auto" }}
+            onClick={() => gantiMode(mode === "wizard" ? "satu-layar" : "wizard")}
+          >
+            {mode === "wizard" ? "Ubah ke 1 layar" : "Ubah ke langkah"}
+          </button>
         </div>
 
         {(galat || pesanGalat) && (
@@ -124,7 +180,7 @@ export default function WizardPesananJahit({ sibuk, pesanGalat, onSimpan, onBata
           </div>
         )}
 
-        {langkah === 1 && (
+        {tampil(1) && (
           <div>
             <p className="h1">Siapa yang memesan?</p>
             <p className="soft">Tulis nama dan nomor WhatsApp pelanggan (boleh kosong).</p>
@@ -152,20 +208,79 @@ export default function WizardPesananJahit({ sibuk, pesanGalat, onSimpan, onBata
           </div>
         )}
 
-        {langkah === 2 && (
+        {tampil(2) && (
           <div>
             <p className="h1">Jahit apa?</p>
-            <p className="soft">Model atau jenis, ukuran, dan perkiraan selesai.</p>
-            <div style={{ marginTop: "0.75rem" }}>
-              <label htmlFor="jht-model">Model / jenis</label>
-              <input
-                id="jht-model"
-                value={model}
-                onChange={(e) => setModel(e.target.value)}
-                placeholder="Contoh: Gaun pesta"
-                autoComplete="off"
-              />
-            </div>
+            <p className="soft">Satu pesanan boleh berisi banyak item — tulis nama & harga tiap item.</p>
+
+            {items.map((it, i) => {
+              const p = parseRupiah(it.hargaTeks);
+              return (
+                <div key={i} className="card" style={{ marginTop: "0.75rem" }}>
+                  <div>
+                    <label htmlFor={`jht-item-${i}`}>Nama item {items.length > 1 ? i + 1 : ""}</label>
+                    <input
+                      id={`jht-item-${i}`}
+                      value={it.nama}
+                      onChange={(e) => ubahItem(i, { nama: e.target.value })}
+                      placeholder="Contoh: Gaun pesta"
+                      autoComplete="off"
+                    />
+                  </div>
+                  <div style={{ marginTop: "0.5rem", display: "flex", gap: "0.5rem", alignItems: "flex-end" }}>
+                    <div style={{ flex: 2 }}>
+                      <label htmlFor={`jht-harga-${i}`}>Harga</label>
+                      <input
+                        id={`jht-harga-${i}`}
+                        inputMode="numeric"
+                        placeholder="Rp 0"
+                        value={it.hargaTeks}
+                        onChange={(e) => ubahItem(i, { hargaTeks: dalamRupiah(e.target.value) })}
+                      />
+                    </div>
+                    <div style={{ flex: 1 }}>
+                      <label htmlFor={`jht-jumlah-${i}`}>Jumlah</label>
+                      <input
+                        id={`jht-jumlah-${i}`}
+                        inputMode="numeric"
+                        value={it.kuantitas}
+                        onChange={(e) => {
+                          const n = parseInt(e.target.value.replace(/[^0-9]/g, ""), 10);
+                          ubahItem(i, { kuantitas: Number.isFinite(n) && n >= 1 ? n : 1 });
+                        }}
+                      />
+                    </div>
+                    {items.length > 1 && (
+                      <button
+                        type="button"
+                        className="btn btn--ghost btn--small"
+                        style={{ minHeight: "3rem", padding: "0 0.75rem" }}
+                        onClick={() => hapusItem(i)}
+                        aria-label="Hapus item ini"
+                      >
+                        ✕
+                      </button>
+                    )}
+                  </div>
+                  {p.ok && p.value > 0 && (
+                    <p className="hint" role="status">
+                      {formatRupiah(p.value)}
+                      {it.kuantitas > 1 ? ` × ${it.kuantitas} = ${formatRupiah(p.value * it.kuantitas)}` : ""}
+                    </p>
+                  )}
+                </div>
+              );
+            })}
+
+            <button
+              type="button"
+              className="btn btn--ghost btn--small"
+              style={{ width: "100%", marginTop: "0.75rem" }}
+              onClick={() => setItems((d) => [...d, { nama: "", hargaTeks: "", kuantitas: 1 }])}
+            >
+              + Tambah item
+            </button>
+
             <div style={{ marginTop: "0.75rem" }}>
               <label htmlFor="jht-ukuran">Ukuran (opsional)</label>
               <input
@@ -188,25 +303,10 @@ export default function WizardPesananJahit({ sibuk, pesanGalat, onSimpan, onBata
           </div>
         )}
 
-        {langkah === 3 && (
+        {tampil(3) && (
           <div>
-            <p className="h1">Berapa biayanya?</p>
-            <p className="soft">Biaya jasa wajib. Biaya lain boleh ditambah.</p>
-            <div style={{ marginTop: "0.75rem" }}>
-              <label htmlFor="jht-jasa">Biaya jasa</label>
-              <input
-                id="jht-jasa"
-                inputMode="numeric"
-                placeholder="Rp 0"
-                value={biayaJasaTeks}
-                onChange={(e) => setBiayaJasaTeks(dalamRupiah(e.target.value))}
-              />
-              {biayaJasaAngka.ok && (
-                <p className="hint" role="status">
-                  {formatRupiah(biayaJasaAngka.value)}
-                </p>
-              )}
-            </div>
+            <p className="h1">Ada biaya lain?</p>
+            <p className="soft">Biaya lain boleh ditambah. Subtotal item: {formatRupiah(subtotalItems)}.</p>
 
             <div className="card" style={{ marginTop: "0.75rem" }}>
               <span className="label" style={{ display: "block", marginBottom: "0.5rem" }}>
@@ -272,7 +372,7 @@ export default function WizardPesananJahit({ sibuk, pesanGalat, onSimpan, onBata
           </div>
         )}
 
-        {langkah === 4 && (
+        {tampil(4) && (
           <div>
             <p className="h1">Periksa lagi</p>
             <p className="soft">Yang akan disimpan:</p>
@@ -288,9 +388,20 @@ export default function WizardPesananJahit({ sibuk, pesanGalat, onSimpan, onBata
                 </div>
               )}
               <div className="ringkas" style={{ marginTop: "0.25rem" }}>
-                <span className="soft">Model</span>
-                <span>{model}</span>
+                <span className="soft">Item</span>
+                <span>
+                  {itemsValid.length} item — {formatRupiah(subtotalItems)}
+                </span>
               </div>
+              {itemsValid.map((it, i) => (
+                <div className="ringkas" key={i} style={{ marginTop: "0.25rem" }}>
+                  <span className="soft">
+                    {it.nama}
+                    {it.kuantitas > 1 ? ` ×${it.kuantitas}` : ""}
+                  </span>
+                  <span>{formatRupiah(it.harga * it.kuantitas)}</span>
+                </div>
+              ))}
               {ukuran && (
                 <div className="ringkas" style={{ marginTop: "0.25rem" }}>
                   <span className="soft">Ukuran</span>
@@ -304,10 +415,6 @@ export default function WizardPesananJahit({ sibuk, pesanGalat, onSimpan, onBata
                 </div>
               )}
               <div className="hr" style={{ height: 1, background: "var(--line)", margin: "0.5rem 0" }} />
-              <div className="ringkas">
-                <span className="soft">Biaya jasa</span>
-                <span>{formatRupiah(biayaJasaAngka.ok ? biayaJasaAngka.value : 0)}</span>
-              </div>
               {biayaLain.filter((b) => b.nama.trim()).map((b, i) => (
                 <div className="ringkas" key={i} style={{ marginTop: "0.25rem" }}>
                   <span className="soft">{b.nama}</span>
@@ -337,7 +444,11 @@ export default function WizardPesananJahit({ sibuk, pesanGalat, onSimpan, onBata
       </div>
 
       <div className="bottombar">
-        {langkah < 4 ? (
+        {mode === "satu-layar" ? (
+          <button type="button" className="btn btn--primary" onClick={simpan} disabled={sibuk}>
+            {sibuk ? "Menyimpan…" : "Simpan Pesanan"}
+          </button>
+        ) : langkah < 4 ? (
           <button type="button" className="btn btn--primary" onClick={lanjut}>
             Lanjut
           </button>
@@ -348,7 +459,11 @@ export default function WizardPesananJahit({ sibuk, pesanGalat, onSimpan, onBata
         )}
 
         <div className="grid2">
-          {langkah > 1 ? (
+          {mode === "satu-layar" ? (
+            <button type="button" className="btn btn--ghost btn--small" onClick={onBatal}>
+              Batal
+            </button>
+          ) : langkah > 1 ? (
             <button type="button" className="btn btn--ghost btn--small" onClick={mundur}>
               Kembali
             </button>

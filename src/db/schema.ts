@@ -63,7 +63,7 @@ export interface Rekening {
   namaBank: string;
   nomor: string;
   namaPemilik: string;
-  /** Hanya satu yang utama; itulah yang dicetak di resi. */
+  /** Hanya satu yang utama; dicetak paling atas di resi (BU-53: semua dicetak). */
   utama: boolean;
 }
 
@@ -186,6 +186,9 @@ export interface TransaksiRecord {
   id: UUID;
   nomorResi: string;
   nomorUrutHari: number;
+  /** Nomor urut pesanan jahit dalam bulan yang sama (BU-19/21, 19 Nov 2026);
+   *  hanya diisi untuk jenisDokumen "jasa". */
+  nomorUrutBulan?: number;
   waktu: string;
   /** LAMA (deprecated): "langsung" (barang siap jual) atau "po" (pre-order).
    *  Dipertahankan agar data lama tidak rusak (risiko B-1); jangan dibaca untuk

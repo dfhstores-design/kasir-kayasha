@@ -150,18 +150,11 @@ export function susunResi(d: DataResi): BarisResi[] {
   if (d.subjudulButik?.trim()) {
     b.push({ jenis: "subjudul", teks: d.subjudulButik.trim().toUpperCase() });
   }
-  // Alamat: baris 1 + baris 2 (patokan) digabung satu baris seperti contoh,
-  // lalu kota + kode pos di baris berikutnya.
+  // Alamat: tiap baris dicetak apa adanya, satu baris satu baris (BU-52:
+  // tanpa kurung — sebelumnya baris 2 ditempel dalam kurung di baris 1).
   const alamat = d.alamat.filter((x) => x.trim());
-  if (alamat.length >= 2) {
-    b.push({ jenis: "teks", teks: `${alamat[0]} (${alamat[1]})`, kecil: true });
-    for (const a of alamat.slice(2)) {
-      b.push({ jenis: "teks", teks: a, kecil: true });
-    }
-  } else {
-    for (const a of alamat) {
-      b.push({ jenis: "teks", teks: a, kecil: true });
-    }
+  for (const a of alamat) {
+    b.push({ jenis: "teks", teks: a, kecil: true });
   }
   const telepon = d.telepon.filter((x) => x.trim());
   if (telepon.length > 0) {
@@ -332,17 +325,20 @@ export function susunResi(d: DataResi): BarisResi[] {
   }
 
   // --- Kotak rekening: SELALU tampil (contoh resi lunas pun menampilkannya) ---
+  // BU-53: SEMUA rekening yang diisi dicetak (sebelumnya hanya yang utama);
+  // rekening utama paling atas.
   if (rekening.length > 0) {
-    const utama = bankUtama;
-    if (utama) {
-      const isi = [`${utama.namaBank} · ${utama.nomor}`];
-      if (utama.namaPemilik.trim()) isi.push(`a.n. ${utama.namaPemilik}`);
-      b.push({
-        jenis: "kotak",
-        judul: invoice ? "PEMBAYARAN MELALUI" : `REKENING ${nama}`,
-        isi,
-      });
+    const urut = [...rekening].sort((a, b) => Number(b.utama) - Number(a.utama));
+    const isi: string[] = [];
+    for (const r of urut) {
+      isi.push(`${r.namaBank} · ${r.nomor}`);
+      if (r.namaPemilik.trim()) isi.push(`a.n. ${r.namaPemilik}`);
     }
+    b.push({
+      jenis: "kotak",
+      judul: invoice ? "PEMBAYARAN MELALUI" : `REKENING ${nama}`,
+      isi,
+    });
   }
 
   // --- Kotak peringatan ---

@@ -48,7 +48,7 @@ export async function terimaPembayaranKasir(
   const terbayarSebelumnya = lengkap.pembayaran.reduce((n, p) => n + p.nominal, 0);
   if (terbayarSebelumnya >= t.total) return { ok: false, pesan: "Pesanan sudah lunas." };
 
-  const hasil = terimaPembayaran(t.total, terbayarSebelumnya, nominal, metode);
+  const hasil = terimaPembayaran(t.total, terbayarSebelumnya, nominal);
   if (!hasil.ok) return { ok: false, pesan: hasil.pesan };
 
   const waktu = new Date().toISOString();

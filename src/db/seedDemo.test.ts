@@ -1,12 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { IDBFactory } from "fake-indexeddb";
-import { ambilLogoDemo, jalankanSeedDemo, LOGO_DEMO_URL } from "./seedDemo.ts";
+import { ambilLogoDemo, jalankanSeedDemo, migrasiAlamatLama, LOGO_DEMO_URL } from "./seedDemo.ts";
 import {
   ambilSettings,
   bazarAktif,
   daftarProduk,
   daftarTransaksi,
   simpanProduk,
+  simpanSettings,
 } from "./repositori.ts";
 import { daftarPesananJahit } from "../lib/jahitan.ts";
 import { resetKoneksiDB, type ProdukRecord } from "./schema.ts";
@@ -59,8 +60,8 @@ describe("seed demo KAYESA", () => {
     const s = await ambilSettings();
     expect(s.namaButik).toBe("KAYESA");
     expect(s.alamatBaris1).toBe("Jl. Tarumanegara No. 41");
-    expect(s.alamatBaris2).toBe("Sebelah Pempak Nyai");
-    expect(s.kotaKodePos).toBe("Ploso Ciptum 15419");
+    expect(s.alamatBaris2).toBe("Pisangan, Ciputat Timur - 15419");
+    expect(s.kotaKodePos).toBe("");
     expect(s.telepon1).toBe("0812 1141 4017");
     expect(s.telepon2).toBe("0821 1376 5892");
     expect(s.teksPenutup).toBe("Terima kasih, sampai jumpa!");
@@ -114,7 +115,7 @@ describe("seed demo KAYESA", () => {
     expect(pesananJahit).toHaveLength(2);
     const sari = pesananJahit.find((p) => p.namaPemesan === "CONTOH – Sari");
     const dewi = pesananJahit.find((p) => p.namaPemesan === "CONTOH – Dewi");
-    // Sari: Kebaya brokat 850.000 + Payet 125.000 = 975.000, DP 300.000.
+    // Sari: Kebaya brokat 600.000 + Kain brokat 250.000 + Payet 125.000 = 975.000, DP 300.000.
     expect(sari?.model).toBe("Kebaya brokat");
     expect(sari?.total).toBe(975000);
     expect(sari?.terbayar).toBe(300000);
@@ -128,10 +129,10 @@ describe("seed demo KAYESA", () => {
     expect(dewi?.sisa).toBe(0);
     expect(dewi?.status).toBe("lunas");
     expect(dewi?.perkiraanSelesai).toBe("2026-11-18");
-    // Kode dokumen unik per urutan pesanan hari itu (usulan Andri 18 Nov 2026:
-    // KC.[001-0xx]-yyyymmdd) — tidak lagi kembar KC.1-20261117.
-    expect(sari?.nomor).toBe("KC.001-20261117");
-    expect(dewi?.nomor).toBe("KC.002-20261117");
+    // Kode dokumen unik per urutan pesanan dalam bulan itu (BU-19/21, 19 Nov 2026:
+    // KC.[00001-99999]-yyyymmdd) — tidak lagi kembar KC.1-20261117.
+    expect(sari?.nomor).toBe("KC.00001-20261117");
+    expect(dewi?.nomor).toBe("KC.00002-20261117");
   });
 
   it("tidak mengubah apa pun bila dijalankan dua kali", async () => {
@@ -158,5 +159,22 @@ describe("seed demo KAYESA", () => {
     expect(await jalankanSeedDemo()).toBe(false);
     expect((await ambilSettings()).namaButik).toBe("");
     expect((await daftarProduk()).map((x) => x.nama)).toEqual(["Barang Asli"]);
+  });
+
+  it("migrasiAlamatLama mengganti alamat lama saja, sekali jalan (BU-51)", async () => {
+    const lama = await ambilSettings();
+    await simpanSettings({
+      ...lama,
+      alamatBaris1: "Jl. Tarumanegara No. 41",
+      alamatBaris2: "Sebelah Pempak Nyai",
+      kotaKodePos: "Ploso Ciptum 15419",
+    });
+    expect(await migrasiAlamatLama()).toBe(true);
+    const baru = await ambilSettings();
+    expect(baru.alamatBaris2).toBe("Pisangan, Ciputat Timur - 15419");
+    expect(baru.kotaKodePos).toBe("");
+    expect(baru.alamatBaris1).toBe("Jl. Tarumanegara No. 41");
+    // Kedua kali tidak mengubah apa pun.
+    expect(await migrasiAlamatLama()).toBe(false);
   });
 });

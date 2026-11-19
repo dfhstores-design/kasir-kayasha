@@ -64,19 +64,26 @@ export default function DetailPesananJahit({ id, onKembali, segarkan, onTerimaPe
   }
 
   const t = data.transaksi;
-  const biayaLainTotal = data.biayaLain.reduce((n, b) => n + b.nominal, 0);
-  const biayaJasa = t.subtotalAwal - biayaLainTotal;
   const dokumen: DataDokumen = {
     nomor: t.nomorResi,
     tanggal: t.waktu,
     namaPemesan: t.namaPemesan ?? "(tanpa nama)",
-    model: modelDariCatatan(t.catatanPesanan),
+    items: data.items.map((i) => ({ nama: i.nama, kuantitas: i.kuantitas, harga: i.harga })),
     ukuran: ukuranDariCatatan(t.catatanPesanan),
     perkiraanSelesai: t.perkiraanSiap,
-    biayaJasa,
     biayaLain: data.biayaLain,
     total: t.total,
     terbayar: data.terbayar,
+    // Kop + rekening + penutup dari Pengaturan (BU-51/52/53/54); bila
+    // Pengaturan belum termuat, dokumen memakai bawaan (KOP_DOKUMEN).
+    ...(settings
+      ? {
+          alamat: [settings.alamatBaris1, settings.alamatBaris2, settings.kotaKodePos],
+          telepon: [settings.telepon1, settings.telepon2],
+          rekening: settings.rekening,
+          teksPenutup: settings.teksPenutup,
+        }
+      : {}),
   };
   const jenisJudul = data.sisa > 0 ? "invoice" : "resi";
 
@@ -118,10 +125,15 @@ export default function DetailPesananJahit({ id, onKembali, segarkan, onTerimaPe
         </div>
 
         <div className="card">
-          <div className="ringkas">
-            <span className="soft">Model / Jenis</span>
-            <strong>{dokumen.model}</strong>
-          </div>
+          {dokumen.items.map((it, i) => (
+            <div className="ringkas" key={i} style={i > 0 ? { marginTop: "0.25rem" } : undefined}>
+              <span className="soft">
+                {it.nama}
+                {it.kuantitas > 1 ? ` ×${it.kuantitas}` : ""}
+              </span>
+              <span>{formatRupiah(it.harga * it.kuantitas)}</span>
+            </div>
+          ))}
           {dokumen.ukuran && (
             <div className="ringkas" style={{ marginTop: "0.25rem" }}>
               <span className="soft">Ukuran</span>
@@ -141,10 +153,6 @@ export default function DetailPesananJahit({ id, onKembali, segarkan, onTerimaPe
         </div>
 
         <div className="card">
-          <div className="ringkas">
-            <span className="soft">Biaya jasa</span>
-            <span>{formatRupiah(biayaJasa)}</span>
-          </div>
           {data.biayaLain.map((b, i) => (
             <div className="ringkas" key={i} style={{ marginTop: "0.25rem" }}>
               <span className="soft">{b.nama}</span>
@@ -193,10 +201,6 @@ async function buatImageBitmap(blob: Blob | null): Promise<ImageBitmap | null> {
   } catch {
     return null;
   }
-}
-
-function modelDariCatatan(catatan: string | null): string {
-  return catatan?.split(" · ")[0]?.trim() || "Jasa jahit";
 }
 
 function ukuranDariCatatan(catatan: string | null): string | null {

@@ -465,20 +465,26 @@ function PratinjauDokumenJahit({ transaksiId }: { transaksiId: string }) {
       const s: SettingsRecord | null = await ambilSettings().catch(() => null);
       const logo = s?.logo ? await buatImageBitmap(s.logo) : null;
       const t = lengkap.transaksi;
-      const biayaLainTotal = pesanan.biayaLain.reduce((n, b) => n + b.nominal, 0);
-      // Susunan DataDokumen mengikuti DetailPesananJahit persis: biaya jasa =
-      // subtotal − biaya lain; model = nama item tersimpan; ukuran dari catatan.
+      // Susunan DataDokumen mengikuti DetailPesananJahit persis: item dari
+      // transaction_items (BU-55); kop + rekening + penutup dari Pengaturan.
       const d: DataDokumen = {
         nomor: t.nomorResi,
         tanggal: t.waktu,
         namaPemesan: t.namaPemesan ?? "(tanpa nama)",
-        model: lengkap.item[0]?.namaSnapshot ?? "Jasa jahit",
+        items: pesanan.items.map((i) => ({ nama: i.nama, kuantitas: i.kuantitas, harga: i.harga })),
         ukuran: ukuranDariCatatan(t.catatanPesanan),
         perkiraanSelesai: t.perkiraanSiap,
-        biayaJasa: t.subtotalAwal - biayaLainTotal,
         biayaLain: pesanan.biayaLain,
         total: t.total,
         terbayar: pesanan.terbayar,
+        ...(s
+          ? {
+              alamat: [s.alamatBaris1, s.alamatBaris2, s.kotaKodePos],
+              telepon: [s.telepon1, s.telepon2],
+              rekening: s.rekening,
+              teksPenutup: s.teksPenutup,
+            }
+          : {}),
       };
       const blob = await renderPng(d, { logo });
       if (!hidup) return;

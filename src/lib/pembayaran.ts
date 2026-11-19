@@ -46,7 +46,6 @@ export function terimaPembayaran(
   total: Rupiah,
   terbayarSebelumnya: Rupiah,
   nominalDiterima: Rupiah,
-  _metode: string | null,
 ): HasilTerimaPembayaran {
   if (!Number.isInteger(nominalDiterima) || nominalDiterima <= 0) {
     return { ok: false, pesan: "Nominal harus lebih dari 0." };

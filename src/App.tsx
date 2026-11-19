@@ -44,7 +44,7 @@ import {
 } from "./db/repositori.ts";
 import { mintaPenyimpananPermanen } from "./pwa/register.ts";
 import { terapkanTampilan } from "./lib/tampilan.ts";
-import { jalankanSeedDemo } from "./db/seedDemo.ts";
+import { jalankanSeedDemo, migrasiAlamatLama } from "./db/seedDemo.ts";
 import type { OngkirMode } from "./lib/ongkir.ts";
 import type { StatusBayar } from "./lib/keranjang.ts";
 import { khususAdmin, type Peran } from "./lib/peran.ts";
@@ -52,6 +52,7 @@ import { simpanPenjualan, type JenisBayar, type TransaksiTersimpan } from "./lib
 import { bikinIsiKeranjang, type IsiKeranjang } from "./lib/isiKeranjang.ts";
 import { formatJam } from "./lib/tanggal.ts";
 import { simpanPesananJahit } from "./lib/jahitan.ts";
+import { layarAwalDariUrl } from "./lib/modeInput.ts";
 
 export type Layar =
   | { nama: "beranda" }
@@ -98,7 +99,12 @@ const KERANJANG_AWAL: NilaiKeranjang = {
 };
 
 export default function App() {
-  const [layar, setLayar] = useState<Layar>({ nama: "beranda" });
+  const [layar, setLayar] = useState<Layar>(() => {
+    // Link pembanding (?layar=pesanan-jahit) langsung membuka form input
+    // pesanan jahit; di luar itu mulai dari beranda (BU-22).
+    const awal = layarAwalDariUrl(window.location.search);
+    return awal ? { nama: awal } : { nama: "beranda" };
+  });
   const [settings, setSettings] = useState<SettingsRecord | null>(null);
   const [storagePermanen, setStoragePermanen] = useState<boolean | null>(null);
 
@@ -163,6 +169,7 @@ export default function App() {
     (async () => {
       try {
         await jalankanSeedDemo().catch(() => false);
+        await migrasiAlamatLama().catch(() => false);
         const s = await ambilSettings().catch(() => null);
         const b = await bazarAktif().catch(() => undefined);
         const saldo = b ? await saldoSemuaBazar(b.id).catch(() => new Map<string, number>()) : new Map<string, number>();

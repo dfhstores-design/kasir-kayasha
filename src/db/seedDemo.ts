@@ -43,8 +43,8 @@ export const SETTINGS_DEMO: SettingsRecord = {
   id: "utama",
   namaButik: "KAYESA",
   alamatBaris1: "Jl. Tarumanegara No. 41",
-  alamatBaris2: "Sebelah Pempak Nyai",
-  kotaKodePos: "Ploso Ciptum 15419",
+  alamatBaris2: "Pisangan, Ciputat Timur - 15419",
+  kotaKodePos: "",
   telepon1: "0812 1141 4017",
   telepon2: "0821 1376 5892",
   teksPenutup: "Terima kasih, sampai jumpa!",
@@ -124,11 +124,15 @@ const JAHITAN_DEMO: JahitanDemo[] = [
     rencana: {
       namaPemesan: "CONTOH – Sari",
       kontak: null,
-      model: "Kebaya brokat",
+      // Multi-item (BU-55): jasa 850.000 dipecah jadi 2 baris + Payet 125.000;
+      // total 975.000 & terbayar 300.000 sama seperti sebelumnya.
+      items: [
+        { nama: "Kebaya brokat", harga: 600000, kuantitas: 1 },
+        { nama: "Kain brokat", harga: 250000, kuantitas: 1 },
+      ],
       ukuran: null,
       perkiraanSelesai: "2026-11-19",
       catatan: "DATA CONTOH DEMO",
-      biayaJasa: 850000,
       biayaLain: [{ nama: "Payet", nominal: 125000 }],
     },
     dibayarSekarang: 300000,
@@ -138,11 +142,10 @@ const JAHITAN_DEMO: JahitanDemo[] = [
     rencana: {
       namaPemesan: "CONTOH – Dewi",
       kontak: null,
-      model: "Gaun Pesta",
+      items: [{ nama: "Gaun Pesta", harga: 350000, kuantitas: 1 }],
       ukuran: null,
       perkiraanSelesai: "2026-11-18",
       catatan: "DATA CONTOH DEMO",
-      biayaJasa: 350000,
       biayaLain: [],
     },
     dibayarSekarang: 350000,
@@ -167,6 +170,30 @@ export async function ambilLogoDemo(): Promise<Blob | null> {
     return blob;
   } catch {
     return null;
+  }
+}
+
+/**
+ * Migrasi alamat lama (BU-51, 19 Nov 2026): perangkat yang sudah berisi data
+ * sebelum trial masih menyimpan alamat lama di Pengaturan, dan seed tidak
+ * jalan lagi di perangkat berisi data. Bila nilainya masih persis nilai lama,
+ * ganti ke alamat baru — sekali jalan, idempotent, tidak menyentuh isian lain.
+ */
+export async function migrasiAlamatLama(): Promise<boolean> {
+  try {
+    const s = await ambilSettings();
+    const lamaBaris2 = s.alamatBaris2.trim() === "Sebelah Pempak Nyai";
+    const lamaKota = s.kotaKodePos.trim() === "Ploso Ciptum 15419";
+    if (!lamaBaris2 && !lamaKota) return false;
+    await simpanSettings({
+      ...s,
+      alamatBaris2: lamaBaris2 ? "Pisangan, Ciputat Timur - 15419" : s.alamatBaris2,
+      kotaKodePos: lamaKota ? "" : s.kotaKodePos,
+      updatedAt: new Date().toISOString(),
+    });
+    return true;
+  } catch {
+    return false;
   }
 }
 

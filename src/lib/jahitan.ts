@@ -26,36 +26,50 @@ export interface BiayaLainInput {
   nominal: Rupiah;
 }
 
+/** Satu baris item pesanan jahit (BU-55): nama + harga satuan + jumlah. */
+export interface ItemJahitanInput {
+  nama: string;
+  harga: Rupiah;
+  kuantitas: number;
+}
+
 /** Masukan wizard pesanan jahit (BU-22.A: langkah pemesan → jahitan → biaya → simpan). */
 export interface RencanaJahitan {
   namaPemesan: string;
   kontak: string | null;
-  model: string;
+  /** Daftar item (BU-55); minimal 1 item. */
+  items: readonly ItemJahitanInput[];
   ukuran: string | null;
   perkiraanSelesai: string | null;
   catatan: string | null;
-  biayaJasa: Rupiah;
   biayaLain: readonly BiayaLainInput[];
 }
 
 export type HasilRencanaJahitan =
-  | { ok: true; total: Rupiah; biayaJasa: Rupiah; biayaLainTotal: Rupiah }
+  | { ok: true; total: Rupiah; itemsTotal: Rupiah; biayaLainTotal: Rupiah }
   | { ok: false; pesan: string };
 
 /**
- * Validasi rencana pesanan jahit (BU-14): wajib `namaPemesan`, `model`, `biayaJasa`.
- * `biayaJasa` integer Rupiah > 0. Biaya lain opsional, nominal integer >= 0.
+ * Validasi rencana pesanan jahit (BU-14, BU-55): wajib `namaPemesan` dan
+ * minimal 1 item (nama + harga > 0 + jumlah >= 1). Biaya lain opsional,
+ * nominal integer >= 0.
  */
 export function periksaRencanaJahitan(rencana: RencanaJahitan): HasilRencanaJahitan {
   if (rencana.namaPemesan.trim().length < 2) {
     return { ok: false, pesan: "Isi nama pemesan." };
   }
-  if (rencana.model.trim().length < 2) {
-    return { ok: false, pesan: "Isi model atau jenis jahitan." };
+  const itemsBersih = rencana.items.filter(
+    (i) => i.nama.trim().length >= 2 && Number.isInteger(i.harga) && i.harga > 0,
+  );
+  if (itemsBersih.length < 1) {
+    return { ok: false, pesan: "Isi minimal satu item jahitan (nama + harga)." };
   }
-  if (!Number.isInteger(rencana.biayaJasa) || rencana.biayaJasa <= 0) {
-    return { ok: false, pesan: "Biaya jasa harus lebih dari 0." };
+  for (const i of itemsBersih) {
+    if (!Number.isInteger(i.kuantitas) || i.kuantitas < 1) {
+      return { ok: false, pesan: `Jumlah "${i.nama.trim()}" tidak valid.` };
+    }
   }
+  const itemsTotal = itemsBersih.reduce((n, i) => n + i.harga * i.kuantitas, 0);
 
   let biayaLainTotal = 0;
   for (const b of rencana.biayaLain) {
@@ -65,12 +79,12 @@ export function periksaRencanaJahitan(rencana: RencanaJahitan): HasilRencanaJahi
     biayaLainTotal += b.nominal;
   }
 
-  const total = rencana.biayaJasa + biayaLainTotal;
+  const total = itemsTotal + biayaLainTotal;
   if (!Number.isSafeInteger(total) || total <= 0) {
     return { ok: false, pesan: "Total tidak valid." };
   }
 
-  return { ok: true, total, biayaJasa: rencana.biayaJasa, biayaLainTotal };
+  return { ok: true, total, itemsTotal, biayaLainTotal };
 }
 
 export interface PesananJahitTersimpan {
@@ -78,7 +92,7 @@ export interface PesananJahitTersimpan {
   nomor: string;
   namaPemesan: string;
   total: Rupiah;
-  biayaJasa: Rupiah;
+  items: readonly ItemJahitanInput[];
   biayaLain: readonly BiayaLainInput[];
   pelangganId: UUID;
 }
@@ -107,6 +121,8 @@ export interface RingkasanJahitan {
 /** Bentuk penuh satu pesanan jahit untuk layar detail. */
 export interface PesananJahitLengkap {
   transaksi: TransaksiRecord;
+  /** Item dari transaction_items (BU-55); pesanan lama selalu 1 baris. */
+  items: readonly ItemJahitanInput[];
   biayaLain: readonly BiayaLainInput[];
   pelanggan: PelangganRecord | null;
   terbayar: Rupiah;
@@ -165,9 +181,12 @@ export async function simpanPesananJahit(
   const waktu = konteks.waktu ?? new Date();
   const iso = waktu.toISOString();
   const hari = iso.slice(0, 10);
-  // Nomor urut pesanan jahit hari itu (hanya jenisDokumen "jasa" yang dihitung,
-  // supaya penjualan barang tidak ikut menggeser nomor pesanan).
+  const bulan = iso.slice(0, 7);
+  // Nomor urut pesanan jahit (BU-19/21, diputuskan Tante 19 Nov 2026):
+  // dihitung dalam BULAN yang sama (hanya jenisDokumen "jasa"), 5 digit.
   const semua = await daftarTransaksi();
+  const urutBulanIni =
+    semua.filter((t) => t.waktu.slice(0, 7) === bulan && t.jenisDokumen === "jasa").length + 1;
   const urutHariIni = semua.filter((t) => t.waktu.slice(0, 10) === hari && t.jenisDokumen === "jasa").length + 1;
   const id = buatId();
   const pelangganId = buatId();
@@ -178,14 +197,23 @@ export async function simpanPesananJahit(
     kontak: rencana.kontak?.trim() || null,
   };
 
+  const itemsBersih: ItemJahitanInput[] = rencana.items
+    .filter((i) => i.nama.trim().length >= 2 && Number.isInteger(i.harga) && i.harga > 0)
+    .map((i) => ({
+      nama: i.nama.trim().slice(0, 60),
+      harga: i.harga,
+      kuantitas: Number.isInteger(i.kuantitas) && i.kuantitas >= 1 ? i.kuantitas : 1,
+    }));
+
   const biayaLainBersih: BiayaLainInput[] = rencana.biayaLain
     .filter((b) => b.nama.trim().length > 0 && b.nominal > 0)
     .map((b) => ({ nama: b.nama.trim().slice(0, 40), nominal: b.nominal }));
 
   const trx: TransaksiRecord = {
     id,
-    nomorResi: nomorPlaceholder(waktu, urutHariIni),
+    nomorResi: nomorPlaceholder(waktu, urutBulanIni),
     nomorUrutHari: urutHariIni,
+    nomorUrutBulan: urutBulanIni,
     waktu: iso,
     jenis: "po",
     jenisDokumen: "jasa",
@@ -197,7 +225,7 @@ export async function simpanPesananJahit(
     kontak: rencana.kontak?.trim() || null,
     perkiraanSiap: rencana.perkiraanSelesai || null,
     alamat: null,
-    catatanPesanan: susunCatatanJahitan(rencana, biayaLainBersih),
+    catatanPesanan: susunCatatanJahitan(rencana, itemsBersih, biayaLainBersih),
     riwayatTotal: [],
     ongkirMode: "ambil_sendiri",
     ongkirNominal: 0,
@@ -218,16 +246,19 @@ export async function simpanPesananJahit(
 
   db.put("pelanggan", pelanggan);
   db.put("transactions", trx);
-  db.put("transaction_items", {
-    id: buatId(),
-    transaksiId: id,
-    produkId: null,
-    namaSnapshot: rencana.model.trim(),
-    hargaSatuan: cek.biayaJasa,
-    kuantitas: 1,
-    diskonPerUnit: 0,
-    subtotalBersih: cek.biayaJasa,
-  });
+  // Satu baris transaction_items per item (BU-55); pesanan 1 item = 1 baris.
+  for (const item of itemsBersih) {
+    db.put("transaction_items", {
+      id: buatId(),
+      transaksiId: id,
+      produkId: null,
+      namaSnapshot: item.nama,
+      hargaSatuan: item.harga,
+      kuantitas: item.kuantitas,
+      diskonPerUnit: 0,
+      subtotalBersih: item.harga * item.kuantitas,
+    });
+  }
 
   for (const b of recomputeJurnalDariDokumen({ id, total: cek.total }, [])) {
     const baris: JournalRecord = { ...b, id: buatId() };
@@ -243,16 +274,21 @@ export async function simpanPesananJahit(
       nomor: trx.nomorResi,
       namaPemesan: trx.namaPemesan ?? "",
       total: cek.total,
-      biayaJasa: cek.biayaJasa,
+      items: itemsBersih,
       biayaLain: biayaLainBersih,
       pelangganId,
     },
   };
 }
 
-function susunCatatanJahitan(rencana: RencanaJahitan, biayaLainBersih: readonly BiayaLainInput[]): string | null {
+function susunCatatanJahitan(
+  rencana: RencanaJahitan,
+  itemsBersih: readonly ItemJahitanInput[],
+  biayaLainBersih: readonly BiayaLainInput[],
+): string | null {
   const bagian: string[] = [];
-  bagian.push(rencana.model.trim());
+  // Segmen pertama = nama item pertama (dipakai daftar sebagai "model").
+  if (itemsBersih.length > 0) bagian.push(itemsBersih[0]!.nama);
   if (rencana.ukuran?.trim()) bagian.push(rencana.ukuran.trim());
   if (biayaLainBersih.length > 0) bagian.push(biayaLainBersih.map((b) => `${b.nama}:${b.nominal}`).join("|"));
   if (rencana.catatan?.trim()) bagian.push(rencana.catatan.trim());
@@ -294,15 +330,17 @@ export async function ambilPesananJahit(id: UUID): Promise<PesananJahitLengkap |
   const t = await db.get("transactions", id);
   if (!t || t.jenisDokumen !== "jasa") return undefined;
 
-  const [pembayaran, kiriman, pelanggan] = await Promise.all([
+  const [pembayaran, kiriman, pelanggan, itemRows] = await Promise.all([
     db.getAllFromIndex("payments", "by-transaksi", id),
     db.getAllFromIndex("pengiriman", "by-dokumen", id),
     t.pelangganId ? db.get("pelanggan", t.pelangganId) : Promise.resolve(undefined),
+    db.getAllFromIndex("transaction_items", "by-transaksi", id),
   ]);
   const terbayar = pembayaran.reduce((n, p) => n + p.nominal, 0);
 
   return {
     transaksi: t,
+    items: itemRows.map((r) => ({ nama: r.namaSnapshot, harga: r.hargaSatuan, kuantitas: r.kuantitas })),
     biayaLain: biayaLainDariTransaksi(t),
     pelanggan: pelanggan ?? null,
     terbayar,
