@@ -12,10 +12,10 @@ describe("bacaModeInput", () => {
     expect(bacaModeInput("?layar=pesanan-jahit", "wizard")).toBe("wizard");
   });
 
-  it("tanpa param dan simpanan memakai wizard", () => {
-    expect(bacaModeInput("", null)).toBe("wizard");
-    expect(bacaModeInput("?mode=aneh", null)).toBe("wizard");
-    expect(bacaModeInput("?mode=aneh", "juga-aneh")).toBe("wizard");
+  it("tanpa param dan simpanan memakai satu layar (keputusan Tante 19 Nov 2026)", () => {
+    expect(bacaModeInput("", null)).toBe("satu-layar");
+    expect(bacaModeInput("?mode=aneh", null)).toBe("satu-layar");
+    expect(bacaModeInput("?mode=aneh", "juga-aneh")).toBe("satu-layar");
   });
 });
 

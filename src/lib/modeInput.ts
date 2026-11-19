@@ -3,7 +3,7 @@
  * satu layar sekaligus. Mode bisa dipilih lewat:
  *   - param URL `?mode=wizard` / `?mode=satu-layar` (link pembanding),
  *   - pilihan terakhir yang tersimpan di localStorage,
- *   - bawaan: wizard.
+ *   - bawaan: satu layar (keputusan Tante 19 Nov 2026, "Menggunakan 1 layar").
  * Param URL selalu menang atas simpanan, supaya tiap link pembanding
  * selalu membuka model yang dimaksud.
  */
@@ -12,7 +12,7 @@ export type ModeInput = "wizard" | "satu-layar";
 
 export const KUNCI_MODE_INPUT = "kayesa-mode-input";
 
-/** Mode awal: param URL > simpanan > wizard. */
+/** Mode awal: param URL > simpanan > satu layar. */
 export function bacaModeInput(search: string, tersimpan: string | null): ModeInput {
   try {
     const p = new URLSearchParams(search).get("mode");
@@ -21,7 +21,7 @@ export function bacaModeInput(search: string, tersimpan: string | null): ModeInp
     // URL tidak bisa dibaca: lanjut ke simpanan.
   }
   if (tersimpan === "wizard" || tersimpan === "satu-layar") return tersimpan;
-  return "wizard";
+  return "satu-layar";
 }
 
 /**

@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { IDBFactory } from "fake-indexeddb";
-import { ambilLogoDemo, jalankanSeedDemo, migrasiAlamatLama, LOGO_DEMO_URL } from "./seedDemo.ts";
+import { ambilLogoDemo, jalankanSeedDemo, migrasiAlamatLama, migrasiRekeningKedua, LOGO_DEMO_URL } from "./seedDemo.ts";
 import {
   ambilSettings,
   bazarAktif,
@@ -76,11 +76,15 @@ describe("seed demo KAYESA", () => {
     // unggah logo di Pengaturan yang sudah dipakai di produksi.
     expect(s.logo).not.toBeNull();
     expect(s.pinHash).toBeNull();
-    expect(s.rekening).toHaveLength(1);
+    expect(s.rekening).toHaveLength(2);
     expect(s.rekening[0]?.namaBank).toBe("BCA");
     expect(s.rekening[0]?.nomor).toBe("676 017 885");
     expect(s.rekening[0]?.namaPemilik).toBe("NARSHITA DEWI");
     expect(s.rekening[0]?.utama).toBe(true);
+    expect(s.rekening[1]?.namaBank).toBe("Mandiri");
+    expect(s.rekening[1]?.nomor).toBe("1010001037785");
+    expect(s.rekening[1]?.namaPemilik).toBe("NARSHITA DEWI");
+    expect(s.rekening[1]?.utama).toBe(false);
 
     const produk = await daftarProduk();
     expect(produk).toHaveLength(5);
@@ -176,5 +180,37 @@ describe("seed demo KAYESA", () => {
     expect(baru.alamatBaris1).toBe("Jl. Tarumanegara No. 41");
     // Kedua kali tidak mengubah apa pun.
     expect(await migrasiAlamatLama()).toBe(false);
+  });
+
+  it("migrasiRekeningKedua menambah Mandiri bila hanya BCA yang ada (BU-53)", async () => {
+    const lama = await ambilSettings();
+    await simpanSettings({
+      ...lama,
+      rekening: [
+        {
+          id: "rekening-demo-bca",
+          namaBank: "BCA",
+          nomor: "676 017 885",
+          namaPemilik: "NARSHITA DEWI",
+          utama: true,
+        },
+      ],
+    });
+    expect(await migrasiRekeningKedua()).toBe(true);
+    const baru = await ambilSettings();
+    expect(baru.rekening).toHaveLength(2);
+    expect(baru.rekening[1]?.namaBank).toBe("Mandiri");
+    expect(baru.rekening[1]?.nomor).toBe("1010001037785");
+    expect(baru.rekening[1]?.namaPemilik).toBe("NARSHITA DEWI");
+    expect(baru.rekening[1]?.utama).toBe(false);
+    // Kedua kali tidak mengubah apa pun.
+    expect(await migrasiRekeningKedua()).toBe(false);
+  });
+
+  it("migrasiRekeningKedua tidak jalan bila Mandiri sudah ada atau BCA tidak ada", async () => {
+    const lama = await ambilSettings();
+    await simpanSettings({ ...lama, rekening: [] });
+    expect(await migrasiRekeningKedua()).toBe(false);
+    expect((await ambilSettings()).rekening).toHaveLength(0);
   });
 });

@@ -44,7 +44,7 @@ import {
 } from "./db/repositori.ts";
 import { mintaPenyimpananPermanen } from "./pwa/register.ts";
 import { terapkanTampilan } from "./lib/tampilan.ts";
-import { jalankanSeedDemo, migrasiAlamatLama } from "./db/seedDemo.ts";
+import { jalankanSeedDemo, migrasiAlamatLama, migrasiRekeningKedua } from "./db/seedDemo.ts";
 import type { OngkirMode } from "./lib/ongkir.ts";
 import type { StatusBayar } from "./lib/keranjang.ts";
 import { khususAdmin, type Peran } from "./lib/peran.ts";
@@ -170,6 +170,7 @@ export default function App() {
       try {
         await jalankanSeedDemo().catch(() => false);
         await migrasiAlamatLama().catch(() => false);
+        await migrasiRekeningKedua().catch(() => false);
         const s = await ambilSettings().catch(() => null);
         const b = await bazarAktif().catch(() => undefined);
         const saldo = b ? await saldoSemuaBazar(b.id).catch(() => new Map<string, number>()) : new Map<string, number>();

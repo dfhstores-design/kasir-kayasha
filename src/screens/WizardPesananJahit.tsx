@@ -32,6 +32,9 @@ type BiayaLainTerenun = BiayaLainInput & { tersimpan: boolean };
  *   4. ringkas & simpan
  * Mode satu layar: keempat bagian di atas tampil sekaligus di satu layar
  * yang bisa digulir, dengan satu tombol Simpan Pesanan.
+ * Bawaan sejak 19 Nov 2026: satu layar (keputusan Tante, "Menggunakan
+ * 1 layar"); wizard tetap bisa dipilih lewat tombol ganti mode atau
+ * param URL ?mode=wizard.
  */
 
 interface ItemTerenun {

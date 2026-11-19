@@ -57,6 +57,13 @@ export const SETTINGS_DEMO: SettingsRecord = {
       namaPemilik: "NARSHITA DEWI",
       utama: true,
     },
+    {
+      id: "rekening-demo-mandiri",
+      namaBank: "Mandiri",
+      nomor: "1010001037785",
+      namaPemilik: "NARSHITA DEWI",
+      utama: false,
+    },
   ],
   tampilkanSapaan: true,
   tampilkanNomorResi: true,
@@ -189,6 +196,39 @@ export async function migrasiAlamatLama(): Promise<boolean> {
       ...s,
       alamatBaris2: lamaBaris2 ? "Pisangan, Ciputat Timur - 15419" : s.alamatBaris2,
       kotaKodePos: lamaKota ? "" : s.kotaKodePos,
+      updatedAt: new Date().toISOString(),
+    });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Migrasi rekening kedua (BU-53, 19 Nov 2026): perangkat yang sudah berisi
+ * data sebelum rekening Mandiri diputuskan hanya menyimpan BCA, dan seed
+ * tidak jalan lagi di perangkat berisi data. Bila rekening BCA demo ada tapi
+ * Mandiri 1010001037785 belum ada, tambahkan — sekali jalan, idempotent,
+ * tidak menyentuh isian lain.
+ */
+export async function migrasiRekeningKedua(): Promise<boolean> {
+  try {
+    const s = await ambilSettings();
+    const punyaBca = s.rekening.some((r) => r.nomor.replace(/\s/g, "") === "676017885");
+    const punyaMandiri = s.rekening.some((r) => r.nomor.replace(/\s/g, "") === "1010001037785");
+    if (!punyaBca || punyaMandiri) return false;
+    await simpanSettings({
+      ...s,
+      rekening: [
+        ...s.rekening,
+        {
+          id: "rekening-demo-mandiri",
+          namaBank: "Mandiri",
+          nomor: "1010001037785",
+          namaPemilik: "NARSHITA DEWI",
+          utama: false,
+        },
+      ],
       updatedAt: new Date().toISOString(),
     });
     return true;

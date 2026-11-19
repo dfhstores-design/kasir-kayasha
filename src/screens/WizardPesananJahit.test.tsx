@@ -25,8 +25,9 @@ beforeEach(() => {
 
 afterEach(cleanup);
 
-describe("mode wizard (bawaan)", () => {
-  it("menampilkan langkah 1 saja, dengan tombol ganti ke 1 layar", () => {
+describe("mode wizard (lewat param URL)", () => {
+  it("?mode=wizard menampilkan langkah 1 saja, dengan tombol ganti ke 1 layar", () => {
+    window.history.pushState({}, "", "/?mode=wizard&layar=pesanan-jahit");
     buka();
     expect(screen.getByText("Langkah 1 dari 4")).toBeTruthy();
     expect(screen.getByText("Siapa yang memesan?")).toBeTruthy();
@@ -35,7 +36,15 @@ describe("mode wizard (bawaan)", () => {
   });
 });
 
-describe("mode satu layar", () => {
+describe("mode satu layar (bawaan sejak keputusan Tante 19 Nov 2026)", () => {
+  it("tanpa param dan simpanan langsung menampilkan keempat bagian sekaligus", () => {
+    buka();
+    expect(screen.getByText("Satu layar — semua isian")).toBeTruthy();
+    expect(screen.getByText("Siapa yang memesan?")).toBeTruthy();
+    expect(screen.getByText("Jahit apa?")).toBeTruthy();
+    expect(screen.getByText("Ada biaya lain?")).toBeTruthy();
+    expect(screen.getByText("Periksa lagi")).toBeTruthy();
+  });
   it("param URL ?mode=satu-layar menampilkan keempat bagian sekaligus", () => {
     window.history.pushState({}, "", "/?mode=satu-layar&layar=pesanan-jahit");
     buka();
@@ -54,6 +63,7 @@ describe("mode satu layar", () => {
   });
 
   it("tombol ganti mode bolak-balik tanpa menghapus isian", () => {
+    window.history.pushState({}, "", "/?mode=wizard");
     buka();
     fireEvent.change(screen.getByLabelText("Nama pemesan"), { target: { value: "Ibu Sari" } });
     fireEvent.click(screen.getByRole("button", { name: "Ubah ke 1 layar" }));
