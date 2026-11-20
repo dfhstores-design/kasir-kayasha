@@ -15,23 +15,31 @@ describe("validasiPinBaru", () => {
     expect(validasiPinBaru("135790")).toEqual({ ok: true });
   });
 
-  it("menolak bukan angka", () => {
-    expect(validasiPinBaru("12ab")).toMatchObject({ ok: false });
+  it("menerima huruf + angka (BU-32, keputusan 20 Nov 2026)", () => {
+    expect(validasiPinBaru("ab12")).toEqual({ ok: true });
+    expect(validasiPinBaru("tante1")).toEqual({ ok: true });
+    expect(validasiPinBaru("A1b2C3")).toEqual({ ok: true });
   });
 
-  it("menolak kurang dari 4 atau lebih dari 6 digit", () => {
+  it("menerima PIN simpel — tidak boleh jadi hambatan untuk manula", () => {
+    expect(validasiPinBaru("8888")).toEqual({ ok: true });
+    expect(validasiPinBaru("1212")).toEqual({ ok: true });
+    expect(validasiPinBaru("22222")).toEqual({ ok: true });
+    expect(validasiPinBaru("1234")).toEqual({ ok: true });
+    expect(validasiPinBaru("0000")).toEqual({ ok: true });
+  });
+
+  it("menolak karakter selain huruf/angka", () => {
+    expect(validasiPinBaru("12a!")).toMatchObject({ ok: false });
+    expect(validasiPinBaru("ab-cd")).toMatchObject({ ok: false });
+    expect(validasiPinBaru("12 34")).toMatchObject({ ok: false });
+  });
+
+  it("menolak kurang dari 4 atau lebih dari 6 karakter", () => {
     expect(validasiPinBaru("123")).toMatchObject({ ok: false });
+    expect(validasiPinBaru("ab")).toMatchObject({ ok: false });
     expect(validasiPinBaru("1234567")).toMatchObject({ ok: false });
-  });
-
-  it("menolak angka sama semua", () => {
-    expect(validasiPinBaru("0000")).toMatchObject({ ok: false });
-    expect(validasiPinBaru("777777")).toMatchObject({ ok: false });
-  });
-
-  it("menolak PIN yang terlalu mudah ditebak", () => {
-    expect(validasiPinBaru("1234")).toMatchObject({ ok: false, pesan: "PIN terlalu mudah ditebak." });
-    expect(validasiPinBaru("123456")).toMatchObject({ ok: false });
+    expect(validasiPinBaru("abcdefg")).toMatchObject({ ok: false });
   });
 });
 
@@ -60,7 +68,8 @@ describe("buatHashPin & cocokPin", () => {
   });
 
   it("menolak membuat hash dari PIN tidak sah", async () => {
-    await expect(buatHashPin("1234")).rejects.toBeInstanceOf(RangeError);
+    await expect(buatHashPin("12!")).rejects.toBeInstanceOf(RangeError);
+    await expect(buatHashPin("abc")).rejects.toBeInstanceOf(RangeError);
   });
 });
 

@@ -34,7 +34,7 @@ Keputusan ini dicatat juga di `docs/PROJECT-BRIEF.md` dan catatan historis fase 
 
 ### 1.1 Cara masuk (PIN lokal)
 
-- PIN **4–6 angka** disimpan di perangkat (`settings.pinHash`, hash SHA-256 + salt).
+- PIN **4–6 karakter (huruf atau angka)** disimpan di perangkat (`settings.pinHash`, hash SHA-256 + salt). PIN simpel diizinkan (mis. 8888, 1212) — PIN tidak boleh menjadi hambatan.
 - Tanpa PIN diatur: aplikasi terbuka dalam **mode kasir** (aman untuk penjaga booth).
 - Ketuk **"Masuk sebagai Admin"** → masukkan PIN → mode admin sampai keluar / aplikasi ditutup.
 - Admin dapat memilih **keluar ke mode kasir** kapan saja.

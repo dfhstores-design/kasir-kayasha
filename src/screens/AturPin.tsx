@@ -115,15 +115,15 @@ export default function AturPin({ peran, pinAda, hashLain = [], onSimpan }: Prop
         )}
 
         <div>
-          <label htmlFor="pin-baru">PIN baru (4–6 angka)</label>
+          <label htmlFor="pin-baru">PIN baru (4–6 karakter, huruf atau angka)</label>
           <input
             id="pin-baru"
             type="password"
-            inputMode="numeric"
+            inputMode="text"
             autoComplete="off"
             maxLength={6}
             value={pin}
-            onChange={(e) => setPin(e.target.value.replace(/[^\d]/g, ""))}
+            onChange={(e) => setPin(e.target.value.replace(/[^A-Za-z0-9]/g, ""))}
           />
         </div>
 
@@ -132,11 +132,11 @@ export default function AturPin({ peran, pinAda, hashLain = [], onSimpan }: Prop
           <input
             id="pin-ulang"
             type="password"
-            inputMode="numeric"
+            inputMode="text"
             autoComplete="off"
             maxLength={6}
             value={ulang}
-            onChange={(e) => setUlang(e.target.value.replace(/[^\d]/g, ""))}
+            onChange={(e) => setUlang(e.target.value.replace(/[^A-Za-z0-9]/g, ""))}
           />
         </div>
 

@@ -38,7 +38,7 @@ Bisa dipakai **tanpa internet** setelah dibuka sekali.
    dan nama pemilik rekening → **Simpan**.
 7. Ketuk **Lihat contoh resi** untuk melihat hasilnya.
 
-**Mengatur PIN:** ketuk **PIN Admin** → masukkan 4–6 angka → ulangi → **Simpan PIN**.
+**Mengatur PIN:** ketuk **PIN Admin** → masukkan 4–6 karakter (huruf atau angka, boleh yang simpel seperti 8888) → ulangi → **Simpan PIN**.
 Simpan PIN di tempat yang Ibu ingat. Kalau lupa, data tidak hilang, tetapi menu admin terkunci.
 
 ---

@@ -48,16 +48,18 @@ export type HasilValidasiPin =
   | { ok: true }
   | { ok: false; pesan: string };
 
-/** Aturan PIN baru: hanya angka, 4–6 digit, tidak berulang semua. */
+/**
+ * Aturan PIN baru (BU-32, keputusan Andri 20 Nov 2026): huruf atau angka,
+ * 4–6 karakter. PIN simpel DIIZINKAN (mis. 8888, 1212, 22222) — pemakainya
+ * manula, PIN tidak boleh menjadi hambatan. Yang ditolak hanya yang di luar
+ * aturan bentuk: kurang dari 4 / lebih dari 6 karakter, atau berisi karakter
+ * selain huruf dan angka.
+ */
 export function validasiPinBaru(pin: string): HasilValidasiPin {
   const bersih = pin.trim();
-  if (!/^\d+$/.test(bersih)) return { ok: false, pesan: "PIN harus angka." };
+  if (!/^[A-Za-z0-9]+$/.test(bersih)) return { ok: false, pesan: "PIN hanya boleh huruf atau angka." };
   if (bersih.length < PIN_DIGIT_MIN || bersih.length > PIN_DIGIT_MAKS) {
-    return { ok: false, pesan: `PIN harus ${PIN_DIGIT_MIN}–${PIN_DIGIT_MAKS} angka.` };
-  }
-  if (/^(\d)\1+$/.test(bersih)) return { ok: false, pesan: "PIN tidak boleh angka sama semua." };
-  if (["123456", "1234", "12345", "0000", "1111"].includes(bersih)) {
-    return { ok: false, pesan: "PIN terlalu mudah ditebak." };
+    return { ok: false, pesan: `PIN harus ${PIN_DIGIT_MIN}–${PIN_DIGIT_MAKS} karakter.` };
   }
   return { ok: true };
 }

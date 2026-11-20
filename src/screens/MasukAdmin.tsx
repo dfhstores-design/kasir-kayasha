@@ -108,11 +108,11 @@ export default function MasukAdmin({ peran, pinHash, onMasukAdmin, onBatal }: Pr
           <input
             id="pin"
             type="password"
-            inputMode="numeric"
+            inputMode="text"
             autoComplete="off"
             maxLength={6}
             value={pin}
-            onChange={(e) => setPin(e.target.value.replace(/[^\d]/g, ""))}
+            onChange={(e) => setPin(e.target.value.replace(/[^A-Za-z0-9]/g, ""))}
             onKeyDown={(e) => {
               if (e.key === "Enter") void masuk();
             }}

@@ -194,25 +194,25 @@ export default function Bazar({ onAturBarang, onTutupBazar, onUbah }: Props) {
               </div>
               {ubahPinUntuk === b.id ? (
                 <div style={{ marginTop: "0.75rem" }}>
-                  <label htmlFor={`pin-baru-${b.id}`}>PIN kasir baru (4–6 angka)</label>
+                  <label htmlFor={`pin-baru-${b.id}`}>PIN kasir baru (4–6 karakter, huruf atau angka)</label>
                   <input
                     id={`pin-baru-${b.id}`}
                     type="password"
-                    inputMode="numeric"
+                    inputMode="text"
                     autoComplete="off"
                     maxLength={6}
                     value={pinBaruUbah}
-                    onChange={(e) => setPinBaruUbah(e.target.value.replace(/[^\d]/g, ""))}
+                    onChange={(e) => setPinBaruUbah(e.target.value.replace(/[^A-Za-z0-9]/g, ""))}
                   />
                   <label htmlFor={`pin-ulang-${b.id}`}>Ulangi PIN kasir baru</label>
                   <input
                     id={`pin-ulang-${b.id}`}
                     type="password"
-                    inputMode="numeric"
+                    inputMode="text"
                     autoComplete="off"
                     maxLength={6}
                     value={ulangPinUbah}
-                    onChange={(e) => setUlangPinUbah(e.target.value.replace(/[^\d]/g, ""))}
+                    onChange={(e) => setUlangPinUbah(e.target.value.replace(/[^A-Za-z0-9]/g, ""))}
                   />
                   <div className="grid2" style={{ marginTop: "0.5rem" }}>
                     <button type="button" className="btn btn--ghost btn--small" onClick={() => setUbahPinUntuk(null)}>
@@ -268,26 +268,26 @@ export default function Bazar({ onAturBarang, onTutupBazar, onUbah }: Props) {
               onChange={(e) => setNama(e.target.value)}
               placeholder="Contoh: Pameran Mall Kelapa Gading, 15–20 Nov"
             />
-            <label htmlFor="pin-bazar">PIN kasir bazar (4–6 angka)</label>
+            <label htmlFor="pin-bazar">PIN kasir bazar (4–6 karakter, huruf atau angka)</label>
             <input
               id="pin-bazar"
               type="password"
-              inputMode="numeric"
+              inputMode="text"
               autoComplete="off"
               maxLength={6}
               value={pinBazar}
-              onChange={(e) => setPinBazar(e.target.value.replace(/[^\d]/g, ""))}
+              onChange={(e) => setPinBazar(e.target.value.replace(/[^A-Za-z0-9]/g, ""))}
               placeholder="PIN khusus bazar ini"
             />
             <label htmlFor="pin-bazar-ulang">Ulangi PIN kasir bazar</label>
             <input
               id="pin-bazar-ulang"
               type="password"
-              inputMode="numeric"
+              inputMode="text"
               autoComplete="off"
               maxLength={6}
               value={ulangPinBazar}
-              onChange={(e) => setUlangPinBazar(e.target.value.replace(/[^\d]/g, ""))}
+              onChange={(e) => setUlangPinBazar(e.target.value.replace(/[^A-Za-z0-9]/g, ""))}
             />
             <p className="hint" style={{ margin: "0.25rem 0 0" }}>
               Satu bazar satu PIN. PIN ini harus beda dengan PIN kasir toko, PIN admin, dan PIN owner.
