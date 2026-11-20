@@ -1,26 +1,32 @@
 import { useCallback, useEffect, useState } from "react";
 import { cocokPin, batasPercobaan, MAKS_PERCOBAAN_PIN } from "../lib/pin.ts";
+import type { Peran } from "../lib/peran.ts";
 
 interface Props {
-  /** Hash PIN admin; null = belum diatur (aplikasi terbuka sebagai kasir). */
+  /** Peran yang dimasuki: "admin" atau "owner" (Fase 2A, BU-32). */
+  peran: Extract<Peran, "admin" | "owner">;
+  /** Hash PIN peran itu; null = belum diatur (aplikasi terbuka sebagai kasir). */
   pinHash: string | null;
   onMasukAdmin: () => void;
   onBatal: () => void;
 }
 
 /**
- * Layar masuk admin (ROLE-BIAYA-RINGKASAN.md 1.1).
+ * Layar masuk admin / owner (ROLE-BIAYA-RINGKASAN.md 1.1; Fase 2A BU-32).
  *
- * Bila PIN belum diatur, admin tetap boleh masuk SEKALI untuk mengatur PIN —
- * tanpa ini aplikasi akan terkunci selamanya di mode kasir.
+ * PIN admin dan PIN owner TERPISAH sejak awal. Bila PIN belum diatur, pemilik
+ * peran tetap boleh masuk SEKALI untuk mengatur PIN — tanpa ini aplikasi akan
+ * terkunci selamanya di mode kasir.
  */
-export default function MasukAdmin({ pinHash, onMasukAdmin, onBatal }: Props) {
+export default function MasukAdmin({ peran, pinHash, onMasukAdmin, onBatal }: Props) {
   const [pin, setPin] = useState("");
   const [galat, setGalat] = useState<string | null>(null);
   const [percobaan, setPercobaan] = useState(0);
   const [gagalPada, setGagalPada] = useState<number | null>(null);
   const [sekarang, setSekarang] = useState(() => Date.now());
   const [sibuk, setSibuk] = useState(false);
+
+  const namaPeran = peran === "owner" ? "Owner" : "Admin";
 
   // Menghitung mundur penguncian secara visual.
   useEffect(() => {
@@ -61,16 +67,16 @@ export default function MasukAdmin({ pinHash, onMasukAdmin, onBatal }: Props) {
       <>
         <div className="content">
           <div className="panel panel--ok">
-            <strong>PIN admin belum diatur.</strong>
+            <strong>PIN {namaPeran.toLowerCase()} belum diatur.</strong>
             <p style={{ margin: "0.25rem 0 0" }}>
-              Aplikasi terbuka dalam mode kasir. Buka sekali sebagai admin untuk mengatur PIN;
-              setelah itu masuk admin akan meminta PIN.
+              Aplikasi terbuka dalam mode kasir. Buka sekali sebagai {namaPeran.toLowerCase()} untuk mengatur PIN;
+              setelah itu masuk {namaPeran.toLowerCase()} akan meminta PIN.
             </p>
           </div>
         </div>
         <div className="bottombar">
           <button type="button" className="btn btn--primary" onClick={onMasukAdmin}>
-            Buka sebagai Admin (atur PIN)
+            Buka sebagai {namaPeran} (atur PIN)
           </button>
           <button type="button" className="btn btn--ghost btn--small" onClick={onBatal}>
             Tetap sebagai kasir
@@ -84,7 +90,7 @@ export default function MasukAdmin({ pinHash, onMasukAdmin, onBatal }: Props) {
     <>
       <div className="content">
         <p className="h2" style={{ margin: 0 }}>
-          Masuk sebagai Admin
+          Masuk sebagai {namaPeran}
         </p>
         <p className="soft" style={{ margin: 0 }}>
           Masukkan PIN ({MAKS_PERCOBAAN_PIN} kali salah = tunggu 30 detik)

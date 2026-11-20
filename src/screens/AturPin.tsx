@@ -1,21 +1,54 @@
 import { useState } from "react";
-import { buatHashPin, validasiPinBaru } from "../lib/pin.ts";
+import { buatHashPin, pinBedaDariHash, validasiPinBaru } from "../lib/pin.ts";
+
+/**
+ * PIN apa yang diatur (Fase 2A, BU-32/34). PIN admin, PIN owner, dan PIN
+ * kasir toko adalah tiga PIN berbeda yang tidak boleh sama.
+ */
+export type PeranPin = "admin" | "owner" | "kasir-toko";
+
+const LABEL: Record<PeranPin, { nama: string; hapus: string; tersimpan: string }> = {
+  admin: {
+    nama: "admin",
+    hapus: "Hapus PIN admin? Aplikasi akan terbuka sebagai kasir tanpa kunci.",
+    tersimpan: "PIN admin tersimpan. Jangan lupa PIN-nya.",
+  },
+  owner: {
+    nama: "owner",
+    hapus: "Hapus PIN owner? Laporan owner tidak akan terkunci.",
+    tersimpan: "PIN owner tersimpan. Jangan lupa PIN-nya.",
+  },
+  "kasir-toko": {
+    nama: "kasir toko",
+    hapus: "Hapus PIN kasir toko? Kasir toko bisa masuk tanpa PIN.",
+    tersimpan: "PIN kasir toko tersimpan. Beri tahu kasir toko PIN barunya.",
+  },
+};
 
 interface Props {
+  peran: PeranPin;
   pinAda: boolean;
+  /**
+   * Hash PIN lain yang tidak boleh sama dengan PIN baru ini (mis. saat
+   * mengatur PIN owner, isi dengan hash PIN admin). Kosong = tidak dicek.
+   */
+  hashLain?: Array<string | null>;
   onSimpan: (hash: string | null) => Promise<void>;
 }
 
 /**
- * Pengaturan PIN admin (ROLE-BIAYA-RINGKASAN.md 1.1).
- * Hanya bisa diakses admin. PIN tidak pernah ditampilkan kembali.
+ * Pengaturan PIN (ROLE-BIAYA-RINGKASAN.md 1.1; Fase 2A BU-32/34).
+ * Hanya bisa diakses pemegang peran yang bersangkutan. PIN tidak pernah
+ * ditampilkan kembali.
  */
-export default function AturPin({ pinAda, onSimpan }: Props) {
+export default function AturPin({ peran, pinAda, hashLain = [], onSimpan }: Props) {
   const [pin, setPin] = useState("");
   const [ulang, setUlang] = useState("");
   const [galat, setGalat] = useState<string | null>(null);
   const [pesan, setPesan] = useState<string | null>(null);
   const [sibuk, setSibuk] = useState(false);
+
+  const label = LABEL[peran];
 
   async function simpan() {
     setGalat(null);
@@ -30,6 +63,11 @@ export default function AturPin({ pinAda, onSimpan }: Props) {
       setGalat("Kedua PIN tidak sama.");
       return;
     }
+    // PIN admin ≠ PIN owner ≠ PIN kasir toko ≠ PIN kasir bazar (BU-32/34).
+    if (!(await pinBedaDariHash(pin, hashLain))) {
+      setGalat(`PIN ${label.nama} harus beda dengan PIN yang lain.`);
+      return;
+    }
 
     setSibuk(true);
     try {
@@ -37,7 +75,7 @@ export default function AturPin({ pinAda, onSimpan }: Props) {
       await onSimpan(hash);
       setPin("");
       setUlang("");
-      setPesan("PIN admin tersimpan. Jangan lupa PIN-nya.");
+      setPesan(label.tersimpan);
     } catch {
       setGalat("PIN belum tersimpan.");
     } finally {
@@ -46,11 +84,11 @@ export default function AturPin({ pinAda, onSimpan }: Props) {
   }
 
   async function hapusPin() {
-    if (!window.confirm("Hapus PIN admin? Aplikasi akan terbuka sebagai kasir tanpa kunci.")) return;
+    if (!window.confirm(label.hapus)) return;
     setSibuk(true);
     try {
       await onSimpan(null);
-      setPesan("PIN dihapus. Aplikasi terbuka sebagai kasir.");
+      setPesan("PIN dihapus.");
     } finally {
       setSibuk(false);
     }
@@ -61,8 +99,8 @@ export default function AturPin({ pinAda, onSimpan }: Props) {
       <div className="content">
         <div className="panel panel--ok">
           {pinAda
-            ? "PIN admin sudah diatur. Masukkan PIN baru untuk menggantinya."
-            : "Belum ada PIN admin. Aplikasi terbuka dalam mode kasir."}
+            ? `PIN ${label.nama} sudah diatur. Masukkan PIN baru untuk menggantinya.`
+            : `Belum ada PIN ${label.nama}.`}
         </div>
 
         {galat && (

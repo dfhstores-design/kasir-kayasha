@@ -10,6 +10,7 @@ import Bazar from "./screens/Bazar.tsx";
 import AlokasiBazar from "./screens/AlokasiBazar.tsx";
 import TutupBazar from "./screens/TutupBazar.tsx";
 import MasukAdmin from "./screens/MasukAdmin.tsx";
+import MasukKasir from "./screens/MasukKasir.tsx";
 import BiayaBazar from "./screens/BiayaBazar.tsx";
 import Ringkasan from "./screens/Ringkasan.tsx";
 import { AksesAdminSaja } from "./screens/AksesAdmin.tsx";
@@ -47,7 +48,7 @@ import { terapkanTampilan } from "./lib/tampilan.ts";
 import { jalankanSeedDemo, migrasiAlamatLama, migrasiRekeningKedua } from "./db/seedDemo.ts";
 import type { OngkirMode } from "./lib/ongkir.ts";
 import type { StatusBayar } from "./lib/keranjang.ts";
-import { khususAdmin, type Peran } from "./lib/peran.ts";
+import { bolehAdmin, khususAdmin, type LokasiKasir, type Peran } from "./lib/peran.ts";
 import { simpanPenjualan, type JenisBayar, type TransaksiTersimpan } from "./lib/penjualan.ts";
 import { bikinIsiKeranjang, type IsiKeranjang } from "./lib/isiKeranjang.ts";
 import { formatJam } from "./lib/tanggal.ts";
@@ -68,8 +69,12 @@ export type Layar =
   | { nama: "ringkasan" }
   | { nama: "pengaturan" }
   | { nama: "masuk-admin" }
+  | { nama: "masuk-owner" }
+  | { nama: "masuk-kasir" }
   | { nama: "biaya-bazar"; bazar: BazarRecord }
   | { nama: "atur-pin" }
+  | { nama: "atur-pin-owner" }
+  | { nama: "atur-pin-kasir-toko" }
   | { nama: "daftar-jahit" }
   | { nama: "wizard-jahit"; editId?: string }
   | { nama: "detail-jahit"; id: string }
@@ -113,8 +118,13 @@ export default function App() {
   const [namaPembeli, setNamaPembeli] = useState("");
   const [parkir, setParkir] = useState<ParkirRingkas[]>([]);
   const [sedangMenyimpan, setSedangMenyimpan] = useState(false);
-  /** Peran aktif. Bawaan kasir; naik ke admin setelah PIN benar. */
+  /** Peran aktif. Bawaan kasir; naik ke admin/owner setelah PIN benar. */
   const [peran, setPeran] = useState<Peran>("kasir");
+  /**
+   * Lokasi kasir yang sedang aktif di perangkat ini (Fase 2A, BU-34).
+   * Hanya di memori (hilang saat aplikasi dimuat ulang); 1 lokasi = 1 kasir.
+   */
+  const [lokasiKasir, setLokasiKasir] = useState<LokasiKasir | null>(null);
   const [biaya, setBiaya] = useState<BiayaBazarRecord[]>([]);
   /** Alur pesanan jahit (Tante): refresh daftar + id detail yang dibuka. */
   const [segarkanJahitan, setSegarkanJahitan] = useState(0);
@@ -435,6 +445,12 @@ export default function App() {
     ringkasan: "Ringkasan",
     pengaturan: "Pengaturan",
     "pengaturan-isi": "Pengaturan",
+    "masuk-admin": "Masuk Admin",
+    "masuk-owner": "Masuk Owner",
+    "masuk-kasir": "Masuk Kasir",
+    "atur-pin": "Atur PIN Admin",
+    "atur-pin-owner": "Atur PIN Owner",
+    "atur-pin-kasir-toko": "Atur PIN Kasir Toko",
     resi: "Resi",
     "contoh-resi": "Contoh Resi",
     cadangan: "Cadangan",
@@ -482,6 +498,7 @@ export default function App() {
           jumlahBazarAktif={jumlahBazarAktif}
           memuatAwal={memuatAwal}
           peran={peran}
+          lokasiKasir={lokasiKasir}
           onMintaAdmin={() => setLayar({ nama: "masuk-admin" })}
           onBiayaBazar={() => {
             if (bazar) setLayar({ nama: "biaya-bazar", bazar });
@@ -491,13 +508,13 @@ export default function App() {
             setLayar({ nama: "beranda" });
           }}
           buka={(nama) => {
-            // Kasir tidak boleh membuka layar admin.
-            if (peran !== "admin" && khususAdmin(nama)) {
+            // Kasir tidak boleh membuka layar admin (owner boleh, BU-32).
+            if (!bolehAdmin(peran) && khususAdmin(nama)) {
               setLayar({ nama: "masuk-admin" });
               return;
             }
             // Kasir hanya menjual bila ada bazar aktif.
-            if (peran !== "admin" && nama === "pilih-barang" && !bazar) {
+            if (!bolehAdmin(peran) && nama === "pilih-barang" && !bazar) {
               setLayar({ nama: "beranda" });
               return;
             }
@@ -677,10 +694,46 @@ export default function App() {
       {layar.nama === "atur-pin" &&
         (peran === "admin" ? (
           <AturPin
+            peran="admin"
             pinAda={!!settings?.pinHash}
+            hashLain={[settings?.pinOwnerHash ?? null, settings?.pinKasirTokoHash ?? null]}
             onSimpan={async (hash) => {
               if (!settings) return;
               await simpanSettings({ ...settings, pinHash: hash });
+              const s = await ambilSettings();
+              setSettings(s);
+            }}
+          />
+        ) : (
+          <AksesAdminSaja bazarAktifAda={!!bazar} onMintaAdmin={() => setLayar({ nama: "masuk-admin" })} />
+        ))}
+
+      {layar.nama === "atur-pin-owner" &&
+        (peran === "owner" ? (
+          <AturPin
+            peran="owner"
+            pinAda={!!settings?.pinOwnerHash}
+            hashLain={[settings?.pinHash ?? null, settings?.pinKasirTokoHash ?? null]}
+            onSimpan={async (hash) => {
+              if (!settings) return;
+              await simpanSettings({ ...settings, pinOwnerHash: hash });
+              const s = await ambilSettings();
+              setSettings(s);
+            }}
+          />
+        ) : (
+          <AksesAdminSaja bazarAktifAda={!!bazar} onMintaAdmin={() => setLayar({ nama: "masuk-owner" })} />
+        ))}
+
+      {layar.nama === "atur-pin-kasir-toko" &&
+        (peran === "admin" ? (
+          <AturPin
+            peran="kasir-toko"
+            pinAda={!!settings?.pinKasirTokoHash}
+            hashLain={[settings?.pinHash ?? null, settings?.pinOwnerHash ?? null]}
+            onSimpan={async (hash) => {
+              if (!settings) return;
+              await simpanSettings({ ...settings, pinKasirTokoHash: hash });
               const s = await ambilSettings();
               setSettings(s);
             }}
@@ -760,7 +813,7 @@ export default function App() {
           onPenjualan={
             // Penjaga yang sama dengan buka("pilih-barang") di Beranda: kasir hanya
             // menjual bila ada bazar aktif. Null = tombol Penjualan nonaktif.
-            peran === "admin" || bazar
+            bolehAdmin(peran) || bazar
               ? () => {
                   setLayar({ nama: "pilih-barang" });
                 }
@@ -771,6 +824,7 @@ export default function App() {
 
       {layar.nama === "masuk-admin" && (
         <MasukAdmin
+          peran="admin"
           pinHash={settings?.pinHash ?? null}
           onMasukAdmin={() => {
             setPeran("admin");
@@ -780,8 +834,35 @@ export default function App() {
         />
       )}
 
+      {layar.nama === "masuk-owner" && (
+        <MasukAdmin
+          peran="owner"
+          pinHash={settings?.pinOwnerHash ?? null}
+          onMasukAdmin={() => {
+            setPeran("owner");
+            setLayar({ nama: "beranda" });
+          }}
+          onBatal={() => setLayar({ nama: "beranda" })}
+        />
+      )}
+
+      {layar.nama === "masuk-kasir" && (
+        <MasukKasir
+          lokasiAktif={lokasiKasir}
+          onMasuk={(lokasi) => {
+            setLokasiKasir(lokasi);
+            setLayar({ nama: "beranda" });
+          }}
+          onKeluarLokasi={() => {
+            setLokasiKasir(null);
+            setLayar({ nama: "beranda" });
+          }}
+          onBatal={() => setLayar({ nama: "beranda" })}
+        />
+      )}
+
       {layar.nama === "ringkasan" &&
-        (peran === "admin" ? (
+        (bolehAdmin(peran) ? (
           <Ringkasan bazar={bazar} />
         ) : (
           <AksesAdminSaja bazarAktifAda={!!bazar} onMintaAdmin={() => setLayar({ nama: "masuk-admin" })} />

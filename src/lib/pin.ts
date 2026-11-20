@@ -62,6 +62,19 @@ export function validasiPinBaru(pin: string): HasilValidasiPin {
   return { ok: true };
 }
 
+/**
+ * PIN baru harus beda dengan PIN lain yang sudah ada (Fase 2A, BU-32/34):
+ * PIN admin ≠ PIN owner ≠ PIN kasir toko ≠ PIN kasir tiap bazar.
+ * Mengembalikan true bila PIN tidak cocok dengan satu pun hash yang diberi
+ * (hash null = PIN itu belum diatur, jadi tidak bisa bentrok).
+ */
+export async function pinBedaDariHash(pin: string, hashes: Array<string | null>): Promise<boolean> {
+  for (const h of hashes) {
+    if (h && (await cocokPin(pin, h))) return false;
+  }
+  return true;
+}
+
 /** Status penguncian setelah beberapa percobaan salah (tanpa state global). */
 export function batasPercobaan(
   percobaan: number,

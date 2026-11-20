@@ -5,6 +5,7 @@ import {
   batasPercobaan,
   buatHashPin,
   cocokPin,
+  pinBedaDariHash,
   validasiPinBaru,
 } from "./pin.ts";
 
@@ -60,6 +61,17 @@ describe("buatHashPin & cocokPin", () => {
 
   it("menolak membuat hash dari PIN tidak sah", async () => {
     await expect(buatHashPin("1234")).rejects.toBeInstanceOf(RangeError);
+  });
+});
+
+describe("pinBedaDariHash — Fase 2A (BU-32/34)", () => {
+  it("beda dari semua hash = boleh; sama dengan satu = tidak boleh", async () => {
+    const hashAdmin = await buatHashPin("2468");
+    const hashOwner = await buatHashPin("1357");
+    expect(await pinBedaDariHash("9753", [hashAdmin, hashOwner, null])).toBe(true);
+    expect(await pinBedaDariHash("2468", [hashAdmin, hashOwner])).toBe(false);
+    expect(await pinBedaDariHash("1357", [hashAdmin, hashOwner])).toBe(false);
+    expect(await pinBedaDariHash("2468", [null, null])).toBe(true);
   });
 });
 

@@ -33,7 +33,12 @@ import type { StatusBayar } from "../lib/keranjang.ts";
 export const DB_NAME = "kasir-kayasha";
 /** Nama database yang dipakai versi lama; hanya untuk keperluan migrasi. */
 export const DB_NAME_LAMA = "kasir-kayesha";
-export const DB_VERSION = 3;
+/**
+ * Versi 4 (Fase 2A, Tahap 2, BU-32/34): PIN owner terpisah dari PIN admin,
+ * PIN kasir toko, dan PIN kasir per bazar. Migrasi hanya menambah kolom
+ * (null bila belum diatur) — tidak ada data yang dihapus atau ditulis ulang.
+ */
+export const DB_VERSION = 4;
 
 export type UUID = string;
 
@@ -96,6 +101,16 @@ export interface SettingsRecord {
   tema: Tema;
   /** PIN 4 angka untuk menu Pengaturan & Barang; null = tidak terkunci. */
   pinHash: string | null;
+  /**
+   * PIN owner (Fase 2A, BU-32): TERPISAH dari PIN admin, tidak boleh sama.
+   * Owner saat ini Tante (nanti Andri). null = belum diatur.
+   */
+  pinOwnerHash: string | null;
+  /**
+   * PIN kasir toko/butik (Fase 2A, BU-34): wajib beda dengan PIN kasir
+   * tiap bazar, PIN admin, dan PIN owner. null = belum diatur.
+   */
+  pinKasirTokoHash: string | null;
   updatedAt: string;
 }
 
@@ -133,6 +148,12 @@ export interface BazarRecord {
   /** "aktif" atau "selesai". Bazar aktif boleh lebih dari satu (18 Nov 2026);
    *  penjualan memakai yang terakhir dibuka. */
   status: "aktif" | "selesai";
+  /**
+   * PIN kasir bazar ini (Fase 2A, BU-34): satu bazar satu PIN, wajib beda
+   * dengan PIN kasir toko, PIN admin, dan PIN owner. null = belum diatur
+   * (kasir bisa masuk sekali tanpa PIN, seperti bootstrap PIN admin).
+   */
+  pinKasirHash: string | null;
   ringkasanTerjual: number | null;
   ringkasanDibawa: number | null;
   ringkasanSisa: number | null;
@@ -492,6 +513,32 @@ export function getDB(): Promise<IDBPDatabase<KasirDB>> {
               await cursor.update({ ...v, jenisDokumen, arahStok, pelangganId: null });
             }
             cursor = await cursor.continue();
+          }
+        }
+
+        // Migrasi ringan v3 -> v4 (Fase 2A, BU-32/34): tambah kolom PIN baru
+        // dengan null (belum diatur). Tidak ada baris yang dihapus; data lama
+        // (termasuk transaksi Tante) tidak disentuh sama sekali.
+        if (oldVersion < 4) {
+          const storeSettings = tx.objectStore("settings");
+          const utama = (await storeSettings.get("utama")) as
+            | (SettingsRecord & { pinOwnerHash?: string | null; pinKasirTokoHash?: string | null })
+            | undefined;
+          if (utama && (utama.pinOwnerHash === undefined || utama.pinKasirTokoHash === undefined)) {
+            await storeSettings.put({
+              ...utama,
+              pinOwnerHash: utama.pinOwnerHash ?? null,
+              pinKasirTokoHash: utama.pinKasirTokoHash ?? null,
+            });
+          }
+          const storeBazar = tx.objectStore("bazars");
+          let cursorBazar = await storeBazar.openCursor();
+          while (cursorBazar) {
+            const b = cursorBazar.value as BazarRecord & { pinKasirHash?: string | null };
+            if (b.pinKasirHash === undefined) {
+              await cursorBazar.update({ ...b, pinKasirHash: null });
+            }
+            cursorBazar = await cursorBazar.continue();
           }
         }
       },

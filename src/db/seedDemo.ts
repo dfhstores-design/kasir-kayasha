@@ -19,7 +19,8 @@
  * eksplisit pada 17 Nov 2026 bahwa saat link dibuka logo sudah ada, mengesampingkan
  * keputusan lama di CATATAN-DISKUSI.md §3.2 (logo diunggah Tante sendiri,
  * bukan disimpan di repo). Logo tetap bisa diganti/dihapus Tante lewat
- * Pengaturan -> Logo resi setelahnya. PIN TIDAK di-seed (pinHash null).
+ * Pengaturan -> Logo resi setelahnya. PIN TIDAK di-seed (pinHash,
+ * pinOwnerHash, dan pinKasirTokoHash null — Fase 2A, BU-32/34).
  */
 import {
   ambilSettings,
@@ -63,6 +64,8 @@ export const SETTINGS_DEMO: SettingsRecord = {
   skalaFont: 1,
   tema: "terang",
   pinHash: null,
+  pinOwnerHash: null,
+  pinKasirTokoHash: null,
   updatedAt: new Date().toISOString(),
 };
 

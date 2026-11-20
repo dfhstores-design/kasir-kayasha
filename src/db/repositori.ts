@@ -32,6 +32,8 @@ export const SETTINGS_KOSONG: SettingsRecord = {
   skalaFont: 1,
   tema: "terang",
   pinHash: null,
+  pinOwnerHash: null,
+  pinKasirTokoHash: null,
   updatedAt: new Date(0).toISOString(),
 };
 
@@ -43,7 +45,15 @@ export function buatId(): UUID {
 
 export async function ambilSettings(): Promise<SettingsRecord> {
   const db = await getDB();
-  return (await db.get("settings", "utama")) ?? SETTINGS_KOSONG;
+  const tersimpan = await db.get("settings", "utama");
+  if (!tersimpan) return SETTINGS_KOSONG;
+  // Rekaman lama (sebelum v4) tidak punya kolom PIN baru: isi null supaya
+  // pemanggil tidak perlu menangani undefined di tiap tempat.
+  return {
+    ...tersimpan,
+    pinOwnerHash: tersimpan.pinOwnerHash ?? null,
+    pinKasirTokoHash: tersimpan.pinKasirTokoHash ?? null,
+  };
 }
 
 export async function simpanSettings(nilai: SettingsRecord): Promise<void> {
@@ -148,7 +158,7 @@ export async function buatBazar(
   nama: string,
   mulai: string | null,
   selesai: string | null,
-  detail: { lokasi?: string | null; catatan?: string | null } = {},
+  detail: { lokasi?: string | null; catatan?: string | null; pinKasirHash?: string | null } = {},
 ): Promise<BazarRecord> {
   const db = await getDB();
   // Bazar aktif boleh lebih dari satu (18 Nov 2026): admin boleh membuka
@@ -161,6 +171,8 @@ export async function buatBazar(
     selesai,
     lokasi: detail.lokasi ?? null,
     catatan: detail.catatan ?? null,
+    // PIN kasir bazar (Fase 2A, BU-34): satu bazar satu PIN.
+    pinKasirHash: detail.pinKasirHash ?? null,
     status: "aktif",
     ringkasanTerjual: null,
     ringkasanDibawa: null,
@@ -170,6 +182,14 @@ export async function buatBazar(
   };
   await db.put("bazars", bazar);
   return bazar;
+}
+
+/** Mengganti PIN kasir sebuah bazar (Fase 2A, BU-34; hanya admin). */
+export async function ubahPinKasirBazar(bazarId: UUID, pinKasirHash: string | null): Promise<void> {
+  const db = await getDB();
+  const bazar = await db.get("bazars", bazarId);
+  if (!bazar) return;
+  await db.put("bazars", { ...bazar, pinKasirHash });
 }
 
 /* ------------------------------------------------------------ biaya bazar */

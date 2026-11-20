@@ -40,6 +40,9 @@ describe("Bazar — multi-bazar & Buka Toko", () => {
     fireEvent.click(buka);
 
     fireEvent.change(screen.getByLabelText("Nama bazar"), { target: { value: "Bazar 2" } });
+    // Fase 2A (BU-34): buka bazar wajib mengisi PIN kasir bazar itu.
+    fireEvent.change(screen.getByLabelText("PIN kasir bazar (4–6 angka)"), { target: { value: "2468" } });
+    fireEvent.change(screen.getByLabelText("Ulangi PIN kasir bazar"), { target: { value: "2468" } });
     fireEvent.click(screen.getByRole("button", { name: "Simpan" }));
 
     // Bazar terbaru tampil sebagai bazar penjualan; yang lama tetap aktif.

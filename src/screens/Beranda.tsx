@@ -3,6 +3,7 @@ import StatusSinkron from "../components/StatusSinkron.tsx";
 import { daftarParkir, daftarProduk, profilTerisi, type ProdukRecord } from "../db/repositori.ts";
 import type { SettingsRecord } from "../db/schema.ts";
 import type { BazarRecord } from "../db/schema.ts";
+import { bolehAdmin, bolehLaporanOwner, labelLokasiKasir, type LokasiKasir, type Peran } from "../lib/peran.ts";
 import type { Layar } from "../App.tsx";
 
 interface Props {
@@ -19,7 +20,9 @@ interface Props {
    */
   memuatAwal: boolean;
   /** Peran aktif: kasir dibatasi pada transaksi bazar aktif saja. */
-  peran: "kasir" | "admin";
+  peran: Peran;
+  /** Lokasi kasir yang sedang aktif di perangkat ini (Fase 2A, BU-34). */
+  lokasiKasir: LokasiKasir | null;
   onMintaAdmin: () => void;
   onKeluarAdmin: () => void;
   /** Membuka Biaya Bazar; App yang menyertakan objek bazar aktif. */
@@ -30,11 +33,13 @@ interface Props {
 
 /**
  * Beranda — docs/design/screens/01-beranda.md.
- * Menu kasir: Penjualan, Pesanan Jahit, Masuk Admin. Admin tambah Barang,
- * Ringkasan, Pengaturan, dan bagian Mini ERP (admin-only). Panel bazar dan
- * status simpan. Tidak ada menu tersembunyi.
+ * Menu kasir: Penjualan, Pesanan Jahit, Masuk Admin, Masuk Owner,
+ * Masuk Kasir. Admin tambah Barang, Ringkasan, Pengaturan, dan bagian
+ * Mini ERP (admin-only). Owner tambah bagian Laporan Owner (admin TIDAK
+ * boleh membuka laporan keuangan, BU-32). Panel bazar dan status simpan.
+ * Tidak ada menu tersembunyi.
  */
-export default function Beranda({ settings, storagePermanen, bazar, jumlahBazarAktif, memuatAwal, peran, onMintaAdmin, onKeluarAdmin, onBiayaBazar, buka }: Props) {
+export default function Beranda({ settings, storagePermanen, bazar, jumlahBazarAktif, memuatAwal, peran, lokasiKasir, onMintaAdmin, onKeluarAdmin, onBiayaBazar, buka }: Props) {
   const [jumlahBarang, setJumlahBarang] = useState<number | null>(null);
   const [parkir, setParkir] = useState(0);
   /** Notifikasi tombol placeholder Mini ERP (belum ada fungsi; admin-only). */
@@ -83,13 +88,13 @@ export default function Beranda({ settings, storagePermanen, bazar, jumlahBazarA
           </span>
           <div className="h2">{bazar.nama}</div>
           <span className="soft">
-            {peran === "admin" ? "Ketuk untuk mengatur barang & biaya bazar" : "Ketuk untuk melihat bazar"}
+            {bolehAdmin(peran) ? "Ketuk untuk mengatur barang & biaya bazar" : "Ketuk untuk melihat bazar"}
           </span>
-          {peran === "admin" && jumlahBazarAktif > 1 && (
+          {bolehAdmin(peran) && jumlahBazarAktif > 1 && (
             <span className="soft">Ada {jumlahBazarAktif} bazar aktif. Penjualan memakai bazar ini (terakhir dibuka).</span>
           )}
         </button>
-      ) : peran === "admin" ? (
+      ) : bolehAdmin(peran) ? (
         <button
           type="button"
           className="card"
@@ -113,7 +118,7 @@ export default function Beranda({ settings, storagePermanen, bazar, jumlahBazarA
           <button type="button" className="tile tile--hero" disabled aria-describedby="alasan-jual">
             Penjualan
           </button>
-        ) : peran === "admin" || bazar ? (
+        ) : bolehAdmin(peran) || bazar ? (
           <button type="button" className="tile tile--hero" onClick={() => buka("pilih-barang")}>
             Penjualan
           </button>
@@ -126,7 +131,7 @@ export default function Beranda({ settings, storagePermanen, bazar, jumlahBazarA
           Pesanan Jahit
         </button>
 
-        {peran === "admin" ? (
+        {bolehAdmin(peran) ? (
           <>
             <button type="button" className="tile" onClick={() => buka("barang")}>
               Barang
@@ -139,9 +144,17 @@ export default function Beranda({ settings, storagePermanen, bazar, jumlahBazarA
             </button>
           </>
         ) : (
-          <button type="button" className="tile" onClick={onMintaAdmin}>
-            Masuk Admin
-          </button>
+          <>
+            <button type="button" className="tile" onClick={onMintaAdmin}>
+              Masuk Admin
+            </button>
+            <button type="button" className="tile" onClick={() => buka("masuk-owner")}>
+              Masuk Owner
+            </button>
+            <button type="button" className="tile" onClick={() => buka("masuk-kasir")}>
+              {lokasiKasir ? `Kasir: ${labelLokasiKasir(lokasiKasir)}` : "Masuk Kasir"}
+            </button>
+          </>
         )}
       </div>
 
@@ -151,13 +164,13 @@ export default function Beranda({ settings, storagePermanen, bazar, jumlahBazarA
         </p>
       )}
 
-      {peran === "admin" && (
+      {bolehAdmin(peran) && (
         <div>
           <p className="h2" style={{ margin: "1rem 0 0.5rem" }}>
             Mini ERP
           </p>
           <div className="tiles" aria-label="Mini ERP — segera hadir">
-            {["Catatan Keuangan", "Catat Belanja", "Laporan Keuangan", "Data Pelanggan", "Pengeluaran"].map((label) => (
+            {["Catatan Keuangan", "Catat Belanja", "Data Pelanggan", "Pengeluaran"].map((label) => (
               <button
                 key={label}
                 type="button"
@@ -177,7 +190,28 @@ export default function Beranda({ settings, storagePermanen, bazar, jumlahBazarA
         </div>
       )}
 
-      {peran === "admin" && (
+      {bolehLaporanOwner(peran) && (
+        <div>
+          <p className="h2" style={{ margin: "1rem 0 0.5rem" }}>
+            Laporan Owner
+          </p>
+          <div className="tiles" aria-label="Laporan Owner — segera hadir">
+            <button
+              type="button"
+              className="tile tile--segera"
+              onClick={() => setPesan("sedang dalam pengembangan")}
+            >
+              <span>Laporan Keuangan</span>
+              <span className="tile__sub">Segera</span>
+            </button>
+          </div>
+          <p className="soft" style={{ margin: "0.25rem 0 0" }}>
+            Laporan keuangan (buku besar, buku kecil, kas, HPP) hanya untuk owner. Admin tidak bisa membukanya.
+          </p>
+        </div>
+      )}
+
+      {bolehAdmin(peran) && (
         <>
           {bazar && (
             <button
@@ -188,11 +222,23 @@ export default function Beranda({ settings, storagePermanen, bazar, jumlahBazarA
               Biaya Bazar
             </button>
           )}
-          <button type="button" className="btn btn--ghost btn--small" onClick={() => buka("atur-pin")}>
-            Atur PIN Admin
-          </button>
+          {peran === "admin" && (
+            <>
+              <button type="button" className="btn btn--ghost btn--small" onClick={() => buka("atur-pin")}>
+                Atur PIN Admin
+              </button>
+              <button type="button" className="btn btn--ghost btn--small" onClick={() => buka("atur-pin-kasir-toko")}>
+                Atur PIN Kasir Toko
+              </button>
+            </>
+          )}
+          {peran === "owner" && (
+            <button type="button" className="btn btn--ghost btn--small" onClick={() => buka("atur-pin-owner")}>
+              Atur PIN Owner
+            </button>
+          )}
           <p className="soft" style={{ margin: 0 }}>
-            Masuk sebagai admin.
+            Masuk sebagai {peran === "owner" ? "owner" : "admin"}.
           </p>
           <button type="button" className="btn btn--ghost btn--small" onClick={onKeluarAdmin}>
             Keluar ke mode kasir

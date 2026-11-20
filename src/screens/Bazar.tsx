@@ -1,11 +1,15 @@
 import { useEffect, useState } from "react";
 import {
+  ambilSettings,
   buatBazar,
   daftarBazar,
   ringkasanBazar,
+  ubahPinKasirBazar,
   type BazarRecord,
   type RingkasanBazar,
+  type SettingsRecord,
 } from "../db/repositori.ts";
+import { buatHashPin, pinBedaDariHash, validasiPinBaru } from "../lib/pin.ts";
 import { formatRupiah } from "../lib/money.ts";
 import { formatTanggal } from "../lib/tanggal.ts";
 
@@ -28,6 +32,16 @@ export default function Bazar({ onAturBarang, onTutupBazar, onUbah }: Props) {
   const [nama, setNama] = useState("");
   const [galat, setGalat] = useState<string | null>(null);
   const [sibuk, setSibuk] = useState(false);
+  /** PIN kasir bazar baru (Fase 2A, BU-34): satu bazar satu PIN. */
+  const [pinBazar, setPinBazar] = useState("");
+  const [ulangPinBazar, setUlangPinBazar] = useState("");
+  /** Ubah PIN kasir bazar aktif: id bazar yang form-nya terbuka. */
+  const [ubahPinUntuk, setUbahPinUntuk] = useState<string | null>(null);
+  const [pinBaruUbah, setPinBaruUbah] = useState("");
+  const [ulangPinUbah, setUlangPinUbah] = useState("");
+  const [pesanUbah, setPesanUbah] = useState<string | null>(null);
+  /** Settings (untuk cek PIN bazar tidak sama dengan PIN lain). */
+  const [settings, setSettings] = useState<SettingsRecord | null>(null);
   /** Notifikasi tombol placeholder Buka Toko (belum ada fungsi). */
   const [pesan, setPesan] = useState<string | null>(null);
 
@@ -39,9 +53,11 @@ export default function Bazar({ onAturBarang, onTutupBazar, onUbah }: Props) {
       const daftar = await daftarBazar();
       const hasil: Record<string, RingkasanBazar> = {};
       for (const b of daftar) hasil[b.id] = await ringkasanBazar(b.id);
+      const s = await ambilSettings().catch(() => null);
       if (!hidup) return;
       setSemua(daftar);
       setRingkas(hasil);
+      setSettings(s);
     })().catch(() => {
       if (hidup) setSemua([]);
     });
@@ -49,6 +65,11 @@ export default function Bazar({ onAturBarang, onTutupBazar, onUbah }: Props) {
       hidup = false;
     };
   }, [muatUlang]);
+
+  /** PIN bazar tidak boleh sama dengan PIN admin, owner, atau kasir toko. */
+  function pinLain(): Array<string | null> {
+    return [settings?.pinHash ?? null, settings?.pinOwnerHash ?? null, settings?.pinKasirTokoHash ?? null];
+  }
 
   // daftarBazar() mengurutkan dari yang terakhir dibuka, jadi aktif[0]
   // adalah bazar penjualan (sama dengan bazarAktif() di repositori).
@@ -60,16 +81,64 @@ export default function Bazar({ onAturBarang, onTutupBazar, onUbah }: Props) {
       setGalat("Perbaiki: nama bazar minimal 2 huruf.");
       return;
     }
+    // PIN kasir bazar (Fase 2A, BU-34): wajib diisi, wajib beda dengan PIN lain.
+    const v = validasiPinBaru(pinBazar);
+    if (!v.ok) {
+      setGalat(`PIN kasir bazar: ${v.pesan}`);
+      return;
+    }
+    if (pinBazar !== ulangPinBazar) {
+      setGalat("Kedua PIN kasir bazar tidak sama.");
+      return;
+    }
+    if (!(await pinBedaDariHash(pinBazar, pinLain()))) {
+      setGalat("PIN kasir bazar harus beda dengan PIN admin, PIN owner, dan PIN kasir toko.");
+      return;
+    }
     setSibuk(true);
     try {
-      await buatBazar(nama.trim(), null, null);
+      const hash = await buatHashPin(pinBazar);
+      await buatBazar(nama.trim(), null, null, { pinKasirHash: hash });
       setFormBuka(false);
       setNama("");
+      setPinBazar("");
+      setUlangPinBazar("");
       setGalat(null);
       setMuatUlang((n) => n + 1);
       onUbah();
     } catch (e) {
       setGalat(e instanceof Error ? e.message : "Bazar belum terbuka.");
+    } finally {
+      setSibuk(false);
+    }
+  }
+
+  /** Mengganti PIN kasir sebuah bazar aktif (hanya admin). */
+  async function simpanUbahPin(bazar: BazarRecord) {
+    const v = validasiPinBaru(pinBaruUbah);
+    if (!v.ok) {
+      setGalat(`PIN kasir bazar: ${v.pesan}`);
+      return;
+    }
+    if (pinBaruUbah !== ulangPinUbah) {
+      setGalat("Kedua PIN kasir bazar tidak sama.");
+      return;
+    }
+    if (!(await pinBedaDariHash(pinBaruUbah, pinLain()))) {
+      setGalat("PIN kasir bazar harus beda dengan PIN admin, PIN owner, dan PIN kasir toko.");
+      return;
+    }
+    setSibuk(true);
+    try {
+      await ubahPinKasirBazar(bazar.id, await buatHashPin(pinBaruUbah));
+      setUbahPinUntuk(null);
+      setPinBaruUbah("");
+      setUlangPinUbah("");
+      setGalat(null);
+      setPesanUbah(`PIN kasir bazar "${bazar.nama}" sudah diganti. Beri tahu kasir bazar PIN barunya.`);
+      setMuatUlang((n) => n + 1);
+    } catch {
+      setGalat("PIN kasir bazar belum diganti.");
     } finally {
       setSibuk(false);
     }
@@ -112,6 +181,9 @@ export default function Bazar({ onAturBarang, onTutupBazar, onUbah }: Props) {
                   Penjualan memakai bazar ini (terakhir dibuka).
                 </p>
               )}
+              <p className="soft" style={{ margin: "0.25rem 0 0" }}>
+                PIN kasir: {b.pinKasirHash ? "sudah diatur" : "belum diatur"}
+              </p>
               <div className="grid2" style={{ marginTop: "0.75rem" }}>
                 <button type="button" className="btn btn--ghost btn--small" onClick={() => onAturBarang(b)}>
                   Atur Barang
@@ -120,12 +192,70 @@ export default function Bazar({ onAturBarang, onTutupBazar, onUbah }: Props) {
                   Tutup Bazar
                 </button>
               </div>
+              {ubahPinUntuk === b.id ? (
+                <div style={{ marginTop: "0.75rem" }}>
+                  <label htmlFor={`pin-baru-${b.id}`}>PIN kasir baru (4–6 angka)</label>
+                  <input
+                    id={`pin-baru-${b.id}`}
+                    type="password"
+                    inputMode="numeric"
+                    autoComplete="off"
+                    maxLength={6}
+                    value={pinBaruUbah}
+                    onChange={(e) => setPinBaruUbah(e.target.value.replace(/[^\d]/g, ""))}
+                  />
+                  <label htmlFor={`pin-ulang-${b.id}`}>Ulangi PIN kasir baru</label>
+                  <input
+                    id={`pin-ulang-${b.id}`}
+                    type="password"
+                    inputMode="numeric"
+                    autoComplete="off"
+                    maxLength={6}
+                    value={ulangPinUbah}
+                    onChange={(e) => setUlangPinUbah(e.target.value.replace(/[^\d]/g, ""))}
+                  />
+                  <div className="grid2" style={{ marginTop: "0.5rem" }}>
+                    <button type="button" className="btn btn--ghost btn--small" onClick={() => setUbahPinUntuk(null)}>
+                      Batal
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn--primary btn--small"
+                      onClick={() => void simpanUbahPin(b)}
+                      disabled={sibuk || pinBaruUbah.length < 4}
+                    >
+                      Simpan PIN
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div style={{ marginTop: "0.5rem" }}>
+                  <button
+                    type="button"
+                    className="btn btn--ghost btn--small"
+                    onClick={() => {
+                      setUbahPinUntuk(b.id);
+                      setPinBaruUbah("");
+                      setUlangPinUbah("");
+                      setGalat(null);
+                    }}
+                  >
+                    Ubah PIN kasir
+                  </button>
+                </div>
+              )}
             </div>
           ))
         ) : (
           <div className="panel panel--ok">
             <strong>Belum ada bazar aktif.</strong>
             <p style={{ margin: "0.25rem 0 0" }}>Penjualan memakai stok gudang.</p>
+          </div>
+        )}
+
+        {pesanUbah && (
+          <div className="panel panel--ok" role="status">
+            {pesanUbah}
           </div>
         )}
 
@@ -138,6 +268,30 @@ export default function Bazar({ onAturBarang, onTutupBazar, onUbah }: Props) {
               onChange={(e) => setNama(e.target.value)}
               placeholder="Contoh: Pameran Mall Kelapa Gading, 15–20 Nov"
             />
+            <label htmlFor="pin-bazar">PIN kasir bazar (4–6 angka)</label>
+            <input
+              id="pin-bazar"
+              type="password"
+              inputMode="numeric"
+              autoComplete="off"
+              maxLength={6}
+              value={pinBazar}
+              onChange={(e) => setPinBazar(e.target.value.replace(/[^\d]/g, ""))}
+              placeholder="PIN khusus bazar ini"
+            />
+            <label htmlFor="pin-bazar-ulang">Ulangi PIN kasir bazar</label>
+            <input
+              id="pin-bazar-ulang"
+              type="password"
+              inputMode="numeric"
+              autoComplete="off"
+              maxLength={6}
+              value={ulangPinBazar}
+              onChange={(e) => setUlangPinBazar(e.target.value.replace(/[^\d]/g, ""))}
+            />
+            <p className="hint" style={{ margin: "0.25rem 0 0" }}>
+              Satu bazar satu PIN. PIN ini harus beda dengan PIN kasir toko, PIN admin, dan PIN owner.
+            </p>
             <div className="grid2" style={{ marginTop: "0.75rem" }}>
               <button type="button" className="btn btn--ghost btn--small" onClick={() => setFormBuka(false)}>
                 Batal

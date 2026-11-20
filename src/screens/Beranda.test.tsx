@@ -29,6 +29,7 @@ function bazar(nama: string): BazarRecord {
     lokasi: null,
     catatan: null,
     status: "aktif",
+    pinKasirHash: null,
     ringkasanTerjual: null,
     ringkasanDibawa: null,
     ringkasanSisa: null,
@@ -50,6 +51,7 @@ describe("Beranda — pemuatan awal", () => {
         jumlahBazarAktif={0}
         memuatAwal
         peran="kasir"
+        lokasiKasir={null}
         onMintaAdmin={() => {}}
         onKeluarAdmin={() => {}}
         onBiayaBazar={() => {}}
@@ -70,6 +72,7 @@ describe("Beranda — pemuatan awal", () => {
         jumlahBazarAktif={0}
         memuatAwal={false}
         peran="kasir"
+        lokasiKasir={null}
         onMintaAdmin={() => {}}
         onKeluarAdmin={() => {}}
         onBiayaBazar={() => {}}
@@ -94,6 +97,7 @@ describe("Beranda — multi-bazar", () => {
         jumlahBazarAktif={2}
         memuatAwal={false}
         peran="admin"
+        lokasiKasir={null}
         onMintaAdmin={() => {}}
         onKeluarAdmin={() => {}}
         onBiayaBazar={() => {}}
@@ -104,5 +108,56 @@ describe("Beranda — multi-bazar", () => {
     expect(screen.getByText(/Ada 2 bazar aktif/)).toBeTruthy();
     expect(screen.getByText(/terakhir dibuka/)).toBeTruthy();
     expect(screen.getByRole("button", { name: "Penjualan" }).hasAttribute("disabled")).toBe(false);
+  });
+});
+
+describe("Beranda — Fase 2A (role & PIN, BU-32/34)", () => {
+  beforeEach(resetDB);
+  afterEach(cleanup);
+
+  function renderBeranda(peran: "kasir" | "admin" | "owner", lokasiKasir: { jenis: "toko" } | { jenis: "bazar"; bazarId: string; nama: string } | null = null) {
+    render(
+      <Beranda
+        settings={null}
+        storagePermanen={null}
+        bazar={null}
+        jumlahBazarAktif={0}
+        memuatAwal={false}
+        peran={peran}
+        lokasiKasir={lokasiKasir}
+        onMintaAdmin={() => {}}
+        onKeluarAdmin={() => {}}
+        onBiayaBazar={() => {}}
+        buka={vi.fn()}
+      />,
+    );
+  }
+
+  it("kasir melihat Masuk Admin, Masuk Owner, dan Masuk Kasir", () => {
+    renderBeranda("kasir");
+    expect(screen.getByRole("button", { name: "Masuk Admin" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Masuk Owner" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Masuk Kasir" })).toBeTruthy();
+  });
+
+  it("kasir yang sudah terikat lokasi melihat nama lokasinya", () => {
+    renderBeranda("kasir", { jenis: "toko" });
+    expect(screen.getByRole("button", { name: "Kasir: Toko" })).toBeTruthy();
+  });
+
+  it("admin TIDAK melihat Laporan Keuangan; owner melihatnya", () => {
+    renderBeranda("admin");
+    expect(screen.queryByText("Laporan Keuangan")).toBeNull();
+    expect(screen.queryByText("Laporan Owner")).toBeNull();
+    expect(screen.getByRole("button", { name: "Atur PIN Admin" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Atur PIN Kasir Toko" })).toBeTruthy();
+    expect(screen.queryByText("Atur PIN Owner")).toBeNull();
+    cleanup();
+
+    renderBeranda("owner");
+    expect(screen.getByText("Laporan Owner")).toBeTruthy();
+    expect(screen.getByRole("button", { name: /Laporan Keuangan/ })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Atur PIN Owner" })).toBeTruthy();
+    expect(screen.queryByText("Atur PIN Admin")).toBeNull();
   });
 });

@@ -1,0 +1,23 @@
+# Kasir Kayesa — konfigurasi TRIAL / staging (Fase 2A, Tahap 2).
+#
+# Dipakai HANYA untuk deploy ke proyek Pages "t2-kayesa":
+#   python3 ~/workspace/deploy-kasir-kayesha.py t2-kayesa wrangler.trial.toml
+# Skrip deploy menukar SEMENTARA wrangler.toml dengan file ini selama deploy
+# (wrangler pages deploy tidak punya --config dan mengabaikan WRANGLER_CONFIG),
+# lalu memulihkannya. Jangan deploy trial dengan wrangler langsung.
+#
+# JANGAN pakai file ini untuk deploy produksi (kayesa / kasir-kayesha):
+# binding D1 di sini menunjuk database TRIAL kasir-kayasha-t2, bukan
+# database produksi. Database trial ini staging permanen: data uji coba
+# tidak pernah masuk ke jurnal produksi.
+#
+# Deploy produksi tetap memakai wrangler.toml (tanpa argumen config).
+
+name = "t2-kayesa"
+pages_build_output_dir = "dist"
+compatibility_date = "2026-11-01"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "kasir-kayasha-t2"
+database_id = "30ca7d90-3aec-4124-a266-a25111a6e2ef"
