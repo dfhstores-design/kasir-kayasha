@@ -102,10 +102,18 @@ export async function terimaPembayaranKasir(
   };
 }
 
+/** Catatan baris pengembalian DP (F8/BU-63): DP dikembalikan ke pelanggan. */
+export const CATATAN_PENGEMBALIAN_DP = "Pengembalian DP";
+
 /**
- * Membatalkan (void) pesanan dengan alasan tercatat (BU-17.C).
+ * Membatalkan (void) pesanan dengan alasan tercatat (BU-17.C, BU-63).
  * Riwayat pembayaran TIDAK dihapus; status jadi batal. Alasan dicatat di catatan
  * pesanan, dan bila ada uang diterima ditulis jurnal balik (arah keluar) sebagai audit.
+ * F8/BU-63: DP yang sudah diterima DIKEMBALIKAN ke pelanggan — dicatat sebagai
+ * baris pembayaran bernominal NEGATIF, satu per pembayaran awal dengan metode
+ * yang sama ("Pengembalian DP"), sehingga uang masuk di Ringkasan berkurang
+ * sejumlah DP dan kas tetap cocok. Baris pengembalian ikut tersinkron lewat
+ * kiriman transaksi yang sama (tidak perlu jenis kiriman baru).
  */
 export async function batalkanPesananKasir(id: UUID, alasan: string): Promise<HasilKasir> {
   const alasanBersih = alasan.trim();
@@ -123,7 +131,7 @@ export async function batalkanPesananKasir(id: UUID, alasan: string): Promise<Ha
     : `Dibatalkan: ${alasanBersih}`;
 
   const db = await getDB();
-  const tx = db.transaction(["transactions", "journal"], "readwrite");
+  const tx = db.transaction(["transactions", "journal", "payments"], "readwrite");
   await tx.objectStore("transactions").put({
     ...t,
     statusPesanan: "dibatalkan",
@@ -145,6 +153,21 @@ export async function batalkanPesananKasir(id: UUID, alasan: string): Promise<Ha
       catatan: alasanBersih,
     };
     await tx.objectStore("journal").put(balik);
+    // Pengembalian DP (BU-63): satu baris negatif per pembayaran awal,
+    // metode sama — jadi uang per metode di Ringkasan ikut berkurang
+    // dengan benar (DP tunai kembali tunai, DP transfer kembali transfer).
+    for (const p of lengkap.pembayaran) {
+      if (p.nominal <= 0) continue;
+      const kembali: PembayaranRecord = {
+        id: buatId(),
+        transaksiId: id,
+        nominal: -p.nominal,
+        waktu,
+        metode: p.metode,
+        catatan: CATATAN_PENGEMBALIAN_DP,
+      };
+      await tx.objectStore("payments").put(kembali);
+    }
   }
   await tx.done;
 

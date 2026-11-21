@@ -22,7 +22,6 @@ import {
   hitungRingkasanKeuangan,
   labelKategori,
   metodeBayarSah,
-  transaksiPadaHari,
 } from "../lib/bazar.ts";
 import { labelJenisBayar } from "../lib/penjualan.ts";
 import { labelStatusBayar } from "../lib/keranjang.ts";
@@ -215,7 +214,10 @@ export default function Ringkasan({ bazar }: Props) {
   const daftarTrx = keRingkas(trx);
   const daftarBiaya = biaya.map((b) => ({ kategori: b.kategori, judul: b.judul, nominal: b.nominal, tanggal: b.tanggal }));
 
-  const harian = hitungRingkasanKeuangan(transaksiPadaHari(daftarTrx, hari), biayaPadaHari(daftarBiaya, hari));
+  // F8/BU-63: hitungan harian memakai `hari` — pengembalian DP yang dibatalkan
+  // hari itu muncul di hari pembatalan (bukan hari pesanan dibuat), dan DP +
+  // pelunasan yang beda hari dihitung di harinya masing-masing.
+  const harian = hitungRingkasanKeuangan(daftarTrx, biayaPadaHari(daftarBiaya, hari), hari);
   const total = hitungRingkasanKeuangan(daftarTrx, daftarBiaya);
 
   return (
@@ -269,6 +271,12 @@ export default function Ringkasan({ bazar }: Props) {
           <span>QRIS</span>
           <span>{formatRupiah(harian.qris)}</span>
         </div>
+        {harian.pengembalian > 0 && (
+          <div className="ringkas soft">
+            <span>Pengembalian DP hari itu</span>
+            <span>− {formatRupiah(harian.pengembalian)}</span>
+          </div>
+        )}
         <div className="hr" style={{ height: 1, background: "var(--line)", margin: "0.5rem 0" }} />
         <div className="ringkas soft">
           <span>Biaya hari itu</span>
@@ -297,6 +305,12 @@ export default function Ringkasan({ bazar }: Props) {
           <span>Uang masuk</span>
           <span className="money">{formatRupiah(total.uangMasuk)}</span>
         </div>
+        {total.pengembalian > 0 && (
+          <div className="ringkas soft">
+            <span>Pengembalian DP</span>
+            <span>− {formatRupiah(total.pengembalian)}</span>
+          </div>
+        )}
         <div className="ringkas">
           <span>Biaya bazar</span>
           <span className="money">− {formatRupiah(total.totalBiaya)}</span>

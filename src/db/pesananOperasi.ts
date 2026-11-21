@@ -4,7 +4,7 @@
  * sebelum mengubah data apa pun.
  */
 import { getDB } from "./schema.ts";
-import type { PembayaranRecord, TransaksiRecord, ItemTransaksiRecord, UUID } from "./schema.ts";
+import type { JournalRecord, PembayaranRecord, TransaksiRecord, ItemTransaksiRecord, UUID } from "./schema.ts";
 import { buatId, ambilTransaksi, simpanTransaksi } from "./repositori.ts";
 import { sumberStokUntuk } from "../lib/sumberStok.ts";
 import { hitungPembayaranBaru, hitungIsiOngkir, transisiSah, type StatusPesanan } from "../lib/pesanan.ts";
@@ -152,13 +152,20 @@ export async function isiOngkir(id: UUID, ongkirBaru: Ongkir): Promise<HasilOper
 /* --------------------------------------------------------- pembatalan */
 
 /**
- * Membatalkan transaksi.
+ * Membatalkan transaksi — WAJIB pakai alasan tertulis (BU-63, sama seperti
+ * batalkanPesananKasir/BU-17.C: tidak boleh batal tanpa alasan yang jelas).
  * - Penjualan langsung: stok dikembalikan.
  * - PO: stok tidak pernah dikurangi, jadi tidak ada yang dikembalikan
  *   kecuali PO sudah selesai (barang sudah keluar).
- * Pembayaran TIDAK dihapus.
+ * Pembayaran TIDAK dihapus. F8/BU-63: uang yang sudah diterima DIKEMBALIKAN
+ * ke pelanggan — dicatat sebagai baris pembayaran negatif ("Pengembalian DP",
+ * satu per pembayaran awal, metode sama) + jurnal balik, dan pembatalan
+ * ditandai untuk sync supaya alasan + pengembalian sampai ke perangkat lain.
  */
-export async function batalkanTransaksi(id: UUID): Promise<HasilOperasi> {
+export async function batalkanTransaksi(id: UUID, alasan: string): Promise<HasilOperasi> {
+  const alasanBersih = alasan.trim();
+  if (alasanBersih.length < 3) return { ok: false, pesan: "Isi alasan pembatalan (minimal 3 huruf)." };
+
   const lengkap = await ambilTransaksi(id);
   if (!lengkap) return { ok: false, pesan: "Transaksi tidak ditemukan." };
   const t = lengkap.transaksi;
@@ -166,9 +173,13 @@ export async function batalkanTransaksi(id: UUID): Promise<HasilOperasi> {
 
   const sudahKeluarStok = t.jenis === "po" ? t.statusPesanan === "selesai" : true;
   const waktu = new Date().toISOString();
+  const terbayar = lengkap.pembayaran.reduce((n, p) => n + p.nominal, 0);
+  const catatanBaru = t.catatanPesanan
+    ? `${t.catatanPesanan}\nDibatalkan: ${alasanBersih}`
+    : `Dibatalkan: ${alasanBersih}`;
 
   const db = await getDB();
-  const tx = db.transaction(["transactions", "products", "bazar_items"], "readwrite");
+  const tx = db.transaction(["transactions", "products", "bazar_items", "journal", "payments"], "readwrite");
 
   if (sudahKeluarStok) {
     // Kembalikan stok ke sumber asalnya.
@@ -204,8 +215,45 @@ export async function batalkanTransaksi(id: UUID): Promise<HasilOperasi> {
     ...t,
     statusPesanan: "dibatalkan",
     dibatalkanPada: waktu,
+    catatanPesanan: catatanBaru,
     updatedAt: waktu,
   });
+
+  if (terbayar > 0) {
+    const balik: JournalRecord = {
+      id: buatId(),
+      arah: "keluar",
+      kategori: "pembatalan",
+      nominal: terbayar,
+      waktu,
+      dokumenId: id,
+      pemilik: "usaha",
+      sumber: "usaha",
+      catatan: alasanBersih,
+    };
+    await tx.objectStore("journal").put(balik);
+    for (const p of lengkap.pembayaran) {
+      if (p.nominal <= 0) continue;
+      const kembali: PembayaranRecord = {
+        id: buatId(),
+        transaksiId: id,
+        nominal: -p.nominal,
+        waktu,
+        metode: p.metode,
+        catatan: "Pengembalian DP",
+      };
+      await tx.objectStore("payments").put(kembali);
+    }
+  }
   await tx.done;
+
+  // Antrean sinkronisasi (Fase 2B): pembatalan + alasan + pengembalian harus
+  // sampai ke perangkat lain — sebelumnya fungsi ini tidak menandai sync.
+  try {
+    const { tandaiUntukSync } = await import("../sync/mesin.ts");
+    await tandaiUntukSync("transaksi", id);
+  } catch {
+    // Sengaja diam: pembatalan lokal sudah sah.
+  }
   return { ok: true };
 }

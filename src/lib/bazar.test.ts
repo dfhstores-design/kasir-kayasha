@@ -143,6 +143,90 @@ describe("hitungRingkasanKeuangan", () => {
   });
 });
 
+describe("F8/BU-63: pengembalian DP pesanan yang dibatalkan", () => {
+  // Baris pembayaran dengan waktu bebas (untuk uji hitungan harian).
+  const pw = (nominal: number, metode: PembayaranRingkas["metode"], waktu: string): PembayaranRingkas => ({
+    nominal,
+    metode,
+    waktu,
+  });
+
+  it("pesanan batal dengan DP yang dikembalikan: uang masuk net 0, omzet tidak masuk, pengembalian tercatat", () => {
+    // Pesanan jahit total 350rb, DP tunai 150rb, lalu dibatalkan + DP dikembalikan.
+    const r = hitungRingkasanKeuangan(
+      [t(350000, "tunai", [p(150000, "tunai"), p(-150000, "tunai")], true)],
+      [],
+    );
+    expect(r.jumlahTransaksi).toBe(0);
+    expect(r.omzet).toBe(0);
+    expect(r.uangMasuk).toBe(0);
+    expect(r.tunai).toBe(0);
+    expect(r.pengembalian).toBe(150000);
+  });
+
+  it("pesanan batal: DP tunai + pelunasan transfer dikembalikan per metode", () => {
+    // Total 350rb: DP tunai 175rb + pelunasan transfer 175rb, keduanya dikembalikan.
+    const r = hitungRingkasanKeuangan(
+      [
+        t(
+          350000,
+          "transfer",
+          [p(175000, "tunai"), p(175000, "transfer"), p(-175000, "tunai"), p(-175000, "transfer")],
+          true,
+        ),
+      ],
+      [],
+    );
+    expect(r.uangMasuk).toBe(0);
+    expect(r.tunai).toBe(0);
+    expect(r.transfer).toBe(0);
+    expect(r.pengembalian).toBe(350000);
+  });
+
+  it("pesanan batal TANPA baris pengembalian (data lama sebelum BU-63) tetap tidak dihitung", () => {
+    // Nasib DP tidak diketahui — tetap dikecualikan seperti sebelum F8.
+    const r = hitungRingkasanKeuangan([t(350000, "tunai", [p(150000, "tunai")], true)], []);
+    expect(r.uangMasuk).toBe(0);
+    expect(r.pengembalian).toBe(0);
+  });
+
+  it("harian: DP masuk di hari pesanan, pengembalian muncul di hari pembatalan", () => {
+    // Pesanan 10 Nov, DP tunai 200rb tanggal 10 Nov; dibatalkan 11 Nov, DP dikembalikan 11 Nov.
+    const batal = t(
+      500000,
+      "tunai",
+      [pw(200000, "tunai", "2026-11-10T10:00:00.000Z"), pw(-200000, "tunai", "2026-11-11T09:00:00.000Z")],
+      true,
+      "2026-11-10T10:00:00.000Z",
+    );
+    const hariPesan = hitungRingkasanKeuangan([batal], [], "2026-11-10");
+    expect(hariPesan.uangMasuk).toBe(200000);
+    expect(hariPesan.tunai).toBe(200000);
+    expect(hariPesan.pengembalian).toBe(0);
+    const hariBatal = hitungRingkasanKeuangan([batal], [], "2026-11-11");
+    expect(hariBatal.uangMasuk).toBe(-200000);
+    expect(hariBatal.tunai).toBe(-200000);
+    expect(hariBatal.pengembalian).toBe(200000);
+    const total = hitungRingkasanKeuangan([batal], []);
+    expect(total.uangMasuk).toBe(0);
+    expect(total.pengembalian).toBe(200000);
+  });
+
+  it("harian: DP dan pelunasan beda hari dihitung di harinya masing-masing", () => {
+    // Pesanan aktif: DP tunai 175rb tanggal 10 Nov, pelunasan transfer 175rb tanggal 12 Nov.
+    const aktif = t(
+      350000,
+      "transfer",
+      [pw(175000, "tunai", "2026-11-10T10:00:00.000Z"), pw(175000, "transfer", "2026-11-12T10:00:00.000Z")],
+      false,
+      "2026-11-10T10:00:00.000Z",
+    );
+    expect(hitungRingkasanKeuangan([aktif], [], "2026-11-10").uangMasuk).toBe(175000);
+    expect(hitungRingkasanKeuangan([aktif], [], "2026-11-12").uangMasuk).toBe(175000);
+    expect(hitungRingkasanKeuangan([aktif], []).uangMasuk).toBe(350000);
+  });
+});
+
 describe("filter harian", () => {
   it("transaksiPadaHari hanya hari tersebut", () => {
     const daftar = [

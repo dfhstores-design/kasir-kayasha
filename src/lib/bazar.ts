@@ -70,6 +70,11 @@ export interface RingkasanKeuangan {
   transfer: Rupiah;
   qris: Rupiah;
   tanpaMetode: Rupiah;
+  /** Total DP yang dikembalikan karena pembatalan (F8/BU-63), sebagai
+   *  angka positif. uangMasuk di atas SUDAH bersih dari pengembalian ini
+   *  (diterima lalu dikembalikan = net 0) — baris ini hanya penjelasnya,
+   *  supaya kasir/owner melihat kenapa uang masuk berkurang. */
+  pengembalian: Rupiah;
   totalBiaya: Rupiah;
   /** omzet − totalBiaya. Boleh negatif. */
   laba: Rupiah;
@@ -83,38 +88,67 @@ export interface RingkasanKeuangan {
  * - Uang masuk & per-metode = Σ baris pembayaran (uang yang benar-benar
  *   diterima). Pesanan DP tunai + pelunasan transfer dihitung terpisah
  *   per metode, bukan dibebankan penuh ke metode terakhir.
- * Transaksi yang DIBATALKAN tidak dihitung sama sekali (omzet maupun
- * uang masuk) — nasib DP pesanan void masih menunggu keputusan (F8).
+ * - `hari` ("YYYY-MM-DD", opsional): bila diisi, yang dihitung sebagai
+ *   uang masuk hari itu HANYA pembayaran bertanggal hari itu — jadi DP
+ *   yang dibayar Senin dan pelunasannya Rabu tidak menumpuk di Senin,
+ *   dan pengembalian DP yang dibatalkan Selasa muncul di Selasa, bukan
+ *   di hari pesanan dibuat. Tanpa `hari`: hitung semua (tampilan total).
+ * Transaksi yang DIBATALKAN tidak masuk omzet. Uangnya dihitung BILA
+ * pembatalannya mengikuti BU-63 (ada baris pengembalian DP, F8): uang
+ * yang diterima dan pengembaliannya saling meniadakan, jadi uang masuk
+ * bersih. Transaksi batal TANPA baris pengembalian (data lama sebelum
+ * BU-63, nasib DP tidak diketahui) tidak dihitung sama sekali.
  */
 export function hitungRingkasanKeuangan(
   transaksi: readonly TransaksiRingkas[],
   biaya: readonly BiayaRingkas[],
+  hari?: string,
 ): RingkasanKeuangan {
-  const sah = transaksi.filter((t) => !t.dibatalkan);
+  const padaHari = (waktu: string) => hari === undefined || waktu.slice(0, 10) === hari;
 
+  let jumlahTransaksi = 0;
   let omzet = 0;
   let uangMasuk = 0;
   let tunai = 0;
   let transfer = 0;
   let qris = 0;
   let tanpaMetode = 0;
+  let pengembalian = 0;
 
-  for (const t of sah) {
-    omzet += t.total;
-    for (const p of t.pembayaran) {
-      uangMasuk += p.nominal;
-      switch (p.metode) {
-        case "tunai":
-          tunai += p.nominal;
-          break;
-        case "transfer":
-          transfer += p.nominal;
-          break;
-        case "qris":
-          qris += p.nominal;
-          break;
-        default:
-          tanpaMetode += p.nominal;
+  const tambahBayar = (p: PembayaranRingkas) => {
+    uangMasuk += p.nominal;
+    if (p.nominal < 0) pengembalian += -p.nominal;
+    switch (p.metode) {
+      case "tunai":
+        tunai += p.nominal;
+        break;
+      case "transfer":
+        transfer += p.nominal;
+        break;
+      case "qris":
+        qris += p.nominal;
+        break;
+      default:
+        tanpaMetode += p.nominal;
+    }
+  };
+
+  for (const t of transaksi) {
+    // Pesanan batal ikut alur BU-63 (ada baris pengembalian) → uangnya
+    // dihitung apa adanya (diterima lalu dikembalikan = net 0). Pesanan
+    // batal TANPA baris pengembalian (data lama) → uangnya tidak dihitung.
+    const adaPengembalian = t.pembayaran.some((p) => p.nominal < 0);
+    if (!t.dibatalkan) {
+      if (padaHari(t.waktu)) {
+        jumlahTransaksi += 1;
+        omzet += t.total;
+      }
+      for (const p of t.pembayaran) {
+        if (padaHari(p.waktu)) tambahBayar(p);
+      }
+    } else if (adaPengembalian) {
+      for (const p of t.pembayaran) {
+        if (padaHari(p.waktu)) tambahBayar(p);
       }
     }
   }
@@ -127,13 +161,14 @@ export function hitungRingkasanKeuangan(
   }
 
   return {
-    jumlahTransaksi: sah.length,
+    jumlahTransaksi,
     omzet,
     uangMasuk,
     tunai,
     transfer,
     qris,
     tanpaMetode,
+    pengembalian,
     totalBiaya,
     // Laba boleh negatif dan tidak boleh dibulatkan ke nol.
     laba: omzet - totalBiaya,

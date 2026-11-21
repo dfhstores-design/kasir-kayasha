@@ -1,15 +1,20 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { IDBFactory } from "fake-indexeddb";
-import { resetKoneksiDB, type Rekening } from "../db/schema.ts";
+import { resetKoneksiDB, type ProdukRecord, type Rekening } from "../db/schema.ts";
+import { ambilTransaksi, daftarProduk, simpanProduk } from "../db/repositori.ts";
 import {
   ambilPesananJahit,
   catatPengiriman,
   daftarPesananJahit,
   daftarPerluDitagih,
   simpanPesananJahit,
+  ubahPesananJahit,
   type RencanaJahitan,
 } from "./jahitan.ts";
-import { batalkanPesananKasir, terimaPembayaranKasir } from "../db/kasirOperasi.ts";
+import { batalkanPesananKasir, terimaPembayaranKasir, CATATAN_PENGEMBALIAN_DP } from "../db/kasirOperasi.ts";
+import { batalkanTransaksi } from "../db/pesananOperasi.ts";
+import { simpanPenjualan, type ItemPilihan, type RencanaPenjualan } from "./penjualan.ts";
+import { hitungRingkasanKeuangan } from "./bazar.ts";
 import { judulDokumen, labelJudul, nomorPlaceholder, sisaDokumen, susunDokumen, teksDokumen, type DataDokumen } from "./dokumen.ts";
 
 /**
@@ -212,5 +217,130 @@ describe("VOID - pembatalan kasir dengan alasan (BU-17.C)", () => {
     const detail = await ambilPesananJahit(id);
     expect(detail?.status).toBe("batal");
     expect(detail?.transaksi.catatanPesanan).toContain("Dibatalkan: Salah ukuran");
+  });
+});
+
+describe("F8/BU-63: DP pesanan yang dibatalkan DIKEMBALIKAN ke pelanggan", () => {
+  beforeEach(resetDB);
+
+  async function produkBaru(nama: string, hargaJual: number, stokGudang: number): Promise<ProdukRecord> {
+    const now = new Date().toISOString();
+    const p: ProdukRecord = {
+      id: crypto.randomUUID(),
+      nama,
+      kode: null,
+      hargaJual,
+      stokGudang,
+      catatan: null,
+      arsip: false,
+      createdAt: now,
+      updatedAt: now,
+    };
+    await simpanProduk(p);
+    return p;
+  }
+
+  function rencanaJual(p: ProdukRecord, kuantitas: number): RencanaPenjualan {
+    const item: ItemPilihan = { produkId: p.id, nama: p.nama, hargaSatuan: p.hargaJual, kuantitas, diskonPerUnit: 0 };
+    return {
+      items: [item],
+      diskonTotal: 0,
+      ongkir: { mode: "ambil_sendiri", nominal: 0 },
+      jenisBayar: "tunai",
+      statusBayar: "lunas",
+      dibayarSekarang: 0,
+      bazarId: null,
+    };
+  }
+
+  it("void pesanan ber-DP menulis baris pengembalian negatif per metode + uang masuk Ringkasan net 0", async () => {
+    const h = await simpanPesananJahit(rencana(), { rekening: [rekening] });
+    expect(h.ok).toBe(true);
+    if (!h.ok) return;
+    const id = h.pesanan.id;
+
+    await terimaPembayaranKasir(id, 150000, "tunai");
+    const b = await batalkanPesananKasir(id, "Pelanggan membatalkan");
+    expect(b.ok).toBe(true);
+
+    const lengkap = await ambilTransaksi(id);
+    expect(lengkap).toBeDefined();
+    const bayar = lengkap?.pembayaran ?? [];
+    // DP awal tetap ada (append-only) + satu baris pengembalian negatif.
+    expect(bayar.some((p) => p.nominal === 150000 && p.metode === "tunai")).toBe(true);
+    const kembali = bayar.find((p) => p.nominal < 0);
+    expect(kembali?.nominal).toBe(-150000);
+    expect(kembali?.metode).toBe("tunai");
+    expect(kembali?.catatan).toBe(CATATAN_PENGEMBALIAN_DP);
+
+    // Detail: terbayar tetap 150rb (uang memang pernah diterima), dikembalikan 150rb.
+    const detail = await ambilPesananJahit(id);
+    expect(detail?.terbayar).toBe(150000);
+    expect(detail?.dikembalikan).toBe(150000);
+
+    // Ringkasan: omzet tidak masuk, uang masuk net 0, pengembalian 150rb.
+    const ringkas = hitungRingkasanKeuangan([
+      {
+        total: lengkap?.transaksi.total ?? 0,
+        jenisBayar: "tunai",
+        dibatalkan: true,
+        waktu: lengkap?.transaksi.waktu ?? "",
+        pembayaran: bayar.map((p) => ({ nominal: p.nominal, metode: p.metode === "tunai" ? "tunai" as const : null, waktu: p.waktu })),
+      },
+    ], []);
+    expect(ringkas.omzet).toBe(0);
+    expect(ringkas.uangMasuk).toBe(0);
+    expect(ringkas.tunai).toBe(0);
+    expect(ringkas.pengembalian).toBe(150000);
+  });
+
+  it("void TANPA alasan ditolak (alasan kosong / kurang dari 3 huruf)", async () => {
+    const h = await simpanPesananJahit(rencana(), { rekening: [rekening] });
+    expect(h.ok).toBe(true);
+    if (!h.ok) return;
+    const id = h.pesanan.id;
+
+    expect((await batalkanPesananKasir(id, "")).ok).toBe(false);
+    expect((await batalkanPesananKasir(id, "ab")).ok).toBe(false);
+    expect((await batalkanPesananKasir(id, "  ")).ok).toBe(false);
+    // Pesanan belum batal — masih bisa dibatalkan dengan alasan yang sah.
+    expect((await batalkanPesananKasir(id, "Salah ukuran")).ok).toBe(true);
+  });
+
+  it("perbaikan catatan/detail pesanan (BU-56) tetap bisa TANPA alasan pembatalan", async () => {
+    const h = await simpanPesananJahit(rencana(), { rekening: [rekening] });
+    expect(h.ok).toBe(true);
+    if (!h.ok) return;
+    const id = h.pesanan.id;
+    await terimaPembayaranKasir(id, 150000, "tunai");
+
+    // Ubah catatan + detail tanpa alasan batal apa pun — aturan BU-63 hanya
+    // berlaku untuk pembatalan transaksi keuangan, bukan perbaikan catatan.
+    const ubah = await ubahPesananJahit(id, rencana({ catatan: "Tambah payet di lengan" }));
+    expect(ubah.ok).toBe(true);
+    const detail = await ambilPesananJahit(id);
+    expect(detail?.status).toBe("terbuka");
+    expect(detail?.catatan).toBe("Tambah payet di lengan");
+  });
+
+  it("void penjualan barang juga wajib alasan + DP dikembalikan + stok kembali", async () => {
+    const blus = await produkBaru("Blus Linen", 180000, 5);
+    const jual = await simpanPenjualan(rencanaJual(blus, 2), { rekening: [] });
+    expect(jual.ok).toBe(true);
+    if (!jual.ok) return;
+    const id = jual.transaksi.id;
+
+    expect((await batalkanTransaksi(id, "")).ok).toBe(false);
+    const b = await batalkanTransaksi(id, "Barang cacat, pelanggan minta batal");
+    expect(b.ok).toBe(true);
+
+    const lengkap = await ambilTransaksi(id);
+    expect(lengkap?.transaksi.statusPesanan).toBe("dibatalkan");
+    expect(lengkap?.transaksi.catatanPesanan).toContain("Dibatalkan: Barang cacat");
+    const bayar = lengkap?.pembayaran ?? [];
+    expect(bayar.some((p) => p.nominal === 360000)).toBe(true);
+    expect(bayar.some((p) => p.nominal === -360000 && p.catatan === CATATAN_PENGEMBALIAN_DP)).toBe(true);
+    // Stok gudang kembali 5 (2 terjual dibatalkan).
+    expect((await daftarProduk())[0]?.stokGudang).toBe(5);
   });
 });

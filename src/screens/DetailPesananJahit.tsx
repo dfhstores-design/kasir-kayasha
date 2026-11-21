@@ -170,6 +170,12 @@ export default function DetailPesananJahit({ id, onKembali, segarkan, onTerimaPe
             <span className="soft">Terbayar</span>
             <span>{formatRupiah(data.terbayar)}</span>
           </div>
+          {data.dikembalikan > 0 && (
+            <div className="ringkas" style={{ marginTop: "0.25rem" }}>
+              <span className="soft">Dikembalikan (DP)</span>
+              <span>− {formatRupiah(data.dikembalikan)}</span>
+            </div>
+          )}
           <div className="ringkas" style={{ marginTop: "0.25rem" }}>
             <strong>SISA</strong>
             <strong className="money" style={{ fontSize: "1.375rem", color: data.sisa > 0 ? "var(--primary)" : "var(--accent-ink)" }}>

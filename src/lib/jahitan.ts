@@ -109,6 +109,21 @@ export type HasilSimpanJahitan =
   | { ok: true; pesanan: PesananJahitTersimpan }
   | { ok: false; pesan: string };
 
+/**
+ * Uang yang benar-benar DITERIMA = jumlah baris pembayaran bernominal positif.
+ * Baris pengembalian DP (F8/BU-63) bernominal negatif dan TIDAK mengurangi
+ * "terbayar" di kartu/detail — uangnya memang pernah diterima; yang
+ * dikembalikan dicatat terpisah di `uangDikembalikan`.
+ */
+export function uangDiterima(pembayaran: readonly { nominal: number }[]): Rupiah {
+  return pembayaran.reduce((n, p) => n + (p.nominal > 0 ? p.nominal : 0), 0);
+}
+
+/** Uang yang dikembalikan ke pelanggan karena pembatalan (F8/BU-63), ≥ 0. */
+export function uangDikembalikan(pembayaran: readonly { nominal: number }[]): Rupiah {
+  return pembayaran.reduce((n, p) => n + (p.nominal < 0 ? -p.nominal : 0), 0);
+}
+
 /** Ringkasan status bayar pesanan jahit untuk kartu daftar & detail. */
 export interface RingkasanJahitan {
   id: UUID;
@@ -121,6 +136,8 @@ export interface RingkasanJahitan {
   createdPada: string;
   total: Rupiah;
   terbayar: Rupiah;
+  /** DP yang dikembalikan ke pelanggan karena pesanan dibatalkan (BU-63). */
+  dikembalikan: Rupiah;
   sisa: Rupiah;
   status: "terbuka" | "lunas" | "batal";
   sudahDikirim: boolean;
@@ -136,6 +153,8 @@ export interface PesananJahitLengkap {
   catatan: string | null;
   pelanggan: PelangganRecord | null;
   terbayar: Rupiah;
+  /** DP yang dikembalikan ke pelanggan karena pesanan dibatalkan (BU-63). */
+  dikembalikan: Rupiah;
   sisa: Rupiah;
   status: "terbuka" | "lunas" | "batal";
   sudahDikirim: boolean;
@@ -355,7 +374,7 @@ export async function ubahPesananJahit(id: UUID, rencana: RencanaJahitan): Promi
     return { ok: false, pesan: "Pesanan tidak ditemukan." };
   }
   const pembayaran = await db.getAllFromIndex("payments", "by-transaksi", id);
-  const terbayar = pembayaran.reduce((n, p) => n + p.nominal, 0);
+  const terbayar = uangDiterima(pembayaran);
   if (cek.total < terbayar) {
     return {
       ok: false,
@@ -508,7 +527,7 @@ export async function daftarPesananJahit(): Promise<RingkasanJahitan[]> {
   const hasil: RingkasanJahitan[] = [];
   for (const t of jasa) {
     const pembayaran = await db.getAllFromIndex("payments", "by-transaksi", t.id);
-    const terbayar = pembayaran.reduce((n, p) => n + p.nominal, 0);
+    const terbayar = uangDiterima(pembayaran);
     const kiriman = await db.getAllFromIndex("pengiriman", "by-dokumen", t.id);
     hasil.push({
       id: t.id,
@@ -521,6 +540,7 @@ export async function daftarPesananJahit(): Promise<RingkasanJahitan[]> {
       createdPada: t.waktu,
       total: t.total,
       terbayar,
+      dikembalikan: uangDikembalikan(pembayaran),
       sisa: hitungSisa(t.total, terbayar),
       status: statusJahitan(t),
       sudahDikirim: kiriman.length > 0,
@@ -541,7 +561,7 @@ export async function ambilPesananJahit(id: UUID): Promise<PesananJahitLengkap |
     t.pelangganId ? db.get("pelanggan", t.pelangganId) : Promise.resolve(undefined),
     db.getAllFromIndex("transaction_items", "by-transaksi", id),
   ]);
-  const terbayar = pembayaran.reduce((n, p) => n + p.nominal, 0);
+  const terbayar = uangDiterima(pembayaran);
 
   // Ukuran/catatan khusus dari baris item (BU-56). Pesanan lama (sebelum BU-56)
   // tidak punya ukuran di baris — pakai segmen ukuran lama dari catatan untuk
@@ -567,6 +587,7 @@ export async function ambilPesananJahit(id: UUID): Promise<PesananJahitLengkap |
     catatan: uraian.catatanBebas,
     pelanggan: pelanggan ?? null,
     terbayar,
+    dikembalikan: uangDikembalikan(pembayaran),
     sisa: hitungSisa(t.total, terbayar),
     status: statusJahitan(t),
     sudahDikirim: kiriman.length > 0,

@@ -256,6 +256,19 @@ describe("periksaKiriman", () => {
     ).toBe(true);
   });
 
+  it("F8/BU-63: menerima transaksi dengan baris pengembalian DP (pembayaran negatif)", () => {
+    const t = transaksi();
+    expect(
+      periksaKiriman({
+        ...t,
+        pembayaran: [
+          ...t.pembayaran,
+          { id: "pay-kembali", nominal: -100000, waktu: "2026-11-10T11:00:00.000Z", metode: "tunai", catatan: "Pengembalian DP" },
+        ],
+      }).ok,
+    ).toBe(true);
+  });
+
   it("menolak total non-integer (uang harus integer)", () => {
     const h = periksaKiriman(transaksi({ total: 450000.5 }));
     expect(h.ok).toBe(false);

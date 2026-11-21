@@ -280,6 +280,44 @@ describe("terapkanPerubahan — transaksi append-only", () => {
     expect(jurnal.some((j) => j.kategori === "pembatalan" && j.nominal === 100000)).toBe(true);
   });
 
+  it("F8/BU-63: void + baris pengembalian DP dari perangkat lain diterapkan; jurnal tidak berisi baris masuk negatif", async () => {
+    const db = await getDB();
+    const lokal = transaksiLokal({ statusBayar: "dp" });
+    await db.put("transactions", lokal);
+    await db.put("payments", { id: "pay-0", transaksiId: lokal.id, nominal: 100000, waktu: "2026-11-10T08:30:00.000Z", metode: "tunai", catatan: null });
+    const perubahan: Perubahan = {
+      sekarang: "2026-11-10T12:00:00.000Z",
+      transaksi: [
+        kirimanTransaksi({
+          statusPesanan: "dibatalkan",
+          statusBayar: "dp",
+          dibatalkanPada: "2026-11-10T11:00:00.000Z",
+          diubahPada: "2026-11-10T11:00:00.000Z",
+          catatanPesanan: "Dibatalkan: pelanggan membatalkan",
+          pembayaran: [
+            { id: "pay-0", nominal: 100000, waktu: "2026-11-10T08:30:00.000Z", metode: "tunai" },
+            { id: "pay-kembali", nominal: -100000, waktu: "2026-11-10T11:00:00.000Z", metode: "tunai", catatan: "Pengembalian DP" },
+          ],
+        }),
+      ],
+      produk: [],
+      bazar: [],
+      biayaBazar: [],
+      pin: [],
+    };
+    await terapkanPerubahan(db, perubahan, CTX);
+    const t = await db.get("transactions", lokal.id);
+    expect(t?.statusPesanan).toBe("dibatalkan");
+    // Baris pengembalian ikut tersimpan (append-only).
+    const bayar = await db.getAllFromIndex("payments", "by-transaksi", lokal.id);
+    expect(bayar.some((p) => p.id === "pay-kembali" && p.nominal === -100000)).toBe(true);
+    // Jurnal: baris "pembatalan" (keluar) sejumlah yang diterima tetap ada,
+    // dan TIDAK ada baris "masuk" bernominal negatif dari pengembalian.
+    const jurnal = await db.getAllFromIndex("journal", "by-dokumen", lokal.id);
+    expect(jurnal.some((j) => j.kategori === "pembatalan" && j.nominal === 100000 && j.arah === "keluar")).toBe(true);
+    expect(jurnal.some((j) => j.arah === "masuk" && j.nominal < 0)).toBe(false);
+  });
+
   it("kiriman rusak dicatat lalu dilewati, yang lain tetap diterapkan", async () => {
     const db = await getDB();
     const perubahan: Perubahan = {

@@ -178,9 +178,13 @@ async function simpanBayangan(
 }
 
 /** Jurnal turunan untuk satu dokumen ditulis ulang dari pembayarannya (BU-02).
- *  Baris "pembatalan" (void) TIDAK dihapus — itu jejak audit, bukan turunan. */
+ *  Baris "pembatalan" (void) TIDAK dihapus — itu jejak audit, bukan turunan.
+ *  F8/BU-63: baris pengembalian DP (nominal negatif) TIDAK masuk recompute —
+ *  jurnal "masuk" hanya mencatat uang yang benar-benar diterima; pengembalian
+ *  diwakili baris "pembatalan" (arah keluar) di bawah, bukan baris masuk negatif. */
 async function sinkronkanJurnal(db: DB, t: TransaksiRecord): Promise<void> {
   const pembayaran = await db.getAllFromIndex("payments", "by-transaksi", t.id);
+  const diterima = pembayaran.filter((p) => p.nominal > 0);
   const lama = await db.getAllFromIndex("journal", "by-dokumen", t.id);
   const tx = db.transaction("journal", "readwrite");
   for (const baris of lama) {
@@ -190,7 +194,7 @@ async function sinkronkanJurnal(db: DB, t: TransaksiRecord): Promise<void> {
   }
   for (const baris of recomputeJurnalDariDokumen(
     { id: t.id, total: t.total },
-    pembayaran.map((p) => ({ nominal: p.nominal, waktu: p.waktu })),
+    diterima.map((p) => ({ nominal: p.nominal, waktu: p.waktu })),
   )) {
     const utuh: JournalRecord = { ...baris, id: buatId() };
     await tx.store.put(utuh);
@@ -201,7 +205,7 @@ async function sinkronkanJurnal(db: DB, t: TransaksiRecord): Promise<void> {
     const sesudah = await db.getAllFromIndex("journal", "by-dokumen", t.id);
     const adaBatal = sesudah.some((b) => b.kategori === "pembatalan");
     if (!adaBatal) {
-      const terbayar = pembayaran.reduce((n, p) => n + p.nominal, 0);
+      const terbayar = diterima.reduce((n, p) => n + p.nominal, 0);
       if (terbayar > 0) {
         const alasan = (t.catatanPesanan ?? "").includes("Dibatalkan:")
           ? (t.catatanPesanan ?? "").split("Dibatalkan:")[1]!.trim()
