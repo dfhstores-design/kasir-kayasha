@@ -34,11 +34,12 @@ export const DB_NAME = "kasir-kayasha";
 /** Nama database yang dipakai versi lama; hanya untuk keperluan migrasi. */
 export const DB_NAME_LAMA = "kasir-kayesha";
 /**
- * Versi 4 (Fase 2A, Tahap 2, BU-32/34): PIN owner terpisah dari PIN admin,
- * PIN kasir toko, dan PIN kasir per bazar. Migrasi hanya menambah kolom
- * (null bila belum diatur) — tidak ada data yang dihapus atau ditulis ulang.
+ * Versi 5 (Fase 2B, Tahap 2, BU-33): sync banyak arah. Store baru `logSinkron`
+ * (catatan konflik/pengaman diam-diam, hanya untuk owner) dan `bayangan`
+ * (snapshot terakhir yang diketahui hub, untuk gabung 3-arah data master).
+ * Tidak ada baris lama yang diubah atau dihapus.
  */
-export const DB_VERSION = 4;
+export const DB_VERSION = 5;
 
 export type UUID = string;
 
@@ -111,6 +112,17 @@ export interface SettingsRecord {
    * tiap bazar, PIN admin, dan PIN owner. null = belum diatur.
    */
   pinKasirTokoHash: string | null;
+  /**
+   * Id perangkat ini (Fase 2B, BU-33): dibuat sekali (UUID), dipakai hub
+   * untuk tidak mengembalikan baris ke perangkat pengirimnya sendiri.
+   * Bukan data pribadi — hanya penanda perangkat.
+   */
+  perangkatId?: string;
+  /**
+   * Kursor tarik terakhir (Fase 2B, BU-33): waktu `diubah_pada` terbaru
+   * yang sudah ditarik dari hub. null/undefined = belum pernah tarik.
+   */
+  syncTarikTerakhir?: string | null;
   updatedAt: string;
 }
 
@@ -159,6 +171,12 @@ export interface BazarRecord {
   ringkasanSisa: number | null;
   ditutupPada: string | null;
   createdAt: string;
+  /**
+   * Terakhir diubah (Fase 2B, BU-33): dipakai sebagai `diubah_pada` saat
+   * bazar dikirim ke hub. Bazar lama (sebelum Fase 2B) tidak punya kolom
+   * ini — dibaca sebagai createdAt.
+   */
+  updatedAt?: string;
 }
 
 /** Kategori biaya bazar (daftar tetap, sesuai keputusan pemilik). */
@@ -246,6 +264,12 @@ export interface TransaksiRecord {
   jenisBayar: "tunai" | "transfer" | "qris" | null;
   statusBayar: StatusBayar;
   dibatalkanPada: string | null;
+  /**
+   * Terakhir kali transaksi ini berhasil dikirim/ditarik lewat hub
+   * (Fase 2B, BU-33): tanggal SYNC, bukan tanggal transaksi. Laporan
+   * tetap memakai `waktu` (tanggal transaksi), bukan kolom ini.
+   */
+  terakhirSyncPada?: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -339,12 +363,48 @@ export interface PengirimanRecord {
 
 export interface OutboxRecord {
   id: UUID;
-  jenisRecord: "produk" | "transaksi" | "pembayaran" | "settings";
+  jenisRecord: "produk" | "transaksi" | "pembayaran" | "settings" | "bazar";
   idRecord: string;
   aksi: "upsert";
   percobaan: number;
   terakhirDicoba: string | null;
   dibuatPada: string;
+}
+
+/**
+ * Satu catatan sinkronisasi (Fase 2B, BU-33): pengaman diam-diam dan jejak
+ * tarik/kirim yang hanya dibaca owner. Bukan antrean — tidak memblokir apa pun.
+ */
+export interface LogSinkronRecord {
+  id: UUID;
+  /** Waktu ISO saat catatan dibuat. */
+  waktu: string;
+  /** "konflik" = bentrok yang diputus otomatis / tidak bisa diputus;
+   *  "info" = jejak tarik (mis. transaksi baru masuk dari perangkat lain). */
+  jenis: "konflik" | "info";
+  /** Judul pendek berbahasa Indonesia, mis. "Harga Kebaya diubah di dua tempat". */
+  judul: string;
+  /** Rincian untuk owner, mis. "Dipakai yang terbaru (10 Nov 2026 09:00)". */
+  rincian: string;
+  /** Id perangkat asal perubahan (bila diketahui). */
+  perangkat: string | null;
+}
+
+/**
+ * Bayangan sync (Fase 2B, BU-33): snapshot terakhir sebuah record master
+ * (produk/bazar) seperti yang diketahui hub. Dipakai gabung 3-arah:
+ * kolom yang hanya berubah di satu sisi diambil dari sisi itu; kolom yang
+ * berubah di dua sisi diputus dengan yang terbaru + dicatat di logSinkron.
+ */
+export interface BayanganRecord {
+  /** "<jenis>:<id>", mis. "produk:abc-123". */
+  id: string;
+  jenis: "produk" | "bazar";
+  idRecord: UUID;
+  /** Snapshot record seperti terakhir diketahui hub (JSON). */
+  data: Record<string, unknown>;
+  /** `diubah_pada` snapshot itu. */
+  diubahPada: string;
 }
 
 export interface KasirDB extends DBSchema {
@@ -413,6 +473,16 @@ export interface KasirDB extends DBSchema {
     key: UUID;
     value: PengirimanRecord;
     indexes: { "by-dokumen": UUID; "by-pelanggan": UUID };
+  };
+  logSinkron: {
+    key: UUID;
+    value: LogSinkronRecord;
+    indexes: { "by-waktu": string };
+  };
+  bayangan: {
+    key: string;
+    value: BayanganRecord;
+    indexes: { "by-jenis": string };
   };
 }
 
@@ -497,6 +567,18 @@ export function getDB(): Promise<IDBPDatabase<KasirDB>> {
           const s = db.createObjectStore("pengiriman", { keyPath: "id" });
           s.createIndex("by-dokumen", "dokumenId");
           s.createIndex("by-pelanggan", "pelangganId");
+        }
+
+        // Store baru Fase 2B (v5): log sinkronisasi + bayangan gabung 3-arah.
+        // Hanya dibuat bila belum ada; tidak ada data lama yang disentuh.
+        if (!db.objectStoreNames.contains("logSinkron")) {
+          const s = db.createObjectStore("logSinkron", { keyPath: "id" });
+          s.createIndex("by-waktu", "waktu");
+        }
+
+        if (!db.objectStoreNames.contains("bayangan")) {
+          const s = db.createObjectStore("bayangan", { keyPath: "id" });
+          s.createIndex("by-jenis", "jenis");
         }
 
         // Migrasi ringan v2 -> v3: isi kolom baru di transactions tanpa merusak data lama.

@@ -285,6 +285,15 @@ export async function simpanPesananJahit(
   }
   await tx.done;
 
+  // Antrean sinkronisasi (Fase 2B): pesanan yang diubah harus sampai ke
+  // perangkat lain.
+  try {
+    const { tandaiUntukSync } = await import("../sync/mesin.ts");
+    await tandaiUntukSync("transaksi", id);
+  } catch {
+    // Sengaja diam: perubahan lokal sudah sah.
+  }
+
   for (const b of biayaLainBersih) simpanBiayaLainTersimpan(b.nama, b.nominal);
 
   return {
@@ -404,6 +413,15 @@ export async function ubahPesananJahit(id: UUID, rencana: RencanaJahitan): Promi
     });
   }
   await tx.done;
+
+  // Antrean sinkronisasi (Fase 2B): pesanan yang diubah harus sampai ke
+  // perangkat lain.
+  try {
+    const { tandaiUntukSync } = await import("../sync/mesin.ts");
+    await tandaiUntukSync("transaksi", id);
+  } catch {
+    // Sengaja diam: perubahan lokal sudah sah.
+  }
 
   for (const b of biayaLainBersih) simpanBiayaLainTersimpan(b.nama, b.nominal);
 

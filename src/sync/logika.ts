@@ -26,6 +26,18 @@ export interface KirimanTransaksi {
   statusBayar: string;
   bazarId: string | null;
   namaPemesan: string | null;
+  /** Kontak pemesan (Fase 2B: ikut tersinkron agar pesanan jahit utuh di perangkat lain). */
+  kontak?: string | null;
+  /** Catatan pesanan (Fase 2B). */
+  catatanPesanan?: string | null;
+  /** Perkiraan siap (Fase 2B). */
+  perkiraanSiap?: string | null;
+  /** Alamat kirim (Fase 2B). */
+  alamat?: string | null;
+  /** Nomor urut pesanan jahit dalam bulan (BU-19/21, Fase 2B). */
+  nomorUrutBulan?: number;
+  /** Jenis bayar terakhir (Fase 2B). */
+  jenisBayar?: string | null;
   ongkirMode: string;
   ongkirNominal: number | null;
   subtotalAwal: number;
@@ -35,6 +47,9 @@ export interface KirimanTransaksi {
   dibatalkanPada: string | null;
   dibuatPada: string;
   diubahPada: string;
+  /** Id perangkat pengirim (Fase 2B): dipakai pull untuk tidak mengembalikan
+   *  baris ke perangkat yang mengirimnya. */
+  perangkat?: string;
   items: Array<{
     id: string;
     produkId: string | null;
@@ -43,12 +58,18 @@ export interface KirimanTransaksi {
     kuantitas: number;
     diskonPerUnit: number;
     subtotalBersih: number;
+    /** Ukuran/catatan khusus per baris item (BU-56, Fase 2B). */
+    ukuran?: string | null;
+    /** Urutan baris seperti diinput (BU-56, Fase 2B). */
+    urutan?: number;
   }>;
   pembayaran: Array<{
     id: string;
     nominal: number;
     waktu: string;
     metode: string | null;
+    /** Catatan pembayaran (Fase 2B). */
+    catatan?: string | null;
   }>;
 }
 
@@ -59,6 +80,8 @@ export interface KirimanProduk {
   kode: string | null;
   hargaJual: number;
   stokGudang: number;
+  /** Catatan barang (Fase 2B). */
+  catatan?: string | null;
   arsip: boolean;
   diubahPada: string;
 }
@@ -71,6 +94,11 @@ export interface KirimanBazar {
   lokasi: string | null;
   mulai: string | null;
   selesai: string | null;
+  /** Catatan bazar (Fase 2B). */
+  catatan?: string | null;
+  /** Hash PIN kasir bazar ini (Fase 2B, BU-34): harus ikut tersinkron agar
+   *  kasir di perangkat lain bisa masuk ke bazar yang sama. Hash, bukan PIN. */
+  pinKasirHash?: string | null;
   diubahPada: string;
 }
 
@@ -85,7 +113,11 @@ export interface HasilKirim {
 export interface DBCloud {
   /** Menjalankan pernyataan SQL; `bind` mengikat parameter. */
   prepare(sql: string): {
-    bind(...nilai: unknown[]): { run(): Promise<unknown>; first<T>(): Promise<T | null> };
+    bind(...nilai: unknown[]): {
+      run(): Promise<unknown>;
+      first<T>(): Promise<T | null>;
+      all<T>(): Promise<{ results: T[] }>;
+    };
   };
 }
 
@@ -138,17 +170,23 @@ export function kunciSync(k: Kiriman): string {
  */
 async function simpanTransaksi(db: DBCloud, k: KirimanTransaksi, sekarang: string): Promise<void> {
   // Baris induk di-upsert: kiriman yang sama menimpa, tidak menggandakan.
+  // Kolom tambahan Fase 2B (kontak, catatan, perkiraan, alamat, nomor urut,
+  // jenis bayar, perangkat) membuat pesanan jahit utuh di perangkat lain.
   await db
     .prepare(
       `INSERT INTO transactions
         (id, nomor_resi, waktu, jenis_dokumen, arah_stok, pelanggan_id, status_pesanan, status_bayar, bazar_id, nama_pemesan,
+         kontak, catatan_pesanan, perkiraan_siap, alamat, nomor_urut_bulan, jenis_bayar,
          ongkir_mode, ongkir_nominal, subtotal_awal, diskon_item, diskon_total, total,
-         dibatalkan_pada, dibuat_pada, diubah_pada)
-       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+         dibatalkan_pada, dibuat_pada, diubah_pada, perangkat)
+       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
        ON CONFLICT(id) DO UPDATE SET
          status_pesanan=excluded.status_pesanan, status_bayar=excluded.status_bayar,
          total=excluded.total, dibatalkan_pada=excluded.dibatalkan_pada,
-         diubah_pada=excluded.diubah_pada`,
+         diubah_pada=excluded.diubah_pada, kontak=excluded.kontak,
+         catatan_pesanan=excluded.catatan_pesanan, perkiraan_siap=excluded.perkiraan_siap,
+         alamat=excluded.alamat, nomor_urut_bulan=excluded.nomor_urut_bulan,
+         jenis_bayar=excluded.jenis_bayar, perangkat=excluded.perangkat`,
     )
     .bind(
       k.id,
@@ -161,6 +199,12 @@ async function simpanTransaksi(db: DBCloud, k: KirimanTransaksi, sekarang: strin
       k.statusBayar,
       k.bazarId,
       k.namaPemesan,
+      k.kontak ?? null,
+      k.catatanPesanan ?? null,
+      k.perkiraanSiap ?? null,
+      k.alamat ?? null,
+      k.nomorUrutBulan ?? null,
+      k.jenisBayar ?? null,
       k.ongkirMode,
       k.ongkirNominal,
       k.subtotalAwal,
@@ -170,6 +214,7 @@ async function simpanTransaksi(db: DBCloud, k: KirimanTransaksi, sekarang: strin
       k.dibatalkanPada,
       k.dibuatPada,
       k.diubahPada,
+      k.perangkat ?? null,
     )
     .run();
 
@@ -177,24 +222,35 @@ async function simpanTransaksi(db: DBCloud, k: KirimanTransaksi, sekarang: strin
     await db
       .prepare(
         `INSERT INTO transaction_items
-          (id, transaksi_id, produk_id, nama_snapshot, harga_satuan, kuantitas, diskon_per_unit, subtotal_bersih)
-         VALUES (?,?,?,?,?,?,?,?)
+          (id, transaksi_id, produk_id, nama_snapshot, harga_satuan, kuantitas, diskon_per_unit, subtotal_bersih, ukuran, urutan)
+         VALUES (?,?,?,?,?,?,?,?,?,?)
          ON CONFLICT(id) DO UPDATE SET kuantitas=excluded.kuantitas,
            harga_satuan=excluded.harga_satuan, diskon_per_unit=excluded.diskon_per_unit,
-           subtotal_bersih=excluded.subtotal_bersih`,
+           subtotal_bersih=excluded.subtotal_bersih, ukuran=excluded.ukuran, urutan=excluded.urutan`,
       )
-      .bind(it.id, k.id, it.produkId, it.namaSnapshot, it.hargaSatuan, it.kuantitas, it.diskonPerUnit, it.subtotalBersih)
+      .bind(
+        it.id,
+        k.id,
+        it.produkId,
+        it.namaSnapshot,
+        it.hargaSatuan,
+        it.kuantitas,
+        it.diskonPerUnit,
+        it.subtotalBersih,
+        it.ukuran ?? null,
+        it.urutan ?? null,
+      )
       .run();
   }
 
   for (const p of k.pembayaran) {
     await db
       .prepare(
-        `INSERT INTO payments (id, transaksi_id, nominal, waktu, metode)
-         VALUES (?,?,?,?,?)
-         ON CONFLICT(id) DO UPDATE SET nominal=excluded.nominal, metode=excluded.metode`,
+        `INSERT INTO payments (id, transaksi_id, nominal, waktu, metode, catatan)
+         VALUES (?,?,?,?,?,?)
+         ON CONFLICT(id) DO UPDATE SET nominal=excluded.nominal, metode=excluded.metode, catatan=excluded.catatan`,
       )
-      .bind(p.id, k.id, p.nominal, p.waktu, p.metode)
+      .bind(p.id, k.id, p.nominal, p.waktu, p.metode, p.catatan ?? null)
       .run();
   }
 
@@ -207,13 +263,13 @@ async function simpanTransaksi(db: DBCloud, k: KirimanTransaksi, sekarang: strin
 async function simpanProduk(db: DBCloud, k: KirimanProduk, sekarang: string): Promise<void> {
   await db
     .prepare(
-      `INSERT INTO products (id, nama, kode, harga_jual, stok_gudang, arsip, diubah_pada)
-       VALUES (?,?,?,?,?,?,?)
+      `INSERT INTO products (id, nama, kode, harga_jual, stok_gudang, catatan, arsip, diubah_pada)
+       VALUES (?,?,?,?,?,?,?,?)
        ON CONFLICT(id) DO UPDATE SET nama=excluded.nama, kode=excluded.kode,
          harga_jual=excluded.harga_jual, stok_gudang=excluded.stok_gudang,
-         arsip=excluded.arsip, diubah_pada=excluded.diubah_pada`,
+         catatan=excluded.catatan, arsip=excluded.arsip, diubah_pada=excluded.diubah_pada`,
     )
-    .bind(k.id, k.nama, k.kode, k.hargaJual, k.stokGudang, k.arsip ? 1 : 0, k.diubahPada)
+    .bind(k.id, k.nama, k.kode, k.hargaJual, k.stokGudang, k.catatan ?? null, k.arsip ? 1 : 0, k.diubahPada)
     .run();
 
   await db
@@ -225,13 +281,14 @@ async function simpanProduk(db: DBCloud, k: KirimanProduk, sekarang: string): Pr
 async function simpanBazar(db: DBCloud, k: KirimanBazar, sekarang: string): Promise<void> {
   await db
     .prepare(
-      `INSERT INTO bazars (id, nama, status, lokasi, mulai, selesai, diubah_pada)
-       VALUES (?,?,?,?,?,?,?)
+      `INSERT INTO bazars (id, nama, status, lokasi, mulai, selesai, catatan, pin_kasir_hash, diubah_pada)
+       VALUES (?,?,?,?,?,?,?,?,?)
        ON CONFLICT(id) DO UPDATE SET nama=excluded.nama, status=excluded.status,
          lokasi=excluded.lokasi, mulai=excluded.mulai, selesai=excluded.selesai,
+         catatan=excluded.catatan, pin_kasir_hash=excluded.pin_kasir_hash,
          diubah_pada=excluded.diubah_pada`,
     )
-    .bind(k.id, k.nama, k.status, k.lokasi, k.mulai, k.selesai, k.diubahPada)
+    .bind(k.id, k.nama, k.status, k.lokasi, k.mulai, k.selesai, k.catatan ?? null, k.pinKasirHash ?? null, k.diubahPada)
     .run();
 
   await db
@@ -283,4 +340,156 @@ export async function prosesBatch(
   }
 
   return { diterima, ditolak };
+}
+
+/** Satu paket perubahan dari hub untuk satu perangkat (Fase 2B, BU-33). */
+export interface Perubahan {
+  sekarang: string;
+  transaksi: KirimanTransaksi[];
+  produk: KirimanProduk[];
+  bazar: KirimanBazar[];
+}
+
+export interface OpsiTarik {
+  /** Ambil baris yang diubah sesudah waktu ini (ISO). Kosong = dari awal. */
+  sejak?: string;
+  /** Id perangkat peminta: baris yang dikirim perangkat ini sendiri dilewati. */
+  perangkat?: string;
+  /** Batas per jenis (bawaan 50, maks 100). */
+  batas?: number;
+}
+
+/** Baris D1 (snake_case) untuk satu transaksi. */
+type BarisTransaksi = Record<string, unknown>;
+
+/** Mengambil perubahan dari hub sesudah `sejak`, untuk ditarik perangkat lain.
+ *  Baris yang berasal dari perangkat peminta sendiri dilewati (bila
+ *  `perangkat` terisi — baris lama tanpa perangkat tetap dikembalikan dan
+ *  perangkat penerima yang menyaringnya lewat bayangan/lokal). */
+export async function ambilPerubahan(db: DBCloud, opsi: OpsiTarik = {}): Promise<Perubahan> {
+  const sejak = opsi.sejak && !Number.isNaN(Date.parse(opsi.sejak)) ? opsi.sejak : "1970-01-01T00:00:00.000Z";
+  const batas = Math.min(Math.max(opsi.batas ?? 50, 1), 100);
+  const perangkat = opsi.perangkat ?? "";
+  const sekarang = new Date().toISOString();
+
+  const barisTrx = (
+    await db
+      .prepare(
+        `SELECT * FROM transactions
+         WHERE diubah_pada > ? AND (perangkat IS NULL OR perangkat != ?)
+         ORDER BY diubah_pada ASC LIMIT ?`,
+      )
+      .bind(sejak, perangkat, batas)
+      .all<BarisTransaksi>()
+  ).results;
+
+  const transaksi: KirimanTransaksi[] = [];
+  if (barisTrx.length > 0) {
+    const tempat = barisTrx.map(() => "?").join(",");
+    const ids = barisTrx.map((b) => String(b.id));
+    const items = (
+      await db
+        .prepare(`SELECT * FROM transaction_items WHERE transaksi_id IN (${tempat})`)
+        .bind(...ids)
+        .all<Record<string, unknown>>()
+    ).results;
+    const bayar = (
+      await db
+        .prepare(`SELECT * FROM payments WHERE transaksi_id IN (${tempat})`)
+        .bind(...ids)
+        .all<Record<string, unknown>>()
+    ).results;
+
+    for (const b of barisTrx) {
+      const id = String(b.id);
+      transaksi.push({
+        jenis: "transaksi",
+        id,
+        nomorResi: String(b.nomor_resi ?? ""),
+        waktu: String(b.waktu ?? ""),
+        jenisDokumen: (b.jenis_dokumen as KirimanTransaksi["jenisDokumen"]) ?? "penjualan",
+        arahStok: (b.arah_stok as KirimanTransaksi["arahStok"]) ?? "tidak_ada",
+        pelangganId: (b.pelanggan_id as string | null) ?? null,
+        statusPesanan: String(b.status_pesanan ?? ""),
+        statusBayar: String(b.status_bayar ?? ""),
+        bazarId: (b.bazar_id as string | null) ?? null,
+        namaPemesan: (b.nama_pemesan as string | null) ?? null,
+        kontak: (b.kontak as string | null) ?? null,
+        catatanPesanan: (b.catatan_pesanan as string | null) ?? null,
+        perkiraanSiap: (b.perkiraan_siap as string | null) ?? null,
+        alamat: (b.alamat as string | null) ?? null,
+        ...(typeof b.nomor_urut_bulan === "number" ? { nomorUrutBulan: b.nomor_urut_bulan } : {}),
+        jenisBayar: (b.jenis_bayar as string | null) ?? null,
+        ongkirMode: String(b.ongkir_mode ?? "ambil_sendiri"),
+        ongkirNominal: (b.ongkir_nominal as number | null) ?? null,
+        subtotalAwal: Number(b.subtotal_awal ?? 0),
+        diskonItem: Number(b.diskon_item ?? 0),
+        diskonTotal: Number(b.diskon_total ?? 0),
+        total: Number(b.total ?? 0),
+        dibatalkanPada: (b.dibatalkan_pada as string | null) ?? null,
+        dibuatPada: String(b.dibuat_pada ?? ""),
+        diubahPada: String(b.diubah_pada ?? ""),
+        ...(typeof b.perangkat === "string" && b.perangkat ? { perangkat: b.perangkat } : {}),
+        items: items
+          .filter((i) => String(i.transaksi_id) === id)
+          .map((i) => ({
+            id: String(i.id),
+            produkId: (i.produk_id as string | null) ?? null,
+            namaSnapshot: String(i.nama_snapshot ?? ""),
+            hargaSatuan: Number(i.harga_satuan ?? 0),
+            kuantitas: Number(i.kuantitas ?? 0),
+            diskonPerUnit: Number(i.diskon_per_unit ?? 0),
+            subtotalBersih: Number(i.subtotal_bersih ?? 0),
+            ukuran: (i.ukuran as string | null) ?? null,
+            ...(typeof i.urutan === "number" ? { urutan: i.urutan } : {}),
+          })),
+        pembayaran: bayar
+          .filter((p) => String(p.transaksi_id) === id)
+          .map((p) => ({
+            id: String(p.id),
+            nominal: Number(p.nominal ?? 0),
+            waktu: String(p.waktu ?? ""),
+            metode: (p.metode as string | null) ?? null,
+            catatan: (p.catatan as string | null) ?? null,
+          })),
+      });
+    }
+  }
+
+  const produk = (
+    await db
+      .prepare(`SELECT * FROM products WHERE diubah_pada > ? ORDER BY diubah_pada ASC LIMIT ?`)
+      .bind(sejak, batas)
+      .all<Record<string, unknown>>()
+  ).results.map((p) => ({
+    jenis: "produk" as const,
+    id: String(p.id),
+    nama: String(p.nama ?? ""),
+    kode: (p.kode as string | null) ?? null,
+    hargaJual: Number(p.harga_jual ?? 0),
+    stokGudang: Number(p.stok_gudang ?? 0),
+    catatan: (p.catatan as string | null) ?? null,
+    arsip: Number(p.arsip ?? 0) === 1,
+    diubahPada: String(p.diubah_pada ?? ""),
+  }));
+
+  const bazar = (
+    await db
+      .prepare(`SELECT * FROM bazars WHERE diubah_pada > ? ORDER BY diubah_pada ASC LIMIT ?`)
+      .bind(sejak, batas)
+      .all<Record<string, unknown>>()
+  ).results.map((b) => ({
+    jenis: "bazar" as const,
+    id: String(b.id),
+    nama: String(b.nama ?? ""),
+    status: String(b.status ?? ""),
+    lokasi: (b.lokasi as string | null) ?? null,
+    mulai: (b.mulai as string | null) ?? null,
+    selesai: (b.selesai as string | null) ?? null,
+    catatan: (b.catatan as string | null) ?? null,
+    pinKasirHash: (b.pin_kasir_hash as string | null) ?? null,
+    diubahPada: String(b.diubah_pada ?? ""),
+  }));
+
+  return { sekarang, transaksi, produk, bazar };
 }

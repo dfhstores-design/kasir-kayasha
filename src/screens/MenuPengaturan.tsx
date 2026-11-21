@@ -6,13 +6,14 @@ interface Props {
   onContohResi: () => void;
   onPin: () => void;
   onCadangan: () => void;
+  onSinkronisasi: () => void;
 }
 
 /**
  * Menu Pengaturan (docs/design/screens/11-pengaturan.md).
  * Daftar pilihan besar — bukan tab kecil.
  */
-export default function MenuPengaturan({ namaButik, jumlahRekening, adaLogo, onBuka, onContohResi, onPin, onCadangan }: Props) {
+export default function MenuPengaturan({ namaButik, jumlahRekening, adaLogo, onBuka, onContohResi, onPin, onCadangan, onSinkronisasi }: Props) {
   const item = (judul: string, keterangan: string, aksi: () => void) => (
     <button
       type="button"
@@ -43,6 +44,7 @@ export default function MenuPengaturan({ namaButik, jumlahRekening, adaLogo, onB
       {item("Lihat contoh resi", "Pratinjau dengan data saat ini", onContohResi)}
       {item("PIN Admin", "Kunci menu admin", onPin)}
       {item("Cadangan & pemulihan", "Simpan/ambil data ke berkas", onCadangan)}
+      {item("Sinkronisasi", "Data yang menunggu dikirim & catatan", onSinkronisasi)}
       <div className="panel panel--ok">Printer thermal: sedang disiapkan. Saat ini resi berupa PDF.</div>
     </div>
   );

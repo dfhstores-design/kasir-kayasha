@@ -85,6 +85,15 @@ export async function terimaPembayaranKasir(
   }
   await tx.done;
 
+  // Antrean sinkronisasi (Fase 2B): pembayaran baru harus sampai ke perangkat
+  // lain — sebelumnya pembayaran tidak pernah masuk outbox.
+  try {
+    const { tandaiUntukSync } = await import("../sync/mesin.ts");
+    await tandaiUntukSync("transaksi", dokumenId);
+  } catch {
+    // Sengaja diam: pembayaran lokal sudah sah.
+  }
+
   return {
     ok: true,
     kembalian: hasil.ringkasan.kembalian,
@@ -138,5 +147,13 @@ export async function batalkanPesananKasir(id: UUID, alasan: string): Promise<Ha
     await tx.objectStore("journal").put(balik);
   }
   await tx.done;
+
+  // Antrean sinkronisasi (Fase 2B): pembatalan harus sampai ke perangkat lain.
+  try {
+    const { tandaiUntukSync } = await import("../sync/mesin.ts");
+    await tandaiUntukSync("transaksi", id);
+  } catch {
+    // Sengaja diam: pembatalan lokal sudah sah.
+  }
   return { ok: true };
 }

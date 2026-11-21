@@ -25,6 +25,12 @@ CREATE TABLE IF NOT EXISTS transactions (
   status_bayar      TEXT NOT NULL,
   bazar_id          TEXT,
   nama_pemesan      TEXT,
+  kontak            TEXT,                    -- Fase 2B: kontak pemesan (pesanan jahit)
+  catatan_pesanan   TEXT,                    -- Fase 2B
+  perkiraan_siap    TEXT,                    -- Fase 2B
+  alamat            TEXT,                    -- Fase 2B: alamat kirim
+  nomor_urut_bulan  INTEGER,                 -- Fase 2B: nomor urut pesanan jahit (BU-19/21)
+  jenis_bayar       TEXT,                    -- Fase 2B: tunai | transfer | qris
   ongkir_mode       TEXT NOT NULL,
   ongkir_nominal    INTEGER,
   subtotal_awal     INTEGER NOT NULL,
@@ -50,6 +56,8 @@ CREATE TABLE IF NOT EXISTS transaction_items (
   kuantitas      INTEGER NOT NULL,
   diskon_per_unit INTEGER NOT NULL,
   subtotal_bersih INTEGER NOT NULL,
+  ukuran         TEXT,                    -- Fase 2B: ukuran/catatan khusus per item (BU-56)
+  urutan          INTEGER,                 -- Fase 2B: urutan baris seperti diinput (BU-56)
   FOREIGN KEY (transaksi_id) REFERENCES transactions (id) ON DELETE CASCADE
 );
 
@@ -61,6 +69,7 @@ CREATE TABLE IF NOT EXISTS payments (
   nominal       INTEGER NOT NULL,
   waktu         TEXT NOT NULL,
   metode        TEXT,
+  catatan       TEXT,                    -- Fase 2B
   FOREIGN KEY (transaksi_id) REFERENCES transactions (id) ON DELETE CASCADE
 );
 
@@ -74,6 +83,7 @@ CREATE TABLE IF NOT EXISTS products (
   kode         TEXT,
   harga_jual   INTEGER NOT NULL,
   stok_gudang  INTEGER NOT NULL,
+  catatan      TEXT,                    -- Fase 2B
   arsip        INTEGER NOT NULL DEFAULT 0,
   diubah_pada  TEXT NOT NULL
 );
@@ -85,6 +95,8 @@ CREATE TABLE IF NOT EXISTS bazars (
   lokasi      TEXT,
   mulai       TEXT,
   selesai     TEXT,
+  catatan     TEXT,                    -- Fase 2B
+  pin_kasir_hash TEXT,                 -- Fase 2B: hash PIN kasir bazar (BU-34)
   diubah_pada TEXT NOT NULL
 );
 
@@ -141,3 +153,23 @@ CREATE TABLE IF NOT EXISTS pengiriman (
 
 CREATE INDEX IF NOT EXISTS idx_pengiriman_dokumen ON pengiriman (dokumen_id);
 CREATE INDEX IF NOT EXISTS idx_pengiriman_pelanggan ON pengiriman (pelanggan_id);
+
+-- ---------------------------------------------------------------- migrasi Fase 2B
+--
+-- Kolom baru di atas (kontak, catatan_pesanan, perkiraan_siap, alamat,
+-- nomor_urut_bulan, jenis_bayar, ukuran, urutan, catatan, pin_kasir_hash)
+-- hanya terbentuk otomatis di database BARU. Database yang SUDAH ADA
+-- (mis. D1 trial kasir-kayasha-t2) perlu ALTER TABLE satu kali, mis.:
+--   ALTER TABLE transactions ADD COLUMN kontak TEXT;
+--   ALTER TABLE transactions ADD COLUMN catatan_pesanan TEXT;
+--   ALTER TABLE transactions ADD COLUMN perkiraan_siap TEXT;
+--   ALTER TABLE transactions ADD COLUMN alamat TEXT;
+--   ALTER TABLE transactions ADD COLUMN nomor_urut_bulan INTEGER;
+--   ALTER TABLE transactions ADD COLUMN jenis_bayar TEXT;
+--   ALTER TABLE transaction_items ADD COLUMN ukuran TEXT;
+--   ALTER TABLE transaction_items ADD COLUMN urutan INTEGER;
+--   ALTER TABLE payments ADD COLUMN catatan TEXT;
+--   ALTER TABLE products ADD COLUMN catatan TEXT;
+--   ALTER TABLE bazars ADD COLUMN catatan TEXT;
+--   ALTER TABLE bazars ADD COLUMN pin_kasir_hash TEXT;
+-- Jangan jalankan ALTER dua kali pada kolom yang sama (SQLite menolak).

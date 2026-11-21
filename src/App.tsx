@@ -25,6 +25,7 @@ import MenuPengaturan from "./screens/MenuPengaturan.tsx";
 import ContohResi from "./screens/ContohResi.tsx";
 import Cadangan from "./screens/Cadangan.tsx";
 import Kasir from "./screens/Kasir.tsx";
+import RiwayatSinkron from "./screens/RiwayatSinkron.tsx";
 import {
   ambilParkir,
   ambilSettings,
@@ -83,7 +84,8 @@ export type Layar =
   | { nama: "resi"; transaksiId: string }
   | { nama: "contoh-resi" }
   | { nama: "kasir" }
-  | { nama: "cadangan" };
+  | { nama: "cadangan" }
+  | { nama: "sinkronisasi" };
 
 interface NilaiKeranjang {
   diskonTotal: number;
@@ -445,6 +447,7 @@ export default function App() {
     ringkasan: "Ringkasan",
     pengaturan: "Pengaturan",
     "pengaturan-isi": "Pengaturan",
+    sinkronisasi: "Sinkronisasi",
     "masuk-admin": "Masuk Admin",
     "masuk-owner": "Masuk Owner",
     "masuk-kasir": "Masuk Kasir",
@@ -668,8 +671,11 @@ export default function App() {
           onContohResi={() => setLayar({ nama: "contoh-resi" })}
           onPin={() => setLayar({ nama: "atur-pin" })}
           onCadangan={() => setLayar({ nama: "cadangan" })}
+          onSinkronisasi={() => setLayar({ nama: "sinkronisasi" })}
         />
       )}
+
+      {layar.nama === "sinkronisasi" && <RiwayatSinkron peran={peran} />}
 
       {layar.nama === "pengaturan-isi" && (
         <Pengaturan

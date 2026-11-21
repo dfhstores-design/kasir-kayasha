@@ -11,7 +11,14 @@
  * INSERT ... ON CONFLICT yang menjadi inti jaminan idempoten.
  */
 import { describe, expect, it } from "vitest";
-import { kunciSync, periksaKiriman, prosesBatch, type DBCloud, type KirimanTransaksi } from "./logika.ts";
+import {
+  ambilPerubahan,
+  kunciSync,
+  periksaKiriman,
+  prosesBatch,
+  type DBCloud,
+  type KirimanTransaksi,
+} from "./logika.ts";
 
 /** Kumpulan tabel di memori + pelaksana SQL sederhana untuk pola yang kita pakai. */
 class DBTiruan implements DBCloud {
@@ -39,6 +46,9 @@ class DBTiruan implements DBCloud {
           },
           async first<T>() {
             return db.cari(bersih, nilai) as T | null;
+          },
+          async all<T>() {
+            return { results: db.cariSemua(bersih, nilai) as T[] };
           },
         };
       },
@@ -85,6 +95,29 @@ class DBTiruan implements DBCloud {
       return this.tabel.sync_log!.find((r) => r.kunci === nilai[0]) ?? null;
     }
     throw new Error("SELECT tak dikenal");
+  }
+
+  /** SELECT untuk ambilPerubahan: filter diubah_pada + perangkat + IN + LIMIT. */
+  private cariSemua(sql: string, nilai: unknown[]): Array<Record<string, unknown>> {
+    const tabel = this.namaTabel(sql, "SELECT FROM");
+    const baris = [...(this.tabel[tabel] ?? [])];
+    if (sql.includes("WHERE transaksi_id IN")) {
+      const ids = new Set(nilai.map(String));
+      return baris.filter((r) => ids.has(String(r.transaksi_id)));
+    }
+    if (sql.includes("WHERE diubah_pada > ?")) {
+      const sejak = String(nilai[0]);
+      let hasil = baris
+        .filter((r) => String(r.diubah_pada ?? "") > sejak)
+        .sort((a, b) => String(a.diubah_pada ?? "").localeCompare(String(b.diubah_pada ?? "")));
+      if (sql.includes("perangkat != ?")) {
+        const perangkat = String(nilai[1]);
+        hasil = hasil.filter((r) => r.perangkat == null || String(r.perangkat) !== perangkat);
+      }
+      const batas = Number(nilai[nilai.length - 1]);
+      return hasil.slice(0, batas);
+    }
+    throw new Error("SELECT tak dikenal: " + sql.slice(0, 40));
   }
 }
 
@@ -246,5 +279,101 @@ describe("prosesBatch — ketahanan", () => {
     const hasil = await prosesBatch(db, [], "2026-11-10T09:00:00.000Z");
     expect(hasil).toEqual({ diterima: [], ditolak: [] });
     expect(db.tabel.sync_log).toHaveLength(0);
+  });
+});
+
+describe("ambilPerubahan — tarik (Fase 2B)", () => {
+  it("mengembalikan baris sesudah kursor, beserta item & pembayaran", async () => {
+    const db = new DBTiruan();
+    const kedua = transaksi({
+      id: "22222222-2222-2222-2222-222222222222",
+      nomorResi: "KYS-0002",
+      perangkat: "perangkat-A",
+      diubahPada: "2026-11-10T11:00:00.000Z",
+    });
+    // Id baris item harus beda antar transaksi (di produksi id selalu UUID).
+    kedua.items = [{ ...kedua.items[0]!, id: "item-2" }];
+    kedua.pembayaran = [{ ...kedua.pembayaran[0]!, id: "pay-2" }];
+    await prosesBatch(
+      db,
+      [transaksi({ perangkat: "perangkat-A", diubahPada: "2026-11-10T10:00:00.000Z" }), kedua],
+      "2026-11-10T12:00:00.000Z",
+    );
+    const hasil = await ambilPerubahan(db, { sejak: "2026-11-10T09:00:00.000Z" });
+    expect(hasil.transaksi).toHaveLength(2);
+    expect(hasil.transaksi[0]?.items).toHaveLength(1);
+    expect(hasil.transaksi[0]?.pembayaran).toHaveLength(1);
+    expect(hasil.transaksi[0]?.perangkat).toBe("perangkat-A");
+  });
+
+  it("tidak mengembalikan baris yang dikirim perangkat peminta sendiri", async () => {
+    const db = new DBTiruan();
+    await prosesBatch(db, [transaksi({ perangkat: "perangkat-A" })], "2026-11-10T12:00:00.000Z");
+    const hasil = await ambilPerubahan(db, { perangkat: "perangkat-A" });
+    expect(hasil.transaksi).toHaveLength(0);
+  });
+
+  it("kursor memotong baris yang lebih lama", async () => {
+    const db = new DBTiruan();
+    await prosesBatch(db, [transaksi({ diubahPada: "2026-11-10T08:00:00.000Z" })], "2026-11-10T12:00:00.000Z");
+    const hasil = await ambilPerubahan(db, { sejak: "2026-11-10T09:00:00.000Z" });
+    expect(hasil.transaksi).toHaveLength(0);
+  });
+
+  it("produk & bazar ikut ditarik sesudah kursor", async () => {
+    const db = new DBTiruan();
+    await prosesBatch(
+      db,
+      [
+        {
+          jenis: "produk",
+          id: "33333333-3333-3333-3333-333333333333",
+          nama: "Kebaya",
+          kode: null,
+          hargaJual: 450000,
+          stokGudang: 3,
+          arsip: false,
+          diubahPada: "2026-11-10T08:00:00.000Z",
+        },
+        {
+          jenis: "bazar",
+          id: "44444444-4444-4444-4444-444444444444",
+          nama: "Pameran",
+          status: "aktif",
+          lokasi: null,
+          mulai: null,
+          selesai: null,
+          pinKasirHash: "sha256$salt$hash",
+          diubahPada: "2026-11-10T08:00:00.000Z",
+        },
+      ],
+      "2026-11-10T09:00:00.000Z",
+    );
+    const hasil = await ambilPerubahan(db, {});
+    expect(hasil.produk).toHaveLength(1);
+    expect(hasil.bazar).toHaveLength(1);
+    expect(hasil.bazar[0]?.pinKasirHash).toBe("sha256$salt$hash");
+  });
+
+  it("prosesBatch menyimpan perangkat & kolom baru transaksi", async () => {
+    const db = new DBTiruan();
+    await prosesBatch(
+      db,
+      [
+        transaksi({
+          perangkat: "perangkat-B",
+          kontak: "0812000000",
+          catatanPesanan: "Kebaya brokat",
+          nomorUrutBulan: 3,
+          jenisBayar: "transfer",
+        }),
+      ],
+      "2026-11-10T12:00:00.000Z",
+    );
+    const baris = db.tabel.transactions[0]!;
+    expect(baris.perangkat).toBe("perangkat-B");
+    expect(baris.kontak).toBe("0812000000");
+    expect(baris.nomor_urut_bulan).toBe(3);
+    expect(baris.jenis_bayar).toBe("transfer");
   });
 });

@@ -1,3 +1,45 @@
+describe("migrasi v4 -> v5 (Fase 2B, BU-33)", () => {
+  beforeEach(resetDB);
+  afterEach(() => {
+    resetKoneksiDB();
+  });
+
+  it("store logSinkron & bayangan dibuat, data lama utuh", async () => {
+    // Database v4: settings + produk tanpa store baru.
+    const db4 = await openDB(DB_NAME, 4, {
+      upgrade(db) {
+        db.createObjectStore("settings", { keyPath: "id" });
+        db.createObjectStore("products", { keyPath: "id" });
+      },
+    });
+    await db4.put("settings", {
+      id: "utama",
+      namaButik: "KAYESA",
+      pinHash: null,
+      pinOwnerHash: null,
+      pinKasirTokoHash: null,
+      updatedAt: new Date().toISOString(),
+    } as unknown as SettingsRecord);
+    await db4.put("products", {
+      id: "produk-1",
+      nama: "Kebaya",
+      hargaJual: 450000,
+      stokGudang: 3,
+    });
+    db4.close();
+
+    // Buka lewat getDB() (v5): migrasi berjalan.
+    const db = await getDB();
+    expect(db.objectStoreNames.contains("logSinkron")).toBe(true);
+    expect(db.objectStoreNames.contains("bayangan")).toBe(true);
+    const settings = await db.get("settings", "utama");
+    expect(settings?.namaButik).toBe("KAYESA");
+    const produk = await db.get("products", "produk-1");
+    expect(produk?.nama).toBe("Kebaya");
+    expect(produk?.stokGudang).toBe(3);
+  });
+});
+
 /**
  * Tes migrasi skema v3 -> v4 (Fase 2A, BU-32/34).
  *

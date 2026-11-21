@@ -179,8 +179,16 @@ export async function buatBazar(
     ringkasanSisa: null,
     ditutupPada: null,
     createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
   };
   await db.put("bazars", bazar);
+  // Antrean sinkronisasi (Fase 2B): bazar baru harus sampai ke perangkat lain.
+  try {
+    const { tandaiUntukSync } = await import("../sync/mesin.ts");
+    await tandaiUntukSync("bazar", bazar.id);
+  } catch {
+    // Sengaja diam: bazar lokal sudah sah, hanya sinkronisasi yang tertunda.
+  }
   return bazar;
 }
 
@@ -189,7 +197,13 @@ export async function ubahPinKasirBazar(bazarId: UUID, pinKasirHash: string | nu
   const db = await getDB();
   const bazar = await db.get("bazars", bazarId);
   if (!bazar) return;
-  await db.put("bazars", { ...bazar, pinKasirHash });
+  await db.put("bazars", { ...bazar, pinKasirHash, updatedAt: new Date().toISOString() });
+  try {
+    const { tandaiUntukSync } = await import("../sync/mesin.ts");
+    await tandaiUntukSync("bazar", bazarId);
+  } catch {
+    // Sengaja diam: PIN lokal sudah sah, hanya sinkronisasi yang tertunda.
+  }
 }
 
 /* ------------------------------------------------------------ biaya bazar */
@@ -366,8 +380,19 @@ export async function tutupBazar(
     ringkasanTerjual: ringkas.terjualPcs,
     ringkasanSisa: totalDikembalikan,
     ditutupPada: waktu,
+    updatedAt: waktu,
   });
   await tx.done;
+
+  // Antrean sinkronisasi (Fase 2B): penutupan bazar + stok gudang yang kembali
+  // harus sampai ke perangkat lain.
+  try {
+    const { tandaiUntukSync } = await import("../sync/mesin.ts");
+    await tandaiUntukSync("bazar", bazarId);
+    for (const p of perubahan) await tandaiUntukSync("produk", p.produkId);
+  } catch {
+    // Sengaja diam: penutupan lokal sudah sah.
+  }
 
   return { ok: true, dikembalikan: totalDikembalikan, hilang: totalHilang, selisih: totalSelisih };
 }
@@ -397,6 +422,13 @@ export async function tarikDariBazar(bazarId: UUID, produkId: UUID, jumlah: numb
   }
   await tx.objectStore("bazar_items").put({ ...item, ditarik: item.ditarik + jumlah, updatedAt: waktu });
   await tx.done;
+  // Antrean sinkronisasi (Fase 2B): stok gudang yang bertambah harus tersinkron.
+  try {
+    const { tandaiUntukSync } = await import("../sync/mesin.ts");
+    await tandaiUntukSync("produk", produkId);
+  } catch {
+    // Sengaja diam: penarikan lokal sudah sah.
+  }
 }
 
 /**
@@ -443,6 +475,13 @@ export async function alokasikanKeBazar(
     updatedAt: now,
   });
   await tx.done;
+  // Antrean sinkronisasi (Fase 2B): stok gudang yang berkurang harus tersinkron.
+  try {
+    const { tandaiUntukSync } = await import("../sync/mesin.ts");
+    await tandaiUntukSync("produk", produkId);
+  } catch {
+    // Sengaja diam: alokasi lokal sudah sah.
+  }
 }
 
 /* ------------------------------------------------------------------ parkir */
