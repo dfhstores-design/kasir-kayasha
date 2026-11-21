@@ -339,3 +339,58 @@ describe("ubahPesananJahit (BU-56)", () => {
     expect(u.ok).toBe(false);
   });
 });
+describe("simpanPesananJahit — nomor urut dari hub (F4, BU-19/21)", () => {
+  beforeEach(resetDB);
+
+  const jawabNomor = (nomor: number): typeof fetch =>
+    (async () =>
+      new Response(JSON.stringify({ ok: true, bulan: "2026-11", nomor }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      })) as unknown as typeof fetch;
+
+  it("online: memakai nomor dari hub, bukan hitungan lokal", async () => {
+    const h = await simpanPesananJahit(rencana(), {
+      rekening: [rekening],
+      waktu: new Date("2026-11-16T07:20:00.000Z"),
+      urlSync: "https://contoh/api/sync",
+      fetchImpl: jawabNomor(7),
+    });
+    expect(h.ok).toBe(true);
+    if (!h.ok) return;
+    expect(h.pesanan.nomor).toBe("KC.00007-20261116");
+    const db = await getDB();
+    const t = await db.get("transactions", h.pesanan.id);
+    expect(t?.nomorUrutBulan).toBe(7);
+    expect(t?.nomorUrutSementara).toBeUndefined();
+  });
+
+  it("offline (hub tidak menjawab): nomor lokal sementara + ditandai", async () => {
+    const h = await simpanPesananJahit(rencana(), {
+      rekening: [rekening],
+      waktu: new Date("2026-11-16T07:20:00.000Z"),
+      urlSync: "https://contoh/api/sync",
+      fetchImpl: (async () => {
+        throw new Error("jaringan mati");
+      }) as unknown as typeof fetch,
+    });
+    expect(h.ok).toBe(true);
+    if (!h.ok) return;
+    // Penjualan tetap jalan dengan nomor lokal — tidak menunggu hub.
+    expect(h.pesanan.nomor).toBe("KC.00001-20261116");
+    const db = await getDB();
+    const t = await db.get("transactions", h.pesanan.id);
+    expect(t?.nomorUrutBulan).toBe(1);
+    expect(t?.nomorUrutSementara).toBe(true);
+  });
+
+  it("tanpa URL sync: nomor lokal sementara seperti dulu", async () => {
+    const h = await simpanPesananJahit(rencana(), { rekening: [rekening], waktu: new Date("2026-11-16T07:20:00.000Z") });
+    expect(h.ok).toBe(true);
+    if (!h.ok) return;
+    expect(h.pesanan.nomor).toBe("KC.00001-20261116");
+    const db = await getDB();
+    const t = await db.get("transactions", h.pesanan.id);
+    expect(t?.nomorUrutSementara).toBe(true);
+  });
+});

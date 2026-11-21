@@ -10,6 +10,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { IDBFactory } from "fake-indexeddb";
 import { getDB, resetKoneksiDB, type ProdukRecord, type TransaksiRecord } from "../db/schema.ts";
+import { SETTINGS_KOSONG } from "../db/repositori.ts";
 import { gabungMaster, terapkanPerubahan, type KonteksTarik } from "./tarik.ts";
 import type { KirimanTransaksi, Perubahan } from "./logika.ts";
 
@@ -156,6 +157,7 @@ describe("terapkanPerubahan — transaksi append-only", () => {
       produk: [],
       bazar: [],
       biayaBazar: [],
+      pin: [],
     };
     const hasil = await terapkanPerubahan(db, perubahan, CTX);
     expect(hasil.transaksiBaru).toBe(1);
@@ -193,6 +195,7 @@ describe("terapkanPerubahan — transaksi append-only", () => {
       produk: [],
       bazar: [],
       biayaBazar: [],
+      pin: [],
     };
     const hasil = await terapkanPerubahan(db, perubahan, CTX);
     expect(hasil.transaksiDigabung).toBe(1);
@@ -214,6 +217,7 @@ describe("terapkanPerubahan — transaksi append-only", () => {
       produk: [],
       bazar: [],
       biayaBazar: [],
+      pin: [],
     };
     await terapkanPerubahan(db, perubahan, CTX);
     const t = await db.get("transactions", "11111111-1111-1111-1111-111111111111");
@@ -241,6 +245,7 @@ describe("terapkanPerubahan — transaksi append-only", () => {
       produk: [],
       bazar: [],
       biayaBazar: [],
+      pin: [],
     };
     await terapkanPerubahan(db, perubahan, CTX);
     const t = await db.get("transactions", lokal.id);
@@ -258,6 +263,7 @@ describe("terapkanPerubahan — transaksi append-only", () => {
       produk: [],
       bazar: [],
       biayaBazar: [],
+      pin: [],
     };
     const hasil = await terapkanPerubahan(db, perubahan, CTX);
     expect(hasil.transaksiBaru).toBe(1);
@@ -299,6 +305,7 @@ describe("terapkanPerubahan — produk gabung 3-arah", () => {
       ],
       bazar: [],
       biayaBazar: [],
+      pin: [],
     };
     const hasil = await terapkanPerubahan(db, perubahan, CTX);
     expect(hasil.produkDigabung).toBe(1);
@@ -336,6 +343,7 @@ describe("terapkanPerubahan — produk gabung 3-arah", () => {
       ],
       bazar: [],
       biayaBazar: [],
+      pin: [],
     };
     await terapkanPerubahan(db, perubahan, CTX);
     const p = await db.get("products", "produk-1");
@@ -383,6 +391,7 @@ describe("terapkanPerubahan — biaya bazar (F1, BU-34)", () => {
     produk: [],
     bazar: [],
     biayaBazar,
+    pin: [],
   });
 
   it("biaya baru dari perangkat lain masuk ke lokal", async () => {
@@ -433,5 +442,144 @@ describe("terapkanPerubahan — biaya bazar (F1, BU-34)", () => {
     expect(hasil.biayaBazarDigabung).toBe(1);
     expect(hasil.konflik).toBe(1);
     expect(await db.get("bazar_biaya", "55555555-5555-5555-5555-555555555555")).toBeDefined();
+  });
+});
+
+describe("terapkanPerubahan — PIN tersinkron (F3, BU-32/33)", () => {
+  beforeEach(resetDB);
+
+  const paketPin = (pin: import("./logika.ts").KirimanPin[]): Perubahan => ({
+    sekarang: "2026-11-21T12:00:00.000Z",
+    transaksi: [],
+    produk: [],
+    bazar: [],
+    biayaBazar: [],
+    pin,
+  });
+  const pinAdmin = (over: Partial<import("./logika.ts").KirimanPin> = {}): import("./logika.ts").KirimanPin => ({
+    jenis: "pin",
+    id: "pin:admin",
+    peran: "admin",
+    hash: "sha256$saltA$digestA",
+    diubahPada: "2026-11-21T10:00:00.000Z",
+    perangkat: "hp-a",
+    ...over,
+  });
+
+  it("PIN dari perangkat lain diterapkan — perangkat baru langsung memakai PIN yang sama", async () => {
+    const db = await getDB();
+    const hasil = await terapkanPerubahan(db, paketPin([pinAdmin()]), CTX);
+    expect(hasil.pinDigabung).toBe(1);
+    const s = await db.get("settings", "utama");
+    expect(s?.pinHash).toBe("sha256$saltA$digestA");
+    expect(s?.pinDiubahPada?.admin).toBe("2026-11-21T10:00:00.000Z");
+  });
+
+  it("PIN lokal yang lebih baru dipertahankan dan ditandai kirim ulang", async () => {
+    const db = await getDB();
+    await db.put("settings", {
+      ...SETTINGS_KOSONG,
+      pinHash: "sha256$saltLokal$digestLokal",
+      pinDiubahPada: { admin: "2026-11-21T11:00:00.000Z" },
+    });
+    const hasil = await terapkanPerubahan(db, paketPin([pinAdmin()]), CTX);
+    expect(hasil.pinDigabung).toBe(0);
+    const s = await db.get("settings", "utama");
+    expect(s?.pinHash).toBe("sha256$saltLokal$digestLokal");
+    const antrean = await db.getAll("outbox");
+    expect(antrean.some((o) => o.jenisRecord === "pin" && o.idRecord === "pin:admin")).toBe(true);
+  });
+
+  it("PIN dihapus di perangkat lain (hash null) ikut terhapus di sini", async () => {
+    const db = await getDB();
+    await db.put("settings", {
+      ...SETTINGS_KOSONG,
+      pinHash: "sha256$saltA$digestA",
+      pinDiubahPada: { admin: "2026-11-21T09:00:00.000Z" },
+    });
+    const hasil = await terapkanPerubahan(
+      db,
+      paketPin([pinAdmin({ hash: null, diubahPada: "2026-11-21T12:00:00.000Z" })]),
+      CTX,
+    );
+    expect(hasil.pinDigabung).toBe(1);
+    const s = await db.get("settings", "utama");
+    expect(s?.pinHash).toBeNull();
+  });
+
+  it("PIN owner dan kasir toko masuk ke kolomnya masing-masing", async () => {
+    const db = await getDB();
+    const hasil = await terapkanPerubahan(
+      db,
+      paketPin([
+        pinAdmin({ id: "pin:owner", peran: "owner", hash: "sha256$saltO$digestO" }),
+        pinAdmin({ id: "pin:kasir_toko", peran: "kasir_toko", hash: "sha256$saltK$digestK" }),
+      ]),
+      CTX,
+    );
+    expect(hasil.pinDigabung).toBe(2);
+    const s = await db.get("settings", "utama");
+    expect(s?.pinOwnerHash).toBe("sha256$saltO$digestO");
+    expect(s?.pinKasirTokoHash).toBe("sha256$saltK$digestK");
+    expect(s?.pinHash).toBeNull(); // admin belum diatur di perangkat ini
+  });
+});
+
+describe("terapkanPerubahan — nomor dokumen ikut diperbarui (F4, BU-19/21)", () => {
+  beforeEach(resetDB);
+
+  it("edit yang lebih baru dari hub mengganti nomor sementara dengan nomor resmi", async () => {
+    const db = await getDB();
+    // Pesanan lokal dengan nomor sementara (dibuat offline).
+    const lokal = transaksiLokal({
+      jenisDokumen: "jasa",
+      nomorResi: "KC.00001-20261110",
+      nomorUrutBulan: 1,
+      nomorUrutSementara: true,
+      waktu: "2026-11-10T08:00:00.000Z",
+      updatedAt: "2026-11-10T08:00:00.000Z",
+    });
+    await db.put("transactions", lokal);
+    await db.put("transaction_items", {
+      id: "item-1",
+      transaksiId: lokal.id,
+      produkId: null,
+      namaSnapshot: "Kebaya",
+      hargaSatuan: 450000,
+      kuantitas: 1,
+      diskonPerUnit: 0,
+      subtotalBersih: 450000,
+      urutan: 0,
+    });
+
+    const kiriman = kirimanTransaksi({
+      id: lokal.id,
+      nomorResi: "KC.00007-20261110",
+      nomorUrutBulan: 7,
+      nomorUrutSementara: false,
+      jenisDokumen: "jasa",
+      statusPesanan: "diproses",
+      statusBayar: "belum_dibayar",
+      diubahPada: "2026-11-10T09:00:00.000Z",
+      perangkat: "hp-a",
+      pembayaran: [],
+    });
+    const hasil = await terapkanPerubahan(
+      db,
+      {
+        sekarang: "2026-11-10T12:00:00.000Z",
+        transaksi: [kiriman],
+        produk: [],
+        bazar: [],
+        biayaBazar: [],
+        pin: [],
+      },
+      CTX,
+    );
+    expect(hasil.transaksiDigabung).toBe(1);
+    const sesudah = await db.get("transactions", lokal.id);
+    expect(sesudah?.nomorResi).toBe("KC.00007-20261110");
+    expect(sesudah?.nomorUrutBulan).toBe(7);
+    expect(sesudah?.nomorUrutSementara).toBe(false);
   });
 });

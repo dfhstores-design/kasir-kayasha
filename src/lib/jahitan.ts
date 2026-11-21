@@ -21,6 +21,7 @@
 import { getDB, type JournalRecord, type PelangganRecord, type Rekening, type TransaksiRecord, type UUID } from "../db/schema.ts";
 import { buatId, daftarTransaksi } from "../db/repositori.ts";
 import { nomorPlaceholder } from "./dokumen.ts";
+import { mintaNomorUrutBulan } from "../sync/penomoran.ts";
 import type { Rupiah } from "./money.ts";
 import { sapaanDariWaktu } from "./sapaan.ts";
 import { recomputeJurnalDariDokumen, hitungSisa } from "./jurnal.ts";
@@ -182,7 +183,7 @@ export function simpanBiayaLainTersimpan(nama: string, terakhir: Rupiah): void {
  */
 export async function simpanPesananJahit(
   rencana: RencanaJahitan,
-  konteks: { rekening: readonly Rekening[]; waktu?: Date },
+  konteks: { rekening: readonly Rekening[]; waktu?: Date; urlSync?: string; fetchImpl?: typeof fetch },
 ): Promise<HasilSimpanJahitan> {
   const cek = periksaRencanaJahitan(rencana);
   if (!cek.ok) return { ok: false, pesan: cek.pesan };
@@ -192,10 +193,17 @@ export async function simpanPesananJahit(
   const hari = iso.slice(0, 10);
   const bulan = iso.slice(0, 7);
   // Nomor urut pesanan jahit (BU-19/21, diputuskan Tante 19 Nov 2026):
-  // dihitung dalam BULAN yang sama (hanya jenisDokumen "jasa"), 5 digit.
+  // 5 digit, dihitung dalam BULAN yang sama (hanya jenisDokumen "jasa").
+  // Saat online, nomor diminta ke hub (F4) supaya dua perangkat tidak
+  // mendapat nomor yang sama. Saat offline / hub tidak bisa dihubungi,
+  // dipakai hitungan lokal + ditandai sementara — sync akan meminta nomor
+  // resmi dari hub dan menulis ulang nomor ini begitu online lagi.
+  // Penjualan TIDAK PERNAH menunggu hub: gagal = nomor lokal.
+  const urlSync = konteks.urlSync ?? import.meta.env.VITE_SYNC_URL ?? "";
+  const nomorHub = await mintaNomorUrutBulan({ urlSync, bulan, fetchImpl: konteks.fetchImpl });
   const semua = await daftarTransaksi();
-  const urutBulanIni =
-    semua.filter((t) => t.waktu.slice(0, 7) === bulan && t.jenisDokumen === "jasa").length + 1;
+  const nomorSementara = nomorHub === null;
+  const urutBulanIni = nomorHub ?? semua.filter((t) => t.waktu.slice(0, 7) === bulan && t.jenisDokumen === "jasa").length + 1;
   const urutHariIni = semua.filter((t) => t.waktu.slice(0, 10) === hari && t.jenisDokumen === "jasa").length + 1;
   const id = buatId();
   const pelangganId = buatId();
@@ -224,6 +232,7 @@ export async function simpanPesananJahit(
     nomorResi: nomorPlaceholder(waktu, urutBulanIni),
     nomorUrutHari: urutHariIni,
     nomorUrutBulan: urutBulanIni,
+    ...(nomorSementara ? { nomorUrutSementara: true as const } : {}),
     waktu: iso,
     jenis: "po",
     jenisDokumen: "jasa",

@@ -38,7 +38,6 @@ import {
   saldoSemuaBazar,
   simpanParkir,
   simpanProduk,
-  simpanSettings,
   type BazarRecord,
   type BiayaBazarRecord,
   type ProdukRecord,
@@ -54,6 +53,7 @@ import { simpanPenjualan, type JenisBayar, type TransaksiTersimpan } from "./lib
 import { bikinIsiKeranjang, type IsiKeranjang } from "./lib/isiKeranjang.ts";
 import { formatJam } from "./lib/tanggal.ts";
 import { simpanPesananJahit, ubahPesananJahit } from "./lib/jahitan.ts";
+import { simpanPin } from "./sync/mesin.ts";
 import { layarAwalDariUrl } from "./lib/modeInput.ts";
 
 export type Layar =
@@ -705,7 +705,7 @@ export default function App() {
             hashLain={[settings?.pinOwnerHash ?? null, settings?.pinKasirTokoHash ?? null]}
             onSimpan={async (hash) => {
               if (!settings) return;
-              await simpanSettings({ ...settings, pinHash: hash });
+              await simpanPin("admin", hash);
               const s = await ambilSettings();
               setSettings(s);
             }}
@@ -722,7 +722,7 @@ export default function App() {
             hashLain={[settings?.pinHash ?? null, settings?.pinKasirTokoHash ?? null]}
             onSimpan={async (hash) => {
               if (!settings) return;
-              await simpanSettings({ ...settings, pinOwnerHash: hash });
+              await simpanPin("owner", hash);
               const s = await ambilSettings();
               setSettings(s);
             }}
@@ -739,7 +739,7 @@ export default function App() {
             hashLain={[settings?.pinHash ?? null, settings?.pinOwnerHash ?? null]}
             onSimpan={async (hash) => {
               if (!settings) return;
-              await simpanSettings({ ...settings, pinKasirTokoHash: hash });
+              await simpanPin("kasir_toko", hash);
               const s = await ambilSettings();
               setSettings(s);
             }}

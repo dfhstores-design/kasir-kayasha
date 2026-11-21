@@ -13,7 +13,24 @@
 import type { JenisDokumen, ArahStok, KategoriBiaya } from "../db/schema.ts";
 import { KATEGORI_BIAYA } from "../db/schema.ts";
 
-export type JenisKiriman = "transaksi" | "produk" | "bazar" | "biaya_bazar";
+export type JenisKiriman = "transaksi" | "produk" | "bazar" | "biaya_bazar" | "pin";
+
+/** Peran yang PIN-nya tersinkron (F3, BU-32): admin, owner, kasir toko.
+ *  PIN kasir tiap bazar sudah ikut record bazar sejak Fase 2B. */
+export type PeranPinSync = "admin" | "owner" | "kasir_toko";
+
+/** Id record outbox + id kiriman untuk satu PIN: "pin:admin" dst. */
+export function idPinSync(peran: PeranPinSync): string {
+  return `pin:${peran}`;
+}
+
+/** Peran dari id kiriman/outbox "pin:<peran>"; null bila bukan id PIN. */
+export function peranDariIdPin(id: string): PeranPinSync | null {
+  if (id === "pin:admin") return "admin";
+  if (id === "pin:owner") return "owner";
+  if (id === "pin:kasir_toko") return "kasir_toko";
+  return null;
+}
 
 export interface KirimanTransaksi {
   jenis: "transaksi";
@@ -37,6 +54,8 @@ export interface KirimanTransaksi {
   alamat?: string | null;
   /** Nomor urut pesanan jahit dalam bulan (BU-19/21, Fase 2B). */
   nomorUrutBulan?: number;
+  /** True bila nomor urut dihitung lokal saat offline (F4): nomor sementara. */
+  nomorUrutSementara?: boolean;
   /** Jenis bayar terakhir (Fase 2B). */
   jenisBayar?: string | null;
   ongkirMode: string;
@@ -126,7 +145,23 @@ export interface KirimanBiayaBazar {
   dihapus?: boolean;
 }
 
-export type Kiriman = KirimanTransaksi | KirimanProduk | KirimanBazar | KirimanBiayaBazar;
+/**
+ * Satu PIN peran (F3, BU-32/33): yang dikirim HANYA hash-nya
+ * (`sha256$salt$digest`, sama seperti di perangkat). PIN teks biasa TIDAK
+ * PERNAH dikirim, disimpan di hub, atau dicatat di log. `hash: null`
+ * berarti PIN peran itu dihapus di perangkat pengirim. `id` selalu
+ * `pin:<peran>` — satu baris per peran di hub.
+ */
+export interface KirimanPin {
+  jenis: "pin";
+  id: string;
+  peran: PeranPinSync;
+  hash: string | null;
+  diubahPada: string;
+  perangkat?: string;
+}
+
+export type Kiriman = KirimanTransaksi | KirimanProduk | KirimanBazar | KirimanBiayaBazar | KirimanPin;
 
 export interface HasilKirim {
   diterima: string[];
@@ -152,8 +187,25 @@ export function periksaKiriman(k: unknown): { ok: true; nilai: Kiriman } | { ok:
   const id = o.id;
   if (typeof id !== "string" || id.length < 8) return { ok: false, pesan: "id tidak valid." };
   const jenis = o.jenis;
-  if (jenis !== "transaksi" && jenis !== "produk" && jenis !== "bazar" && jenis !== "biaya_bazar") {
+  if (jenis !== "transaksi" && jenis !== "produk" && jenis !== "bazar" && jenis !== "biaya_bazar" && jenis !== "pin") {
     return { ok: false, pesan: "jenis tidak dikenal." };
+  }
+
+  if (jenis === "pin") {
+    const p = o as unknown as KirimanPin;
+    // PIN teks biasa tidak punya tempat di sini: yang sah hanya hash
+    // "sha256$salt$digest" (atau null = PIN dihapus).
+    if (p.id !== idPinSync(p.peran)) return { ok: false, pesan: "id PIN tidak cocok dengan perannya." };
+    if (p.peran !== "admin" && p.peran !== "owner" && p.peran !== "kasir_toko") {
+      return { ok: false, pesan: "peran PIN tidak dikenal." };
+    }
+    if (p.hash !== null && (typeof p.hash !== "string" || !p.hash.startsWith("sha256$"))) {
+      return { ok: false, pesan: "hash PIN tidak valid." };
+    }
+    if (typeof p.diubahPada !== "string" || Number.isNaN(Date.parse(p.diubahPada))) {
+      return { ok: false, pesan: "diubahPada PIN tidak valid." };
+    }
+    return { ok: true, nilai: k as Kiriman };
   }
 
   if (jenis === "transaksi") {
@@ -218,16 +270,18 @@ async function simpanTransaksi(db: DBCloud, k: KirimanTransaksi, sekarang: strin
     .prepare(
       `INSERT INTO transactions
         (id, nomor_resi, waktu, jenis_dokumen, arah_stok, pelanggan_id, status_pesanan, status_bayar, bazar_id, nama_pemesan,
-         kontak, catatan_pesanan, perkiraan_siap, alamat, nomor_urut_bulan, jenis_bayar,
+         kontak, catatan_pesanan, perkiraan_siap, alamat, nomor_urut_bulan, nomor_urut_sementara, jenis_bayar,
          ongkir_mode, ongkir_nominal, subtotal_awal, diskon_item, diskon_total, total,
          dibatalkan_pada, dibuat_pada, diubah_pada, perangkat)
-       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
        ON CONFLICT(id) DO UPDATE SET
+         nomor_resi=excluded.nomor_resi,
          status_pesanan=excluded.status_pesanan, status_bayar=excluded.status_bayar,
          total=excluded.total, dibatalkan_pada=excluded.dibatalkan_pada,
          diubah_pada=excluded.diubah_pada, kontak=excluded.kontak,
          catatan_pesanan=excluded.catatan_pesanan, perkiraan_siap=excluded.perkiraan_siap,
          alamat=excluded.alamat, nomor_urut_bulan=excluded.nomor_urut_bulan,
+         nomor_urut_sementara=excluded.nomor_urut_sementara,
          jenis_bayar=excluded.jenis_bayar, perangkat=excluded.perangkat`,
     )
     .bind(
@@ -246,6 +300,7 @@ async function simpanTransaksi(db: DBCloud, k: KirimanTransaksi, sekarang: strin
       k.perkiraanSiap ?? null,
       k.alamat ?? null,
       k.nomorUrutBulan ?? null,
+      k.nomorUrutSementara === true ? 1 : 0,
       k.jenisBayar ?? null,
       k.ongkirMode,
       k.ongkirNominal,
@@ -409,6 +464,55 @@ async function simpanBiayaBazar(db: DBCloud, k: KirimanBiayaBazar, sekarang: str
 }
 
 /**
+ * Menyimpan satu PIN peran (F3, BU-32/33). Yang terbaru menang: kiriman
+ * yang `diubahPada`-nya lebih lama dari yang sudah tersimpan diabaikan
+ * (baris tetap ada, kiriman tetap diakui diterima). Hash di sini hanya
+ * diteruskan apa adanya — hub tidak pernah melihat PIN teks biasa.
+ */
+async function simpanPin(db: DBCloud, k: KirimanPin, sekarang: string): Promise<void> {
+  await db
+    .prepare(
+      `INSERT INTO pin_sync (peran, hash, diubah_pada, perangkat)
+       VALUES (?,?,?,?)
+       ON CONFLICT(peran) DO UPDATE SET hash=excluded.hash,
+         diubah_pada=excluded.diubah_pada, perangkat=excluded.perangkat
+       WHERE excluded.diubah_pada > pin_sync.diubah_pada`,
+    )
+    .bind(k.peran, k.hash, k.diubahPada, k.perangkat ?? null)
+    .run();
+
+  await db
+    .prepare(`INSERT OR REPLACE INTO sync_log (kunci, jenis, id_record, diterima_pada) VALUES (?,?,?,?)`)
+    .bind(kunciSync(k), "pin", k.id, sekarang)
+    .run();
+}
+
+/**
+ * Mengalokasikan nomor urut pesanan jahit berikutnya untuk satu bulan
+ * (F4, BU-19/21). Satu pernyataan atomik: dua perangkat yang meminta
+ * bersamaan tidak bisa mendapat nomor yang sama. `bulan` = "YYYY-MM".
+ * Bila RETURNING tidak didukung, nomor dibaca ulang dengan SELECT.
+ */
+export async function alokasiNomor(db: DBCloud, bulan: string): Promise<number> {
+  if (!/^\d{4}-\d{2}$/.test(bulan)) throw new Error("bulan harus format YYYY-MM.");
+  const baris = await db
+    .prepare(
+      `INSERT INTO penomoran (bulan, terakhir) VALUES (?, 1)
+       ON CONFLICT(bulan) DO UPDATE SET terakhir = terakhir + 1
+       RETURNING terakhir`,
+    )
+    .bind(bulan)
+    .first<{ terakhir: number }>();
+  if (baris && typeof baris.terakhir === "number" && baris.terakhir >= 1) return baris.terakhir;
+  const ada = await db
+    .prepare(`SELECT terakhir FROM penomoran WHERE bulan = ?`)
+    .bind(bulan)
+    .first<{ terakhir: number }>();
+  if (ada && typeof ada.terakhir === "number" && ada.terakhir >= 1) return ada.terakhir;
+  throw new Error("Gagal mengalokasikan nomor urut.");
+}
+
+/**
  * Memproses satu batch kiriman.
  * Tiap kiriman ditangani sendiri-sendiri: satu rusak tidak membatalkan yang lain.
  */
@@ -443,7 +547,8 @@ export async function prosesBatch(
       if (k.jenis === "transaksi") await simpanTransaksi(db, k, sekarang);
       else if (k.jenis === "produk") await simpanProduk(db, k, sekarang);
       else if (k.jenis === "bazar") await simpanBazar(db, k, sekarang);
-      else await simpanBiayaBazar(db, k, sekarang);
+      else if (k.jenis === "biaya_bazar") await simpanBiayaBazar(db, k, sekarang);
+      else await simpanPin(db, k, sekarang);
 
       diterima.push(k.id);
     } catch (e) {
@@ -463,6 +568,8 @@ export interface Perubahan {
   /** Biaya bazar, termasuk tombstone (F1): baris yang sudah dihapus di
    *  perangkat lain ikut dikembalikan dengan `dihapus: true`. */
   biayaBazar: KirimanBiayaBazar[];
+  /** Hash PIN peran (F3): hanya hash, tidak pernah PIN teks biasa. */
+  pin: KirimanPin[];
 }
 
 export interface OpsiTarik {
@@ -534,6 +641,7 @@ export async function ambilPerubahan(db: DBCloud, opsi: OpsiTarik = {}): Promise
         perkiraanSiap: (b.perkiraan_siap as string | null) ?? null,
         alamat: (b.alamat as string | null) ?? null,
         ...(typeof b.nomor_urut_bulan === "number" ? { nomorUrutBulan: b.nomor_urut_bulan } : {}),
+        ...(Number(b.nomor_urut_sementara ?? 0) === 1 ? { nomorUrutSementara: true as const } : {}),
         jenisBayar: (b.jenis_bayar as string | null) ?? null,
         ongkirMode: String(b.ongkir_mode ?? "ambil_sendiri"),
         ongkirNominal: (b.ongkir_nominal as number | null) ?? null,
@@ -626,5 +734,22 @@ export async function ambilPerubahan(db: DBCloud, opsi: OpsiTarik = {}): Promise
     ...(b.dihapus_pada != null ? { dihapus: true as const } : {}),
   }));
 
-  return { sekarang, transaksi, produk, bazar, biayaBazar };
+  const pin: KirimanPin[] = (
+    await db
+      .prepare(
+        `SELECT * FROM pin_sync WHERE diubah_pada > ? AND (perangkat IS NULL OR perangkat != ?)
+         ORDER BY diubah_pada ASC LIMIT ?`,
+      )
+      .bind(sejak, perangkat, batas)
+      .all<Record<string, unknown>>()
+  ).results.map((p) => ({
+    jenis: "pin" as const,
+    id: idPinSync(p.peran as PeranPinSync),
+    peran: p.peran as PeranPinSync,
+    hash: (p.hash as string | null) ?? null,
+    diubahPada: String(p.diubah_pada ?? ""),
+    ...(typeof p.perangkat === "string" && p.perangkat ? { perangkat: p.perangkat } : {}),
+  }));
+
+  return { sekarang, transaksi, produk, bazar, biayaBazar, pin };
 }

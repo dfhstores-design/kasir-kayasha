@@ -12,12 +12,14 @@
  */
 import { describe, expect, it } from "vitest";
 import {
+  alokasiNomor,
   ambilPerubahan,
   kunciSync,
   periksaKiriman,
   prosesBatch,
   type DBCloud,
   type KirimanBiayaBazar,
+  type KirimanPin,
   type KirimanTransaksi,
 } from "./logika.ts";
 
@@ -31,6 +33,8 @@ class DBTiruan implements DBCloud {
     bazars: [],
     bazar_biaya: [],
     sync_log: [],
+    pin_sync: [],
+    penomoran: [],
   };
 
   prepare(sql: string) {
@@ -63,7 +67,34 @@ class DBTiruan implements DBCloud {
     return m?.[1] ?? "";
   }
 
+  /** Alokasi nomor tiruan (F4): naik 1 per bulan, atomik dalam tiruan. */
+  private alokasiNomorTiruan(bulan: string): number {
+    const t = this.tabel.penomoran!;
+    const baris = t.find((r) => r.bulan === bulan);
+    if (baris) {
+      baris.terakhir = Number(baris.terakhir ?? 0) + 1;
+      return Number(baris.terakhir);
+    }
+    t.push({ bulan, terakhir: 1 });
+    return 1;
+  }
+
   private jalankan(sql: string, nilai: unknown[]) {
+    // PIN (F3): yang terbaru menang — kiriman lebih lama diabaikan.
+    if (sql.startsWith("INSERT INTO pin_sync")) {
+      const [peran, hash, diubahPada, perangkat] = nilai as [string, string | null, string, string | null];
+      const t = this.tabel.pin_sync!;
+      const i = t.findIndex((r) => r.peran === peran);
+      if (i >= 0) {
+        if (String(diubahPada) > String(t[i]!.diubah_pada ?? "")) {
+          t[i] = { peran, hash, diubah_pada: diubahPada, perangkat };
+        }
+      } else {
+        t.push({ peran, hash, diubah_pada: diubahPada, perangkat });
+      }
+      return;
+    }
+
     if (sql.startsWith("INSERT OR REPLACE INTO sync_log")) {
       const [kunci, jenis, idRecord, diterimaPada] = nilai;
       const t = this.tabel.sync_log!;
@@ -107,6 +138,13 @@ class DBTiruan implements DBCloud {
     }
     if (sql.includes("FROM bazar_biaya")) {
       return this.tabel.bazar_biaya!.find((r) => r.id === nilai[0]) ?? null;
+    }
+    // Alokasi nomor (F4): INSERT ... RETURNING terakhir.
+    if (sql.startsWith("INSERT INTO penomoran")) {
+      return { terakhir: this.alokasiNomorTiruan(String(nilai[0])) };
+    }
+    if (sql.includes("FROM penomoran")) {
+      return this.tabel.penomoran!.find((r) => r.bulan === nilai[0]) ?? null;
     }
     throw new Error("SELECT tak dikenal");
   }
@@ -500,5 +538,126 @@ describe("biaya bazar tersinkron (F1, BU-34)", () => {
     expect(hasil.diterima).toHaveLength(1);
     expect(hasil.ditolak).toHaveLength(1);
     expect(db.tabel.bazar_biaya).toHaveLength(1);
+  });
+});
+
+describe("PIN tersinkron — hash saja, tidak pernah teks biasa (F3, BU-32/33)", () => {
+  const HASH_A = "sha256$saltA$digestA";
+  const HASH_B = "sha256$saltB$digestB";
+  const pin = (over: Partial<KirimanPin> = {}): KirimanPin => ({
+    jenis: "pin",
+    id: "pin:admin",
+    peran: "admin",
+    hash: HASH_A,
+    diubahPada: "2026-11-21T10:00:00.000Z",
+    perangkat: "hp-a",
+    ...over,
+  });
+
+  it("PIN polos ditolak — yang bukan format sha256$salt$digest tidak masuk", async () => {
+    const db = new DBTiruan();
+    const hasil = await prosesBatch(db, [pin({ hash: "1234" })], "2026-11-21T10:00:00.000Z");
+    expect(hasil.diterima).toHaveLength(0);
+    expect(hasil.ditolak).toHaveLength(1);
+    expect(db.tabel.pin_sync).toHaveLength(0);
+  });
+
+  it("PIN kosong (string kosong) ditolak — penghapusan hanya lewat hash null", async () => {
+    const db = new DBTiruan();
+    const hasil = await prosesBatch(db, [pin({ hash: "" })], "2026-11-21T10:00:00.000Z");
+    expect(hasil.ditolak).toHaveLength(1);
+    expect(db.tabel.pin_sync).toHaveLength(0);
+  });
+
+  it("hash PIN diterima dan bisa ditarik perangkat lain", async () => {
+    const db = new DBTiruan();
+    const hasil = await prosesBatch(db, [pin()], "2026-11-21T10:00:00.000Z");
+    expect(hasil.diterima).toHaveLength(1);
+    expect(db.tabel.pin_sync).toHaveLength(1);
+    expect(db.tabel.pin_sync[0]?.hash).toBe(HASH_A);
+
+    const tarik = await ambilPerubahan(db, { sejak: "2026-11-21T09:00:00.000Z" });
+    expect(tarik.pin).toHaveLength(1);
+    expect(tarik.pin[0]?.peran).toBe("admin");
+    expect(tarik.pin[0]?.hash).toBe(HASH_A);
+  });
+
+  it("yang terbaru menang — kiriman lama tidak menimpa PIN yang lebih baru", async () => {
+    const db = new DBTiruan();
+    await prosesBatch(db, [pin()], "2026-11-21T10:00:00.000Z");
+    const telat = await prosesBatch(
+      db,
+      [pin({ hash: HASH_B, diubahPada: "2026-11-21T09:00:00.000Z", perangkat: "hp-b" })],
+      "2026-11-21T10:05:00.000Z",
+    );
+    expect(telat.diterima).toHaveLength(1); // antrean pengirim dibersihkan
+    expect(db.tabel.pin_sync[0]?.hash).toBe(HASH_A);
+  });
+
+  it("yang lebih baru menimpa — PIN diganti di perangkat lain", async () => {
+    const db = new DBTiruan();
+    await prosesBatch(db, [pin()], "2026-11-21T10:00:00.000Z");
+    await prosesBatch(
+      db,
+      [pin({ hash: HASH_B, diubahPada: "2026-11-21T11:00:00.000Z", perangkat: "hp-b" })],
+      "2026-11-21T11:00:00.000Z",
+    );
+    expect(db.tabel.pin_sync[0]?.hash).toBe(HASH_B);
+  });
+
+  it("hapus PIN (hash null) diterima dan ikut ditarik", async () => {
+    const db = new DBTiruan();
+    await prosesBatch(db, [pin()], "2026-11-21T10:00:00.000Z");
+    await prosesBatch(
+      db,
+      [pin({ hash: null, diubahPada: "2026-11-21T12:00:00.000Z", perangkat: "hp-b" })],
+      "2026-11-21T12:00:00.000Z",
+    );
+    expect(db.tabel.pin_sync[0]?.hash).toBeNull();
+    const tarik = await ambilPerubahan(db, { sejak: "2026-11-21T11:00:00.000Z" });
+    expect(tarik.pin).toHaveLength(1);
+    expect(tarik.pin[0]?.hash).toBeNull();
+  });
+
+  it("peran di luar admin/owner/kasir_toko ditolak", async () => {
+    const db = new DBTiruan();
+    const hasil = await prosesBatch(
+      db,
+      // @ts-expect-error peran sengaja tidak sah untuk menguji penolakan
+      [pin({ peran: "kasir_bazar" })],
+      "2026-11-21T10:00:00.000Z",
+    );
+    expect(hasil.ditolak).toHaveLength(1);
+    expect(db.tabel.pin_sync).toHaveLength(0);
+  });
+
+  it("tarik tidak mengembalikan PIN dari perangkat yang sama", async () => {
+    const db = new DBTiruan();
+    await prosesBatch(db, [pin()], "2026-11-21T10:00:00.000Z");
+    const tarik = await ambilPerubahan(db, { sejak: "2026-11-21T09:00:00.000Z", perangkat: "hp-a" });
+    expect(tarik.pin).toHaveLength(0);
+  });
+});
+
+describe("nomor urut dari hub — dua perangkat tidak dapat nomor sama (F4, BU-19/21)", () => {
+  it("alokasi berurutan 1, 2, 3 dalam satu bulan", async () => {
+    const db = new DBTiruan();
+    expect(await alokasiNomor(db, "2026-11")).toBe(1);
+    expect(await alokasiNomor(db, "2026-11")).toBe(2);
+    expect(await alokasiNomor(db, "2026-11")).toBe(3);
+  });
+
+  it("bulan baru mulai lagi dari 1", async () => {
+    const db = new DBTiruan();
+    await alokasiNomor(db, "2026-11");
+    await alokasiNomor(db, "2026-11");
+    expect(await alokasiNomor(db, "2026-12")).toBe(1);
+  });
+
+  it("nomor yang sudah dialokasikan tidak dipakai ulang", async () => {
+    const db = new DBTiruan();
+    await alokasiNomor(db, "2026-11");
+    // Perangkat membatalkan pesanannya: tidak ada pengembalian nomor.
+    expect(await alokasiNomor(db, "2026-11")).toBe(2);
   });
 });

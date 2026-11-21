@@ -459,3 +459,162 @@ describe("biaya bazar masuk antrean sync (F1, BU-34)", () => {
     expect(tombstone?.dihapus).toBe(true);
   });
 });
+
+describe("PIN tersinkron antar perangkat (F3, BU-32/33)", () => {
+  beforeEach(() => {
+    (globalThis as unknown as { indexedDB: IDBFactory }).indexedDB = new IDBFactory();
+    resetKoneksiDB();
+  });
+
+  const HASH = "sha256$saltA$digestA";
+
+  it("simpanPin menulis hash + waktu ubah + menandai antrean sync", async () => {
+    const { simpanPin } = await import("./mesin.ts");
+    await simpanPin("admin", HASH);
+    const db = await getDB();
+    const s = await db.get("settings", "utama");
+    expect(s?.pinHash).toBe(HASH);
+    expect(s?.pinDiubahPada?.admin).toBeTruthy();
+    const outbox = await db.getAll("outbox");
+    expect(outbox).toHaveLength(1);
+    expect(outbox[0]?.jenisRecord).toBe("pin");
+    expect(outbox[0]?.idRecord).toBe("pin:admin");
+  });
+
+  it("kirimAntrean mengirim hash PIN — tidak pernah PIN teks biasa", async () => {
+    const { simpanPin } = await import("./mesin.ts");
+    await simpanPin("owner", HASH);
+    let terkirim: Array<Record<string, unknown>> = [];
+    const r = await kirimAntrean({
+      url: "https://contoh/api/sync",
+      fetchImpl: (async (_u: string, init?: RequestInit) => {
+        terkirim = JSON.parse(String(init?.body ?? "{}")).kiriman as Array<Record<string, unknown>>;
+        const diterima = terkirim.map((k) => String(k.id));
+        return new Response(JSON.stringify({ ok: true, diterima }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      }) as unknown as typeof fetch,
+    });
+    expect(r.status).toBe("siap");
+    const kirimanPin = terkirim.find((k) => k.jenis === "pin");
+    expect(kirimanPin?.id).toBe("pin:owner");
+    expect(kirimanPin?.hash).toBe(HASH);
+    // Tidak ada kolom yang bisa berisi PIN teks biasa.
+    expect("pin" in (kirimanPin ?? {})).toBe(false);
+    expect("pinTeks" in (kirimanPin ?? {})).toBe(false);
+    expect(await jumlahAntrean()).toBe(0);
+  });
+
+  it("tarikPerubahan menerapkan PIN dari perangkat lain", async () => {
+    const hasil = await tarikPerubahan({
+      url: "https://contoh/api/sync",
+      fetchImpl: jawab({
+        ok: true,
+        sekarang: "2026-11-21T12:00:00.000Z",
+        transaksi: [],
+        produk: [],
+        bazar: [],
+        biayaBazar: [],
+        pin: [
+          {
+            jenis: "pin",
+            id: "pin:admin",
+            peran: "admin",
+            hash: HASH,
+            diubahPada: "2026-11-21T10:00:00.000Z",
+            perangkat: "hp-a",
+          },
+        ],
+      }),
+    });
+    expect(hasil.ok).toBe(true);
+    expect(hasil.ditarik?.pinDigabung).toBe(1);
+    const db = await getDB();
+    const s = await db.get("settings", "utama");
+    expect(s?.pinHash).toBe(HASH);
+  });
+
+  it("daftarAntrean menampilkan PIN tanpa pernah menampilkan hash-nya", async () => {
+    const { simpanPin } = await import("./mesin.ts");
+    await simpanPin("kasir_toko", HASH);
+    const antrean = await daftarAntrean();
+    expect(antrean).toHaveLength(1);
+    expect(antrean[0]?.jenis).toBe("PIN");
+    expect(antrean[0]?.judul).toBe("PIN kasir toko");
+    expect(JSON.stringify(antrean)).not.toContain(HASH);
+  });
+});
+
+describe("perbaikiNomorSementara — nomor offline diganti nomor hub (F4, BU-19/21)", () => {
+  beforeEach(() => {
+    (globalThis as unknown as { indexedDB: IDBFactory }).indexedDB = new IDBFactory();
+    resetKoneksiDB();
+  });
+
+  it("pesanan offline mendapat nomor resmi dari hub saat online lagi", async () => {
+    const { simpanPesananJahit } = await import("../lib/jahitan.ts");
+    const { perbaikiNomorSementara } = await import("./mesin.ts");
+    const hasil = await simpanPesananJahit(
+      {
+        namaPemesan: "Ibu Sari",
+        kontak: "0812 0000 0000",
+        items: [{ nama: "Gaun pesta", harga: 300000, kuantitas: 1, ukuran: "M" }],
+        perkiraanSelesai: "2026-11-23",
+        catatan: null,
+        biayaLain: [],
+      },
+      { rekening: [], waktu: new Date("2026-11-21T09:00:00.000Z") },
+    );
+    expect(hasil.ok).toBe(true);
+    if (!hasil.ok) return;
+    const db = await getDB();
+    const sebelum = await db.get("transactions", hasil.pesanan.id);
+    expect(sebelum?.nomorUrutSementara).toBe(true); // offline: nomor lokal sementara
+
+    const diperbaiki = await perbaikiNomorSementara({
+      urlSync: "https://contoh/api/sync",
+      fetchImpl: (async () =>
+        new Response(JSON.stringify({ ok: true, bulan: "2026-11", nomor: 5 }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        })) as unknown as typeof fetch,
+    });
+    expect(diperbaiki).toBe(1);
+    const sesudah = await db.get("transactions", hasil.pesanan.id);
+    expect(sesudah?.nomorUrutBulan).toBe(5);
+    expect(sesudah?.nomorResi).toBe("KC.00005-20261121");
+    expect(sesudah?.nomorUrutSementara).toBe(false);
+    // Nomor yang sudah diperbaiki ikut dikirim ke hub.
+    const outbox = await db.getAll("outbox");
+    expect(outbox.some((o) => o.idRecord === hasil.pesanan.id)).toBe(true);
+  });
+
+  it("hub tidak menjawab → nomor sementara tetap, tidak ada yang rusak", async () => {
+    const { simpanPesananJahit } = await import("../lib/jahitan.ts");
+    const { perbaikiNomorSementara } = await import("./mesin.ts");
+    const hasil = await simpanPesananJahit(
+      {
+        namaPemesan: "Ibu Sari",
+        kontak: "0812 0000 0000",
+        items: [{ nama: "Gaun pesta", harga: 300000, kuantitas: 1, ukuran: "M" }],
+        perkiraanSelesai: "2026-11-23",
+        catatan: null,
+        biayaLain: [],
+      },
+      { rekening: [], waktu: new Date("2026-11-21T09:00:00.000Z") },
+    );
+    expect(hasil.ok).toBe(true);
+    if (!hasil.ok) return;
+    const diperbaiki = await perbaikiNomorSementara({
+      urlSync: "https://contoh/api/sync",
+      fetchImpl: (async () => {
+        throw new Error("jaringan mati");
+      }) as unknown as typeof fetch,
+    });
+    expect(diperbaiki).toBe(0);
+    const db = await getDB();
+    const tetap = await db.get("transactions", hasil.pesanan.id);
+    expect(tetap?.nomorUrutSementara).toBe(true);
+  });
+});

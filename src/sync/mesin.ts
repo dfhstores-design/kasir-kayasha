@@ -7,9 +7,11 @@
  *  3. Antrean dikosongkan HANYA setelah server menjawab diterima.
  *  4. Tanpa internet, tidak ada yang berubah — aplikasi tetap berfungsi penuh.
  */
-import { getDB, type OutboxRecord, type TransaksiRecord, type ProdukRecord, type ItemTransaksiRecord, type PembayaranRecord, type LogSinkronRecord } from "../db/schema.ts";
-import { buatId, SETTINGS_KOSONG } from "../db/repositori.ts";
-import type { Kiriman, Perubahan } from "./logika.ts";
+import { getDB, type OutboxRecord, type TransaksiRecord, type ProdukRecord, type ItemTransaksiRecord, type PembayaranRecord, type LogSinkronRecord, type SettingsRecord } from "../db/schema.ts";
+import { ambilSettings, buatId, simpanSettings, SETTINGS_KOSONG } from "../db/repositori.ts";
+import { idPinSync, peranDariIdPin, type Kiriman, type Perubahan, type PeranPinSync } from "./logika.ts";
+import { mintaNomorUrutBulan } from "./penomoran.ts";
+import { nomorPlaceholder } from "../lib/dokumen.ts";
 import { simpanBayanganUntuk, terapkanPerubahan, type HasilTarik, type KonteksTarik } from "./tarik.ts";
 
 export type StatusSync = "mati" | "menunggu" | "mengirim" | "siap" | "gagal";
@@ -24,8 +26,28 @@ export interface RingkasanSync {
 /** Ringkasan satu putaran sinkronisasi penuh (kirim + tarik, Fase 2B). */
 export interface RingkasanSinkronisasi extends RingkasanSync {
   terakhirTarik: string | null;
-  ditarik: { transaksiBaru: number; transaksiDigabung: number; produk: number; bazar: number; biayaBazar: number };
+  ditarik: { transaksiBaru: number; transaksiDigabung: number; produk: number; bazar: number; biayaBazar: number; pin: number };
   konflik: number;
+}
+
+/**
+ * Menyimpan satu PIN peran (F3, BU-32/33): menulis hash + waktu diubah ke
+ * settings, lalu menandai PIN itu untuk dikirim ke hub. Yang dikirim
+ * hanya hash — PIN teks biasa tidak pernah keluar dari perangkat ini.
+ * Dipakai layar Atur PIN (admin / owner / kasir toko).
+ */
+export async function simpanPin(peran: PeranPinSync, hash: string | null): Promise<void> {
+  const settings = await ambilSettings();
+  const sekarang = new Date().toISOString();
+  const baru: SettingsRecord = {
+    ...settings,
+    pinDiubahPada: { ...(settings.pinDiubahPada ?? {}), [peran]: sekarang },
+  };
+  if (peran === "admin") baru.pinHash = hash;
+  else if (peran === "owner") baru.pinOwnerHash = hash;
+  else baru.pinKasirTokoHash = hash;
+  await simpanSettings(baru);
+  await tandaiUntukSync("pin", idPinSync(peran));
 }
 
 const KUNCI_TERAKHIR = "syncTerakhirBerhasil";
@@ -131,6 +153,9 @@ async function siapkanKiriman(o: OutboxRecord, perangkat: string): Promise<Kirim
       perkiraanSiap: t.perkiraanSiap,
       alamat: t.alamat,
       ...(t.nomorUrutBulan !== undefined ? { nomorUrutBulan: t.nomorUrutBulan } : {}),
+      // Selalu eksplisit (true/false) supaya perangkat lain tahu nomor ini
+      // resmi dari hub atau masih sementara (F4).
+      nomorUrutSementara: t.nomorUrutSementara === true,
       jenisBayar: t.jenisBayar,
       ongkirMode: t.ongkirMode,
       ongkirNominal: t.ongkirNominal,
@@ -228,6 +253,24 @@ async function siapkanKiriman(o: OutboxRecord, perangkat: string): Promise<Kirim
       dibuatPada: b.createdAt,
       // Biaya tidak pernah diubah: createdAt adalah versinya.
       diubahPada: b.createdAt,
+      perangkat,
+    };
+  }
+
+  if (o.jenisRecord === "pin") {
+    // Hanya hash PIN peran yang dikirim — bukan PIN-nya, bukan settings
+    // lain (rekening tetap lokal). Hash null = PIN dihapus di perangkat ini.
+    const peran = peranDariIdPin(o.idRecord);
+    if (!peran) return null;
+    const s = await db.get("settings", "utama");
+    if (!s) return null;
+    const hash = peran === "admin" ? s.pinHash : peran === "owner" ? s.pinOwnerHash : s.pinKasirTokoHash;
+    return {
+      jenis: "pin",
+      id: o.idRecord,
+      peran,
+      hash: hash ?? null,
+      diubahPada: s.pinDiubahPada?.[peran] ?? o.dibuatPada,
       perangkat,
     };
   }
@@ -449,6 +492,8 @@ export async function tarikPerubahan(opsi: OpsiTarik = {}): Promise<{
       bazar: o.bazar,
       // Hub lama belum mengirim biaya: perlakukan sebagai kosong, bukan rusak.
       biayaBazar: Array.isArray(o.biayaBazar) ? o.biayaBazar : [],
+      // Hub lama belum mengirim PIN: perlakukan sebagai kosong, bukan rusak.
+      pin: Array.isArray(o.pin) ? o.pin : [],
     },
     ctx,
   );
@@ -460,6 +505,47 @@ export async function tarikPerubahan(opsi: OpsiTarik = {}): Promise<{
     await simpanTerakhirTarik(maju);
   }
   return { ok: true, ditarik, terakhirTarik: kursorBaru ?? terakhirTarik, pesan: null };
+}
+
+/**
+ * Memperbaiki nomor urut sementara (F4, BU-19/21): pesanan jahit yang
+ * dibuat saat offline memakai nomor lokal sementara. Saat online lagi,
+ * tiap pesanan itu dimintakan nomor resmi dari hub (urut waktu), lalu
+ * nomor urut + nomor resinya ditulis ulang dan ditandai untuk dikirim.
+ * Best-effort: berhenti di nomor pertama yang gagal (dicoba lagi putaran
+ * berikutnya) dan tidak pernah menggagalkan sinkronisasi.
+ */
+export async function perbaikiNomorSementara(
+  opsi: { urlSync?: string; token?: string | undefined; fetchImpl?: typeof fetch | undefined } = {},
+): Promise<number> {
+  const urlSync = opsi.urlSync ?? "";
+  if (!urlSync) return 0;
+  const db = await getDB();
+  const semua = await db.getAll("transactions");
+  const sementara = semua
+    .filter((t) => t.jenisDokumen === "jasa" && t.nomorUrutSementara === true && t.nomorUrutBulan !== undefined)
+    .sort((a, b) => a.waktu.localeCompare(b.waktu));
+  let diperbaiki = 0;
+  for (const t of sementara) {
+    const nomor = await mintaNomorUrutBulan({
+      urlSync,
+      token: opsi.token,
+      bulan: t.waktu.slice(0, 7),
+      fetchImpl: opsi.fetchImpl,
+    });
+    if (nomor === null) break;
+    const sekarang = new Date().toISOString();
+    await db.put("transactions", {
+      ...t,
+      nomorUrutBulan: nomor,
+      nomorResi: nomorPlaceholder(new Date(t.waktu), nomor),
+      nomorUrutSementara: false,
+      updatedAt: sekarang,
+    });
+    await tandaiUntukSync("transaksi", t.id);
+    diperbaiki += 1;
+  }
+  return diperbaiki;
 }
 
 /**
@@ -477,7 +563,7 @@ export async function sinkronkan(opsi: OpsiKirim & OpsiTarik = {}): Promise<Ring
       antrean: antreanAwal,
       terakhirBerhasil: await bacaTerakhirBerhasil(),
       terakhirTarik: terakhirTarikAwal,
-      ditarik: { transaksiBaru: 0, transaksiDigabung: 0, produk: 0, bazar: 0, biayaBazar: 0 },
+      ditarik: { transaksiBaru: 0, transaksiDigabung: 0, produk: 0, bazar: 0, biayaBazar: 0, pin: 0 },
       konflik: 0,
       pesan: null,
     };
@@ -485,6 +571,13 @@ export async function sinkronkan(opsi: OpsiKirim & OpsiTarik = {}): Promise<Ring
 
   const hasilKirim = await kirimAntrean(opsi);
   const hasilTarik = await tarikPerubahan(opsi);
+  // Nomor sementara diperbaiki diam-diam sesudah tarik (F4): tidak
+  // menggagalkan putaran bila hub tidak bisa dihubungi.
+  try {
+    await perbaikiNomorSementara({ urlSync: url, token: opsi.token, fetchImpl: opsi.fetchImpl });
+  } catch {
+    // Abaikan: dicoba lagi putaran berikutnya.
+  }
 
   const status: StatusSync =
     hasilKirim.status === "gagal" || !hasilTarik.ok
@@ -507,8 +600,9 @@ export async function sinkronkan(opsi: OpsiKirim & OpsiTarik = {}): Promise<Ring
           produk: hasilTarik.ditarik.produkDigabung,
           bazar: hasilTarik.ditarik.bazarDigabung,
           biayaBazar: hasilTarik.ditarik.biayaBazarDigabung,
+          pin: hasilTarik.ditarik.pinDigabung,
         }
-      : { transaksiBaru: 0, transaksiDigabung: 0, produk: 0, bazar: 0, biayaBazar: 0 },
+      : { transaksiBaru: 0, transaksiDigabung: 0, produk: 0, bazar: 0, biayaBazar: 0, pin: 0 },
     konflik: hasilTarik.ditarik?.konflik ?? 0,
     pesan: hasilKirim.pesan ?? hasilTarik.pesan,
   };
@@ -564,6 +658,14 @@ export async function daftarAntrean(): Promise<AntreanTampil[]> {
             ? "Biaya bazar (dihapus)"
             : o.idRecord,
         subjudul: b ? (bz ? bz.nama : "Biaya bazar") : "Menunggu terkirim.",
+      });
+    } else if (o.jenisRecord === "pin") {
+      const peran = peranDariIdPin(o.idRecord);
+      hasil.push({
+        id: o.id,
+        jenis: "PIN",
+        judul: peran === "admin" ? "PIN admin" : peran === "owner" ? "PIN owner" : peran === "kasir_toko" ? "PIN kasir toko" : o.idRecord,
+        subjudul: "Kode acak (hash) — PIN tidak pernah dikirim sebagai teks.",
       });
     } else {
       hasil.push({ id: o.id, jenis: "Lainnya", judul: o.idRecord, subjudul: o.jenisRecord });

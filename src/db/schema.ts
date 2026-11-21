@@ -113,6 +113,13 @@ export interface SettingsRecord {
    */
   pinKasirTokoHash: string | null;
   /**
+   * Kapan tiap PIN terakhir diatur/dihapus (F3, BU-32/33): dipakai sync
+   * untuk memutuskan "yang terbaru menang" antar perangkat. Diisi saat
+   * PIN disimpan/dihapus lewat simpanPin; perangkat lama tidak punya
+   * kolom ini (dianggap belum pernah diatur).
+   */
+  pinDiubahPada?: { admin?: string; owner?: string; kasir_toko?: string };
+  /**
    * Id perangkat ini (Fase 2B, BU-33): dibuat sekali (UUID), dipakai hub
    * untuk tidak mengembalikan baris ke perangkat pengirimnya sendiri.
    * Bukan data pribadi — hanya penanda perangkat.
@@ -228,6 +235,14 @@ export interface TransaksiRecord {
   /** Nomor urut pesanan jahit dalam bulan yang sama (BU-19/21, 19 Nov 2026);
    *  hanya diisi untuk jenisDokumen "jasa". */
   nomorUrutBulan?: number;
+  /**
+   * True bila nomor urut di atas dihitung LOKAL karena perangkat sedang
+   * offline / hub tidak bisa dihubungi (F4, BU-19/21): nomor sementara
+   * yang bisa dobel dengan perangkat lain. Saat online lagi, sync
+   * meminta nomor resmi dari hub dan menulis ulang nomor ini + nomorResi.
+   * Pesanan yang dibuat saat online tidak punya kolom ini.
+   */
+  nomorUrutSementara?: boolean;
   waktu: string;
   /** LAMA (deprecated): "langsung" (barang siap jual) atau "po" (pre-order).
    *  Dipertahankan agar data lama tidak rusak (risiko B-1); jangan dibaca untuk
@@ -363,7 +378,7 @@ export interface PengirimanRecord {
 
 export interface OutboxRecord {
   id: UUID;
-  jenisRecord: "produk" | "transaksi" | "pembayaran" | "settings" | "bazar" | "biaya_bazar";
+  jenisRecord: "produk" | "transaksi" | "pembayaran" | "settings" | "bazar" | "biaya_bazar" | "pin";
   idRecord: string;
   /**
    * "upsert" = kirim isi record terbaru; "hapus" = kirim tombstone agar

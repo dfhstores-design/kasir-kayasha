@@ -25,12 +25,13 @@ import {
   type KasirDB,
   type LogSinkronRecord,
   type ProdukRecord,
+  type SettingsRecord,
   type TransaksiRecord,
 } from "../db/schema.ts";
-import { buatId } from "../db/repositori.ts";
+import { buatId, SETTINGS_KOSONG } from "../db/repositori.ts";
 import { recomputeJurnalDariDokumen } from "../lib/jurnal.ts";
 import { sapaanDariWaktu } from "../lib/sapaan.ts";
-import { periksaKiriman, type Kiriman, type KirimanBazar, type KirimanBiayaBazar, type KirimanProduk, type KirimanTransaksi, type Perubahan } from "./logika.ts";
+import { periksaKiriman, type Kiriman, type KirimanBazar, type KirimanBiayaBazar, type KirimanPin, type KirimanProduk, type KirimanTransaksi, type Perubahan } from "./logika.ts";
 
 type DB = IDBPDatabase<KasirDB>;
 
@@ -47,6 +48,8 @@ export interface HasilTarik {
   bazarDigabung: number;
   /** Biaya bazar yang masuk/dihapus dari hub (F1). */
   biayaBazarDigabung: number;
+  /** PIN peran yang diterapkan dari hub (F3). */
+  pinDigabung: number;
   konflik: number;
   /** `diubah_pada` terbaru di antara semua baris yang diterima (kursor). */
   kursorBaru: string | null;
@@ -230,6 +233,7 @@ async function terapkanTransaksi(db: DB, k: KirimanTransaksi, ctx: KonteksTarik)
       nomorResi: k.nomorResi,
       nomorUrutHari: 0,
       ...(k.nomorUrutBulan !== undefined ? { nomorUrutBulan: k.nomorUrutBulan } : {}),
+      ...(k.nomorUrutSementara === true ? { nomorUrutSementara: true as const } : {}),
       waktu: k.waktu,
       jenis: k.jenisDokumen === "jasa" ? "po" : "langsung",
       jenisDokumen: k.jenisDokumen,
@@ -312,20 +316,26 @@ async function terapkanTransaksi(db: DB, k: KirimanTransaksi, ctx: KonteksTarik)
   let gabung: TransaksiRecord = { ...lokal, terakhirSyncPada: sekarang };
 
   if (k.diubahPada > lokal.updatedAt) {
-    // Edit yang lebih baru dari perangkat lain (mis. ubahPesananJahit):
-    // ambil isi terbaru, TAPI pembayaran lokal tidak pernah dihapus.
+    // Edit yang lebih baru dari perangkat lain (mis. ubahPesananJahit,
+    // atau perbaikan nomor sementara F4): ambil isi terbaru, TAPI
+    // pembayaran lokal tidak pernah dihapus.
     gabung = {
       ...gabung,
-      namaPemesan: k.namaPemesan,
-      kontak: k.kontak ?? lokal.kontak,
-      catatanPesanan: k.catatanPesanan ?? lokal.catatanPesanan,
-      perkiraanSiap: k.perkiraanSiap ?? lokal.perkiraanSiap,
-      alamat: k.alamat ?? lokal.alamat,
+      // Nomor dokumen ikut diperbarui bila hub membawa yang lebih baru
+      // (perbaikan nomor sementara F4) — nomor lama yang sementara
+      // diganti nomor resmi dari hub.
+      nomorResi: k.nomorResi,
       ...(k.nomorUrutBulan !== undefined
         ? { nomorUrutBulan: k.nomorUrutBulan }
         : lokal.nomorUrutBulan !== undefined
           ? { nomorUrutBulan: lokal.nomorUrutBulan }
           : {}),
+      nomorUrutSementara: k.nomorUrutSementara === true,
+      namaPemesan: k.namaPemesan,
+      kontak: k.kontak ?? lokal.kontak,
+      catatanPesanan: k.catatanPesanan ?? lokal.catatanPesanan,
+      perkiraanSiap: k.perkiraanSiap ?? lokal.perkiraanSiap,
+      alamat: k.alamat ?? lokal.alamat,
       jenisBayar: (k.jenisBayar as TransaksiRecord["jenisBayar"]) ?? lokal.jenisBayar,
       ongkirMode: k.ongkirMode as TransaksiRecord["ongkirMode"],
       ongkirNominal: k.ongkirNominal,
@@ -561,6 +571,43 @@ async function terapkanBiayaBazar(db: DB, k: KirimanBiayaBazar): Promise<boolean
 }
 
 /**
+ * Menerapkan satu PIN peran dari hub (F3, BU-32/33). Yang diterapkan
+ * hanya hash — PIN teks biasa tidak pernah sampai ke sini. Yang terbaru
+ * menang (dibandingkan dengan `pinDiubahPada` lokal):
+ *  - Jauh lebih baru (atau lokal belum pernah atur) → hash dipakai.
+ *  - Lokal lebih baru → lokal dipertahankan, antrean kirim ditandai ulang
+ *    supaya hub menerima yang terbaru, dan bentroknya dicatat di log.
+ *  - Waktu sama → sudah sama, tidak ada yang diubah.
+ * Mengembalikan true bila ada yang berubah di perangkat ini.
+ */
+async function terapkanPin(db: DB, k: KirimanPin, ctx: KonteksTarik): Promise<boolean> {
+  const tersimpan = (await db.get("settings", "utama")) ?? (SETTINGS_KOSONG as SettingsRecord);
+  const waktuLokal = tersimpan.pinDiubahPada?.[k.peran];
+  if (waktuLokal !== undefined && k.diubahPada < waktuLokal) {
+    // Lokal lebih baru: pertahankan + kirim ulang supaya hub ikut terbaru.
+    const { tandaiUntukSync } = await import("./mesin.ts");
+    await tandaiUntukSync("pin", k.id);
+    await catatLogSinkron(db, {
+      jenis: "konflik",
+      judul: `PIN ${k.peran === "admin" ? "admin" : k.peran === "owner" ? "owner" : "kasir toko"} diubah di dua tempat`,
+      rincian: "Dipakai PIN yang diatur terakhir di perangkat ini.",
+      perangkat: ctx.perangkatId,
+    });
+    return false;
+  }
+  if (waktuLokal !== undefined && k.diubahPada === waktuLokal) return false;
+  const baru: SettingsRecord = {
+    ...tersimpan,
+    pinDiubahPada: { ...(tersimpan.pinDiubahPada ?? {}), [k.peran]: k.diubahPada },
+  };
+  if (k.peran === "admin") baru.pinHash = k.hash;
+  else if (k.peran === "owner") baru.pinOwnerHash = k.hash;
+  else baru.pinKasirTokoHash = k.hash;
+  await db.put("settings", { ...baru, id: "utama", updatedAt: new Date().toISOString() });
+  return true;
+}
+
+/**
  * Menerapkan satu paket perubahan dari hub. Satu baris yang rusak dicatat
  * di log lalu dilewati — tidak pernah menggagalkan paket lainnya.
  */
@@ -571,6 +618,7 @@ export async function terapkanPerubahan(db: DB, perubahan: Perubahan, ctx: Konte
     produkDigabung: 0,
     bazarDigabung: 0,
     biayaBazarDigabung: 0,
+    pinDigabung: 0,
     konflik: 0,
     kursorBaru: null,
   };
@@ -584,6 +632,7 @@ export async function terapkanPerubahan(db: DB, perubahan: Perubahan, ctx: Konte
     ...perubahan.produk,
     ...perubahan.bazar,
     ...perubahan.biayaBazar,
+    ...perubahan.pin,
   ];
   for (const mentah of semua) {
     const cek = periksaKiriman(mentah);
@@ -609,8 +658,10 @@ export async function terapkanPerubahan(db: DB, perubahan: Perubahan, ctx: Konte
       } else if (k.jenis === "bazar") {
         await terapkanBazar(db, k, ctx);
         hasil.bazarDigabung += 1;
-      } else {
+      } else if (k.jenis === "biaya_bazar") {
         if (await terapkanBiayaBazar(db, k)) hasil.biayaBazarDigabung += 1;
+      } else {
+        if (await terapkanPin(db, k, ctx)) hasil.pinDigabung += 1;
       }
       catatKursor(k.diubahPada);
     } catch (e) {

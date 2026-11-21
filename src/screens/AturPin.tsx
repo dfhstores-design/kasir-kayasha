@@ -141,8 +141,9 @@ export default function AturPin({ peran, pinAda, hashLain = [], onSimpan }: Prop
         </div>
 
         <p className="hint">
-          PIN hanya tersimpan di HP ini sebagai kode acak. PIN tidak mengunci data secara
-          terenkripsi — siapa pun yang menguasai HP tetap bisa membuka data.
+          PIN tersimpan sebagai kode acak dan ikut tersinkron ke perangkat lain, supaya
+          PIN yang diatur di sini berlaku juga di HP/iPad yang lain. PIN tidak mengunci
+          data secara terenkripsi — siapa pun yang menguasai HP tetap bisa membuka data.
         </p>
 
         {pinAda && (

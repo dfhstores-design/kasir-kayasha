@@ -30,6 +30,7 @@ CREATE TABLE IF NOT EXISTS transactions (
   perkiraan_siap    TEXT,                    -- Fase 2B
   alamat            TEXT,                    -- Fase 2B: alamat kirim
   nomor_urut_bulan  INTEGER,                 -- Fase 2B: nomor urut pesanan jahit (BU-19/21)
+  nomor_urut_sementara INTEGER,              -- F4: 1 = nomor dihitung lokal saat offline (sementara)
   jenis_bayar       TEXT,                    -- Fase 2B: tunai | transfer | qris
   ongkir_mode       TEXT NOT NULL,
   ongkir_nominal    INTEGER,
@@ -200,8 +201,38 @@ CREATE INDEX IF NOT EXISTS idx_pengiriman_pelanggan ON pengiriman (pelanggan_id)
 --   ALTER TABLE bazars ADD COLUMN pin_kasir_hash TEXT;
 -- Jangan jalankan ALTER dua kali pada kolom yang sama (SQLite menolak).
 --
+-- ---------------------------------------------------------------- pin_sync (F3)
+--
+-- Satu baris per peran: hash PIN admin / owner / kasir toko. HANYA hash
+-- yang disimpan di sini — PIN teks biasa tidak pernah dikirim ke hub.
+-- `hash` NULL = PIN peran itu dihapus. Yang terbaru menang (diubah_pada).
+CREATE TABLE IF NOT EXISTS pin_sync (
+  peran       TEXT PRIMARY KEY,              -- admin | owner | kasir_toko
+  hash        TEXT,                          -- sha256$salt$digest, NULL = PIN dihapus
+  diubah_pada TEXT NOT NULL,
+  perangkat   TEXT
+);
+
+-- ---------------------------------------------------------------- penomoran (F4)
+--
+-- Penghitung nomor urut pesanan jahit per bulan (BU-19/21). Satu baris per
+-- bulan; `terakhir` naik 1 tiap alokasi (satu pernyataan atomik, tidak bisa
+-- dobel antar perangkat). Nomor yang sudah dialokasikan tidak dipakai ulang.
+CREATE TABLE IF NOT EXISTS penomoran (
+  bulan    TEXT PRIMARY KEY,                 -- "YYYY-MM"
+  terakhir INTEGER NOT NULL DEFAULT 0
+);
+
 -- ---------------------------------------------------------------- migrasi F1 (biaya bazar tersinkron)
 --
 -- Tabel `bazar_biaya` di atas dibuat otomatis di database BARU. Database yang
 -- SUDAH ADA cukup menjalankan ulang berkas ini (CREATE TABLE IF NOT EXISTS):
 --   npx wrangler d1 execute <nama-db> --remote --file=./db/schema.sql
+--
+-- ---------------------------------------------------------------- migrasi F3 + F4 (PIN tersinkron, nomor urut dari hub)
+--
+-- Tabel `pin_sync` dan `penomoran` di atas dibuat otomatis di database BARU.
+-- Database yang SUDAH ADA cukup menjalankan ulang berkas ini (CREATE TABLE
+-- IF NOT EXISTS). Kolom baru di tabel LAMA perlu ALTER satu kali:
+--   ALTER TABLE transactions ADD COLUMN nomor_urut_sementara INTEGER;
+-- Jangan jalankan ALTER dua kali pada kolom yang sama (SQLite menolak).

@@ -53,6 +53,7 @@ export async function ambilSettings(): Promise<SettingsRecord> {
     ...tersimpan,
     pinOwnerHash: tersimpan.pinOwnerHash ?? null,
     pinKasirTokoHash: tersimpan.pinKasirTokoHash ?? null,
+    pinDiubahPada: tersimpan.pinDiubahPada ?? {},
   };
 }
 
