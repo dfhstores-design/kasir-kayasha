@@ -12,7 +12,7 @@ import { ambilSettings, buatId, simpanSettings, SETTINGS_KOSONG } from "../db/re
 import { idPinSync, peranDariIdPin, type Kiriman, type Perubahan, type PeranPinSync } from "./logika.ts";
 import { mintaNomorUrutBulan } from "./penomoran.ts";
 import { nomorPlaceholder } from "../lib/dokumen.ts";
-import { simpanBayanganUntuk, terapkanPerubahan, type HasilTarik, type KonteksTarik } from "./tarik.ts";
+import { catatLogSinkron, simpanBayanganUntuk, terapkanPerubahan, type HasilTarik, type KonteksTarik } from "./tarik.ts";
 
 export type StatusSync = "mati" | "menunggu" | "mengirim" | "siap" | "gagal";
 
@@ -366,9 +366,9 @@ export async function kirimAntrean(opsi: OpsiKirim = {}): Promise<RingkasanSync>
     };
   }
 
-  let hasil: { diterima?: string[] } = {};
+  let hasil: { diterima?: string[]; statusDitahan?: string[] } = {};
   try {
-    hasil = (await jawab.json()) as { diterima?: string[] };
+    hasil = (await jawab.json()) as { diterima?: string[]; statusDitahan?: string[] };
   } catch {
     hasil = {};
   }
@@ -397,6 +397,23 @@ export async function kirimAntrean(opsi: OpsiKirim = {}): Promise<RingkasanSync>
       }
     } catch {
       // Gagal mencatat jejak sync: antrean sudah bersih, jangan gagalkan kirim.
+    }
+  }
+
+  // F5 (BU-33): hub menahan status yang mundur — catat di log sinkron
+  // lokal (dibaca owner di Riwayat Sinkron) supaya terlihat, tanpa
+  // memblokir kiriman lain. Data kiriman itu sendiri tetap terkirim.
+  const ditahan = new Set(hasil.statusDitahan ?? []);
+  if (ditahan.size > 0) {
+    for (const x of kiriman) {
+      if (!ditahan.has(x.kiriman.id) || x.kiriman.jenis !== "transaksi") continue;
+      const t = await db.get("transactions", x.kiriman.id);
+      await catatLogSinkron(db, {
+        jenis: "konflik",
+        judul: `Status ${t ? `pesanan ${t.nomorResi}` : "pesanan"} ditahan hub`,
+        rincian:
+          "Perangkat ini mengirim status yang lebih lama dari yang sudah tersimpan di hub — dipakai status yang terbaru. Data lain (barang, pembayaran) tetap terkirim.",
+      });
     }
   }
 

@@ -225,6 +225,31 @@ describe("terapkanPerubahan — transaksi append-only", () => {
     expect(t?.statusBayar).toBe("lunas");
   });
 
+  it("F5 (jalur tarik): kiriman lebih baru tapi status mundur tetap ditahan, data lain masuk", async () => {
+    const db = await getDB();
+    await db.put("transactions", transaksiLokal({ statusPesanan: "selesai", statusBayar: "lunas", updatedAt: "2026-11-10T10:00:00.000Z" }));
+    const perubahan: Perubahan = {
+      sekarang: "2026-11-10T12:00:00.000Z",
+      transaksi: [
+        kirimanTransaksi({
+          statusPesanan: "diproses",
+          statusBayar: "dp",
+          total: 475000,
+          diubahPada: "2026-11-10T11:00:00.000Z",
+        }),
+      ],
+      produk: [],
+      bazar: [],
+      biayaBazar: [],
+      pin: [],
+    };
+    await terapkanPerubahan(db, perubahan, CTX);
+    const t = await db.get("transactions", "11111111-1111-1111-1111-111111111111");
+    expect(t?.statusPesanan).toBe("selesai");
+    expect(t?.statusBayar).toBe("lunas");
+    expect(t?.total).toBe(475000);
+  });
+
   it("void dari perangkat lain diterapkan + jurnal balik ditulis", async () => {
     const db = await getDB();
     const lokal = transaksiLokal({ statusBayar: "dp" });

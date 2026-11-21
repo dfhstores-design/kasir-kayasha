@@ -173,6 +173,56 @@ describe("kirimAntrean", () => {
     expect(header).toBe("rahasia");
   });
 
+  it("F5: status yang ditahan hub dicatat di log sinkron (owner bisa melihat)", async () => {
+    const db = await getDB();
+    await db.put("transactions", {
+      id: "tx-1",
+      nomorResi: "KC.00001-20261110",
+      nomorUrutHari: 1,
+      waktu: "2026-11-10T08:00:00.000Z",
+      jenis: "po",
+      jenisDokumen: "jasa",
+      arahStok: "tidak_ada",
+      pelangganId: null,
+      statusPesanan: "diproses",
+      bazarId: null,
+      namaPemesan: "Sari",
+      kontak: null,
+      perkiraanSiap: null,
+      alamat: null,
+      catatanPesanan: null,
+      riwayatTotal: [],
+      ongkirMode: "ambil_sendiri",
+      ongkirNominal: 0,
+      subtotalAwal: 850000,
+      diskonItem: 0,
+      diskonTotal: 0,
+      total: 850000,
+      sapaan: "Pagi",
+      rekeningSnapshot: [],
+      jenisBayar: null,
+      statusBayar: "belum_dibayar",
+      dibatalkanPada: null,
+      createdAt: "2026-11-10T08:00:00.000Z",
+      updatedAt: "2026-11-10T08:00:00.000Z",
+    });
+    await tandaiUntukSync("transaksi", "tx-1");
+
+    const r = await kirimAntrean({
+      url: "https://contoh/api/sync",
+      fetchImpl: jawab({ ok: true, diterima: ["tx-1"], ditolak: [], statusDitahan: ["tx-1"] }),
+    });
+
+    // Kiriman tetap dianggap terkirim (antrean bersih), hanya statusnya ditahan.
+    expect(r.status).toBe("siap");
+    expect(await jumlahAntrean()).toBe(0);
+    const log = await db.getAll("logSinkron");
+    expect(log).toHaveLength(1);
+    expect(log[0]?.jenis).toBe("konflik");
+    expect(log[0]?.judul).toContain("KC.00001-20261110");
+    expect(log[0]?.judul).toContain("ditahan");
+  });
+
   it("settings tidak dikirim dan antrean dibersihkan", async () => {
     await simpanSettings({ ...SETTINGS_KOSONG, namaButik: "Kayesa" });
     await tandaiUntukSync("settings", "utama");

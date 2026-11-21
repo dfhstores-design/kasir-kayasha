@@ -139,6 +139,10 @@ class DBTiruan implements DBCloud {
     if (sql.includes("FROM bazar_biaya")) {
       return this.tabel.bazar_biaya!.find((r) => r.id === nilai[0]) ?? null;
     }
+    // F5: hub membaca status tersimpan sebelum menimpa transaksi.
+    if (sql.includes("FROM transactions")) {
+      return this.tabel.transactions!.find((r) => r.id === nilai[0]) ?? null;
+    }
     // Alokasi nomor (F4): INSERT ... RETURNING terakhir.
     if (sql.startsWith("INSERT INTO penomoran")) {
       return { terakhir: this.alokasiNomorTiruan(String(nilai[0])) };
@@ -304,11 +308,19 @@ describe("prosesBatch — IDEMPOTEN", () => {
     await prosesBatch(db, [transaksi()], "2026-11-10T09:00:00.000Z");
     await prosesBatch(
       db,
-      [transaksi({ statusBayar: "dp", diubahPada: "2026-11-10T10:00:00.000Z" })],
+      [transaksi({ total: 500000, diubahPada: "2026-11-10T10:00:00.000Z" })],
       "2026-11-10T10:00:00.000Z",
     );
     expect(db.tabel.transactions).toHaveLength(1);
-    expect(db.tabel.transactions[0]?.status_bayar).toBe("dp");
+    expect(db.tabel.transactions[0]?.total).toBe(500000);
+    // F5: status yang mundur TIDAK ikut ditimpa (lunas → dp ditahan).
+    await prosesBatch(
+      db,
+      [transaksi({ statusBayar: "dp", diubahPada: "2026-11-10T11:00:00.000Z" })],
+      "2026-11-10T11:00:00.000Z",
+    );
+    expect(db.tabel.transactions).toHaveLength(1);
+    expect(db.tabel.transactions[0]?.status_bayar).toBe("lunas");
   });
 
   it("kunciSync membedakan versi berbeda", () => {
@@ -367,8 +379,151 @@ describe("prosesBatch — ketahanan", () => {
   it("batch kosong tidak menulis apa pun", async () => {
     const db = new DBTiruan();
     const hasil = await prosesBatch(db, [], "2026-11-10T09:00:00.000Z");
-    expect(hasil).toEqual({ diterima: [], ditolak: [] });
+    expect(hasil).toEqual({ diterima: [], ditolak: [], statusDitahan: [] });
     expect(db.tabel.sync_log).toHaveLength(0);
+  });
+});
+
+describe("prosesBatch — F5 status hanya maju di hub (BU-33)", () => {
+  it("kiriman status mundur ditahan, data lain tetap masuk + tercatat di log", async () => {
+    const db = new DBTiruan();
+    // Perangkat A sudah mengirim status selesai/lunas.
+    await prosesBatch(db, [transaksi()], "2026-11-10T09:00:00.000Z");
+    // Perangkat B (offline lama) mengirim status lama + total baru.
+    const hasil = await prosesBatch(
+      db,
+      [
+        transaksi({
+          statusPesanan: "diproses",
+          statusBayar: "dp",
+          total: 500000,
+          diubahPada: "2026-11-10T10:00:00.000Z",
+        }),
+      ],
+      "2026-11-10T10:00:00.000Z",
+    );
+    // Kiriman tetap diterima (bukan ditolak): data lain masuk.
+    expect(hasil.diterima).toContain("11111111-1111-1111-1111-111111111111");
+    expect(hasil.ditolak).toHaveLength(0);
+    expect(hasil.statusDitahan).toContain("11111111-1111-1111-1111-111111111111");
+    const baris = db.tabel.transactions[0]!;
+    expect(baris.status_pesanan).toBe("selesai");
+    expect(baris.status_bayar).toBe("lunas");
+    expect(baris.total).toBe(500000);
+    // Penahanan tercatat di log sinkron hub.
+    expect(db.tabel.sync_log.some((r) => r.jenis === "tolak_status")).toBe(true);
+  });
+
+  it("status yang maju diterima dan tidak masuk statusDitahan", async () => {
+    const db = new DBTiruan();
+    await prosesBatch(
+      db,
+      [transaksi({ statusPesanan: "diproses", statusBayar: "dp" })],
+      "2026-11-10T09:00:00.000Z",
+    );
+    const hasil = await prosesBatch(
+      db,
+      [transaksi({ statusPesanan: "selesai", statusBayar: "lunas", diubahPada: "2026-11-10T10:00:00.000Z" })],
+      "2026-11-10T10:00:00.000Z",
+    );
+    expect(hasil.statusDitahan).toHaveLength(0);
+    expect(db.tabel.transactions[0]?.status_pesanan).toBe("selesai");
+    expect(db.tabel.transactions[0]?.status_bayar).toBe("lunas");
+  });
+
+  it("campuran: pesanan mundur ditahan, bayar maju tetap diterapkan", async () => {
+    const db = new DBTiruan();
+    await prosesBatch(
+      db,
+      [transaksi({ statusPesanan: "selesai", statusBayar: "dp" })],
+      "2026-11-10T09:00:00.000Z",
+    );
+    const hasil = await prosesBatch(
+      db,
+      [
+        transaksi({
+          statusPesanan: "diproses",
+          statusBayar: "lunas",
+          diubahPada: "2026-11-10T10:00:00.000Z",
+        }),
+      ],
+      "2026-11-10T10:00:00.000Z",
+    );
+    expect(hasil.statusDitahan).toContain("11111111-1111-1111-1111-111111111111");
+    expect(db.tabel.transactions[0]?.status_pesanan).toBe("selesai");
+    expect(db.tabel.transactions[0]?.status_bayar).toBe("lunas");
+  });
+
+  it("void tetap jalan; pesanan batal tidak bisa dihidupkan lagi", async () => {
+    const db = new DBTiruan();
+    await prosesBatch(
+      db,
+      [transaksi({ statusPesanan: "diproses", statusBayar: "dp" })],
+      "2026-11-10T09:00:00.000Z",
+    );
+    // Void dari perangkat lain.
+    const voidHasil = await prosesBatch(
+      db,
+      [
+        transaksi({
+          statusPesanan: "dibatalkan",
+          statusBayar: "dp",
+          dibatalkanPada: "2026-11-10T10:00:00.000Z",
+          diubahPada: "2026-11-10T10:00:00.000Z",
+        }),
+      ],
+      "2026-11-10T10:00:00.000Z",
+    );
+    expect(voidHasil.statusDitahan).toHaveLength(0);
+    expect(db.tabel.transactions[0]?.status_pesanan).toBe("dibatalkan");
+    expect(db.tabel.transactions[0]?.dibatalkan_pada).toBe("2026-11-10T10:00:00.000Z");
+    // Kiriman lama mencoba menghidupkan lagi (status diproses, tanpa tanggal batal).
+    const hidupHasil = await prosesBatch(
+      db,
+      [
+        transaksi({
+          statusPesanan: "diproses",
+          statusBayar: "dp",
+          dibatalkanPada: null,
+          diubahPada: "2026-11-10T11:00:00.000Z",
+        }),
+      ],
+      "2026-11-10T11:00:00.000Z",
+    );
+    expect(hidupHasil.statusDitahan).toContain("11111111-1111-1111-1111-111111111111");
+    expect(db.tabel.transactions[0]?.status_pesanan).toBe("dibatalkan");
+    expect(db.tabel.transactions[0]?.dibatalkan_pada).toBe("2026-11-10T10:00:00.000Z");
+  });
+
+  it("status sama + data baru: diterapkan, tidak masuk statusDitahan", async () => {
+    const db = new DBTiruan();
+    await prosesBatch(db, [transaksi()], "2026-11-10T09:00:00.000Z");
+    const hasil = await prosesBatch(
+      db,
+      [transaksi({ total: 475000, diubahPada: "2026-11-10T10:00:00.000Z" })],
+      "2026-11-10T10:00:00.000Z",
+    );
+    expect(hasil.statusDitahan).toHaveLength(0);
+    expect(db.tabel.transactions[0]?.total).toBe(475000);
+    expect(db.tabel.transactions[0]?.status_pesanan).toBe("selesai");
+  });
+
+  it("kirim ulang kiriman yang menahan status tetap melaporkan statusDitahan", async () => {
+    const db = new DBTiruan();
+    await prosesBatch(db, [transaksi()], "2026-11-10T09:00:00.000Z");
+    const mundur = transaksi({
+      statusPesanan: "diproses",
+      statusBayar: "dp",
+      diubahPada: "2026-11-10T10:00:00.000Z",
+    });
+    const pertama = await prosesBatch(db, [mundur], "2026-11-10T10:00:00.000Z");
+    expect(pertama.statusDitahan).toContain("11111111-1111-1111-1111-111111111111");
+    // Kirim ulang persis sama (retry sesudah respons hilang): tetap diterima,
+    // dan penahanan status tetap dilaporkan — bukan hilang diam-diam.
+    const ulang = await prosesBatch(db, [mundur], "2026-11-10T10:05:00.000Z");
+    expect(ulang.diterima).toContain("11111111-1111-1111-1111-111111111111");
+    expect(ulang.statusDitahan).toContain("11111111-1111-1111-1111-111111111111");
+    expect(db.tabel.transactions[0]?.status_pesanan).toBe("selesai");
   });
 });
 

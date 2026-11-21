@@ -166,6 +166,33 @@ export type Kiriman = KirimanTransaksi | KirimanProduk | KirimanBazar | KirimanB
 export interface HasilKirim {
   diterima: string[];
   ditolak: Array<{ id: string; pesan: string }>;
+  /** Id transaksi yang statusnya DITAHAN hub (F5, BU-33): kiriman membawa
+   *  status lebih rendah dari yang sudah tersimpan. Kiriman tetap diterima
+   *  (data lain masuk), hanya pergerakan status mundurnya yang ditahan. */
+  statusDitahan: string[];
+}
+
+/**
+ * Urutan maju status pesanan (BU-33): tidak boleh mundur. Sama dengan
+ * peta di tarik.ts (client) — hub menegakkan aturan yang sama.
+ */
+export const PERINGKAT_PESANAN: Record<string, number> = {
+  diproses: 0,
+  siap: 1,
+  selesai: 2,
+  dibatalkan: 3,
+};
+
+/** Urutan maju status bayar (BU-33): tidak boleh mundur. */
+export const PERINGKAT_BAYAR: Record<string, number> = {
+  belum_dibayar: 0,
+  dp: 1,
+  lunas: 2,
+};
+
+/** Peringkat satu nilai status; -1 bila nilainya tidak dikenal. */
+export function peringkatStatus(peta: Record<string, number>, nilai: string): number {
+  return peta[nilai] ?? -1;
 }
 
 /** Antarmuka database yang dibutuhkan sinkronisasi (supaya bisa diuji). */
@@ -261,8 +288,42 @@ export function kunciSync(k: Kiriman): string {
 /**
  * Menyimpan satu kiriman secara idempoten.
  * Bila kunci sudah ada di `sync_log`, kiriman dianggap SUDAH diterima dan dilewati.
+ *
+ * F5 (BU-33): status hanya boleh maju. Sebelum menimpa, status yang sudah
+ * tersimpan dibaca; kiriman yang membawa status pesanan/bayar LEBIH RENDAH
+ * tidak boleh menimpa — hanya statusnya yang ditahan, data lain (total,
+ * item, pembayaran) tetap masuk. Batal bersifat final: `dibatalkan_pada`
+ * yang sudah terisi tidak pernah dihapus. Penahanan dicatat di `sync_log`
+ * (jenis `tolak_status`) supaya bisa diaudit, dan dilaporkan ke pengirim
+ * lewat `HasilKirim.statusDitahan`.
  */
-async function simpanTransaksi(db: DBCloud, k: KirimanTransaksi, sekarang: string): Promise<void> {
+async function simpanTransaksi(
+  db: DBCloud,
+  k: KirimanTransaksi,
+  sekarang: string,
+): Promise<{ ditahanPesanan: boolean; ditahanBayar: boolean }> {
+  const lama = await db
+    .prepare(`SELECT status_pesanan, status_bayar, dibatalkan_pada FROM transactions WHERE id = ?`)
+    .bind(k.id)
+    .first<{ status_pesanan: string; status_bayar: string; dibatalkan_pada: string | null }>();
+
+  let statusPesanan = k.statusPesanan;
+  let statusBayar = k.statusBayar;
+  let dibatalkanPada = k.dibatalkanPada;
+  let ditahanPesanan = false;
+  let ditahanBayar = false;
+  if (lama) {
+    if (peringkatStatus(PERINGKAT_PESANAN, k.statusPesanan) < peringkatStatus(PERINGKAT_PESANAN, String(lama.status_pesanan ?? ""))) {
+      statusPesanan = String(lama.status_pesanan ?? "");
+      ditahanPesanan = true;
+    }
+    if (peringkatStatus(PERINGKAT_BAYAR, k.statusBayar) < peringkatStatus(PERINGKAT_BAYAR, String(lama.status_bayar ?? ""))) {
+      statusBayar = String(lama.status_bayar ?? "");
+      ditahanBayar = true;
+    }
+    if (lama.dibatalkan_pada != null) dibatalkanPada = lama.dibatalkan_pada;
+  }
+
   // Baris induk di-upsert: kiriman yang sama menimpa, tidak menggandakan.
   // Kolom tambahan Fase 2B (kontak, catatan, perkiraan, alamat, nomor urut,
   // jenis bayar, perangkat) membuat pesanan jahit utuh di perangkat lain.
@@ -291,8 +352,8 @@ async function simpanTransaksi(db: DBCloud, k: KirimanTransaksi, sekarang: strin
       k.jenisDokumen,
       k.arahStok,
       k.pelangganId,
-      k.statusPesanan,
-      k.statusBayar,
+      statusPesanan,
+      statusBayar,
       k.bazarId,
       k.namaPemesan,
       k.kontak ?? null,
@@ -308,7 +369,7 @@ async function simpanTransaksi(db: DBCloud, k: KirimanTransaksi, sekarang: strin
       k.diskonItem,
       k.diskonTotal,
       k.total,
-      k.dibatalkanPada,
+      dibatalkanPada,
       k.dibuatPada,
       k.diubahPada,
       k.perangkat ?? null,
@@ -355,6 +416,18 @@ async function simpanTransaksi(db: DBCloud, k: KirimanTransaksi, sekarang: strin
     .prepare(`INSERT OR REPLACE INTO sync_log (kunci, jenis, id_record, diterima_pada) VALUES (?,?,?,?)`)
     .bind(kunciSync(k), "transaksi", k.id, sekarang)
     .run();
+
+  // Penahanan status dicatat terpisah di log sinkron hub (BU-33:
+  // pengaman diam-diam) — kuncinya beda dari kunci idempoten, jadi kirim
+  // ulang kiriman yang sama tidak menulis baris tolak kedua.
+  if (ditahanPesanan || ditahanBayar) {
+    await db
+      .prepare(`INSERT OR REPLACE INTO sync_log (kunci, jenis, id_record, diterima_pada) VALUES (?,?,?,?)`)
+      .bind(`tolak-status:${k.id}:${k.diubahPada}`, "tolak_status", k.id, sekarang)
+      .run();
+  }
+
+  return { ditahanPesanan, ditahanBayar };
 }
 
 async function simpanProduk(db: DBCloud, k: KirimanProduk, sekarang: string): Promise<void> {
@@ -523,6 +596,7 @@ export async function prosesBatch(
 ): Promise<HasilKirim> {
   const diterima: string[] = [];
   const ditolak: Array<{ id: string; pesan: string }> = [];
+  const statusDitahan: string[] = [];
 
   for (const mentah of kiriman) {
     const cek = periksaKiriman(mentah);
@@ -534,18 +608,30 @@ export async function prosesBatch(
 
     const k = cek.nilai;
     try {
-      // Sudah pernah diterima? Lewati tanpa menulis ulang.
+      // Sudah pernah diterima? Lewati tanpa menulis ulang — tapi bila
+      // kiriman itu dulu menahan status, laporkan lagi penahanannya:
+      // pengirim yang kirim ulang karena respons pertamanya hilang
+      // (koneksi putus) tetap perlu tahu statusnya ditahan.
       const ada = await db
         .prepare(`SELECT kunci FROM sync_log WHERE kunci = ?`)
         .bind(kunciSync(k))
         .first<{ kunci: string }>();
       if (ada) {
+        if (k.jenis === "transaksi") {
+          const tolak = await db
+            .prepare(`SELECT kunci FROM sync_log WHERE kunci = ?`)
+            .bind(`tolak-status:${k.id}:${k.diubahPada}`)
+            .first<{ kunci: string }>();
+          if (tolak) statusDitahan.push(k.id);
+        }
         diterima.push(k.id);
         continue;
       }
 
-      if (k.jenis === "transaksi") await simpanTransaksi(db, k, sekarang);
-      else if (k.jenis === "produk") await simpanProduk(db, k, sekarang);
+      if (k.jenis === "transaksi") {
+        const tahan = await simpanTransaksi(db, k, sekarang);
+        if (tahan.ditahanPesanan || tahan.ditahanBayar) statusDitahan.push(k.id);
+      } else if (k.jenis === "produk") await simpanProduk(db, k, sekarang);
       else if (k.jenis === "bazar") await simpanBazar(db, k, sekarang);
       else if (k.jenis === "biaya_bazar") await simpanBiayaBazar(db, k, sekarang);
       else await simpanPin(db, k, sekarang);
@@ -556,7 +642,7 @@ export async function prosesBatch(
     }
   }
 
-  return { diterima, ditolak };
+  return { diterima, ditolak, statusDitahan };
 }
 
 /** Satu paket perubahan dari hub untuk satu perangkat (Fase 2B, BU-33). */
