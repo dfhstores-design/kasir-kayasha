@@ -570,6 +570,25 @@ describe("terapkanPerubahan — PIN tersinkron (F3, BU-32/33)", () => {
     expect(s?.pinHash).toBeNull();
   });
 
+  it("PIN lokal tanpa stempel waktu TIDAK terhapus oleh baris pin hub yang hash-nya null (C2)", async () => {
+    const db = await getDB();
+    // PIN diatur sebelum F3 — ada hash, tidak ada pinDiubahPada.
+    await db.put("settings", { ...SETTINGS_KOSONG, pinHash: "sha256$saltLokal$digestLokal" });
+    const hasil = await terapkanPerubahan(
+      db,
+      paketPin([pinAdmin({ hash: null, diubahPada: "2026-11-21T12:00:00.000Z" })]),
+      CTX,
+    );
+    // Penghapusan tidak bisa dibuktikan lebih baru: PIN lokal dipertahankan.
+    expect(hasil.pinDigabung).toBe(0);
+    const s = await db.get("settings", "utama");
+    expect(s?.pinHash).toBe("sha256$saltLokal$digestLokal");
+    // PIN lokal diberi stempel waktu + ditandai kirim ulang ke hub.
+    expect(s?.pinDiubahPada?.admin).toBeTruthy();
+    const antrean = await db.getAll("outbox");
+    expect(antrean.some((o) => o.jenisRecord === "pin" && o.idRecord === "pin:admin")).toBe(true);
+  });
+
   it("PIN owner dan kasir toko masuk ke kolomnya masing-masing", async () => {
     const db = await getDB();
     const hasil = await terapkanPerubahan(

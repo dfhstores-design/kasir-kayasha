@@ -2,7 +2,7 @@ import { useState } from "react";
 import { KATEGORI_BIAYA, type BazarRecord, type BiayaBazarRecord, type KategoriBiaya } from "../db/schema.ts";
 import { formatRupiah, parseRupiah } from "../lib/money.ts";
 import { dalamRupiah } from "../lib/ketikUang.ts";
-import { formatTanggal } from "../lib/tanggal.ts";
+import { formatTanggal, tanggalHariIni } from "../lib/tanggal.ts";
 import { hitungRingkasanKeuangan, labelKategori } from "../lib/bazar.ts";
 import { tambahBiaya, hapusBiaya } from "../db/repositori.ts";
 import type { Peran } from "../lib/peran.ts";
@@ -14,7 +14,8 @@ interface Props {
   onUbah: () => void;
 }
 
-const hariIni = () => new Date().toISOString().slice(0, 10);
+// Tanggal hari ini dalam WIB (C9) — dipakai sebagai default tanggal biaya.
+const hariIni = () => tanggalHariIni();
 
 /**
  * Biaya bazar (ROLE-BIAYA-RINGKASAN.md bagian 3).

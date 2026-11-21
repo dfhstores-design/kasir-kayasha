@@ -20,6 +20,8 @@ import { resetKoneksiDB } from "../db/schema.ts";
 import { sumberStokUntuk } from "../lib/sumberStok.ts";
 import { sapaanDariWaktu } from "../lib/sapaan.ts";
 import { simpanPesananJahit } from "../lib/jahitan.ts";
+import { terimaPembayaranKasir } from "../db/kasirOperasi.ts";
+import { batalkanTransaksi } from "../db/pesananOperasi.ts";
 
 function resetDB() {
   (globalThis as unknown as { indexedDB: IDBFactory }).indexedDB = new IDBFactory();
@@ -129,11 +131,12 @@ describe("TutupBazar — rekonsiliasi & konfirmasi (Fase 2C, BU-34)", () => {
         perkiraanSelesai: null,
         catatan: null,
         biayaLain: [],
+        // Pesanan bazar ini (C7): tanpa bazarId tidak muncul di daftar.
+        bazarId: b.id,
       },
       { rekening: [] },
     );
     const selesai = vi.fn();
-    vi.spyOn(window, "confirm").mockReturnValue(true);
 
     render(<TutupBazar bazar={b} onSelesai={selesai} />);
     expect(await screen.findByText("Ibu Sari")).toBeTruthy();
@@ -145,9 +148,104 @@ describe("TutupBazar — rekonsiliasi & konfirmasi (Fase 2C, BU-34)", () => {
 
     fireEvent.click(screen.getByLabelText(/Pesanan di atas sudah dikonfirmasi/));
     fireEvent.click(screen.getByRole("button", { name: "Tutup Bazar" }));
+    // Konfirmasi dua langkah (C1): klik pertama hanya menampilkan panel.
+    expect(await screen.findByText("Tutup bazar ini?")).toBeTruthy();
+    expect(selesai).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "Ya, Tutup Bazar" }));
     // Bazar tertutup dan tercatat selesai; onSelesai dipanggil setelah tutupBazar selesai.
     await waitFor(() => expect(selesai).toHaveBeenCalled());
     const daftar = await daftarBazar();
     expect(daftar.find((x) => x.id === b.id)?.status).toBe("selesai");
+  });
+
+  it("tutup bazar memakai konfirmasi dua langkah di dalam aplikasi, tanpa window.confirm (C1)", async () => {
+    const b = await siapkanBazarDenganPenjualan();
+    const confirmSpy = vi.spyOn(window, "confirm");
+    const selesai = vi.fn();
+
+    render(<TutupBazar bazar={b} onSelesai={selesai} />);
+    expect(await screen.findByText("Pameran")).toBeTruthy();
+
+    // Klik pertama: panel konfirmasi muncul, bazar BELUM tertutup.
+    fireEvent.click(await screen.findByRole("button", { name: "Tutup Bazar" }));
+    expect(await screen.findByText("Tutup bazar ini?")).toBeTruthy();
+    expect(selesai).not.toHaveBeenCalled();
+    expect((await daftarBazar()).find((x) => x.id === b.id)?.status).toBe("aktif");
+    expect(confirmSpy).not.toHaveBeenCalled();
+
+    // "Batal" menyembunyikan panel; bazar tetap aktif.
+    fireEvent.click(screen.getByRole("button", { name: "Batal" }));
+    expect(screen.queryByText("Tutup bazar ini?")).toBeNull();
+    expect((await daftarBazar()).find((x) => x.id === b.id)?.status).toBe("aktif");
+
+    // Klik kedua + "Ya, Tutup Bazar": bazar benar-benar tertutup.
+    fireEvent.click(screen.getByRole("button", { name: "Tutup Bazar" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Ya, Tutup Bazar" }));
+    await waitFor(() => expect(selesai).toHaveBeenCalled());
+    expect((await daftarBazar()).find((x) => x.id === b.id)?.status).toBe("selesai");
+    expect(confirmSpy).not.toHaveBeenCalled();
+  });
+
+  it("daftar konfirmasi hanya pesanan terbuka bazar ini (C7)", async () => {
+    const b = await siapkanBazarDenganPenjualan();
+    const bLain = await buatBazar("Pameran Kedua", null, null);
+    const pesan = async (nama: string, over: Record<string, unknown> = {}) => {
+      const h = await simpanPesananJahit(
+        {
+          namaPemesan: nama,
+          kontak: null,
+          items: [{ nama: "Gaun pesta", harga: 300000, kuantitas: 1, ukuran: null }],
+          perkiraanSelesai: null,
+          catatan: null,
+          biayaLain: [],
+          ...over,
+        },
+        { rekening: [] },
+      );
+      if (!h.ok) throw new Error(`gagal membuat pesanan ${nama}`);
+      return h.pesanan.id;
+    };
+    // Terbuka di bazar ini -> muncul.
+    await pesan("Ibu Sari", { bazarId: b.id });
+    // Terbuka di bazar lain -> tidak muncul.
+    await pesan("Ibu Dewi", { bazarId: bLain.id });
+    // Terbuka tapi pesanan butik (tanpa bazarId) -> tidak muncul.
+    await pesan("Ibu Butik");
+    // Sudah LUNAS di bazar ini (belum selesai, tapi lunas) -> tidak muncul.
+    const idLunas = await pesan("Ibu Lunas", { bazarId: b.id });
+    expect((await terimaPembayaranKasir(idLunas, 300000, "tunai")).ok).toBe(true);
+
+    render(<TutupBazar bazar={b} onSelesai={vi.fn()} />);
+    expect(await screen.findByText("Ibu Sari")).toBeTruthy();
+    expect(screen.queryByText("Ibu Dewi")).toBeNull();
+    expect(screen.queryByText("Ibu Butik")).toBeNull();
+    expect(screen.queryByText("Ibu Lunas")).toBeNull();
+  });
+
+  it("menampilkan baris pengembalian DP bila ada pesanan bazar yang dibatalkan (C7)", async () => {
+    const b = await siapkanBazarDenganPenjualan();
+    const h = await simpanPesananJahit(
+      {
+        namaPemesan: "Ibu Sari",
+        kontak: null,
+        items: [{ nama: "Gaun pesta", harga: 300000, kuantitas: 1, ukuran: null }],
+        perkiraanSelesai: null,
+        catatan: null,
+        biayaLain: [],
+        bazarId: b.id,
+      },
+      { rekening: [] },
+    );
+    if (!h.ok) throw new Error("gagal membuat pesanan");
+    expect((await terimaPembayaranKasir(h.pesanan.id, 100000, "tunai")).ok).toBe(true);
+    expect((await batalkanTransaksi(h.pesanan.id, "Pelanggan batal")).ok).toBe(true);
+
+    render(<TutupBazar bazar={b} onSelesai={vi.fn()} />);
+    expect(await screen.findByText("Pengembalian DP")).toBeTruthy();
+    // Baris pengembalian menampilkan "− Rp 100.000" (berbeda dari baris
+    // Tunai "Rp 100.000" milik penjualan di bazar yang sama).
+    expect(await screen.findByText("− Rp 100.000")).toBeTruthy();
+    // Pesanan yang dibatalkan tidak masuk daftar konfirmasi ulang.
+    expect(screen.queryByText("Ibu Sari")).toBeNull();
   });
 });

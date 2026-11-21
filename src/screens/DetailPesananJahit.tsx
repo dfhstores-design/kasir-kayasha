@@ -177,16 +177,19 @@ export default function DetailPesananJahit({ id, onKembali, segarkan, onTerimaPe
             </div>
           )}
           <div className="ringkas" style={{ marginTop: "0.25rem" }}>
-            <strong>SISA</strong>
+            {/* Pesanan batal tidak lagi menagih (C8): tampilkan "Dibatalkan",
+                bukan sisa tagihan — sama seperti layar KasirDetail. */}
+            <strong>{data.status === "batal" ? "STATUS" : "SISA"}</strong>
             <strong className="money" style={{ fontSize: "1.375rem", color: data.sisa > 0 ? "var(--primary)" : "var(--accent-ink)" }}>
-              {formatRupiah(data.sisa)}
+              {data.status === "batal" ? "Dibatalkan" : formatRupiah(data.sisa)}
             </strong>
           </div>
         </div>
       </div>
 
       <div className="bottombar">
-        {data.sisa > 0 && onTerimaPembayaran && (
+        {/* Pesanan batal tidak boleh menerima pembayaran lagi (C8). */}
+        {data.status !== "batal" && data.sisa > 0 && onTerimaPembayaran && (
           <button type="button" className="btn btn--primary" onClick={onTerimaPembayaran}>
             Terima Pembayaran
           </button>

@@ -587,6 +587,25 @@ async function terapkanBiayaBazar(db: DB, k: KirimanBiayaBazar): Promise<boolean
 async function terapkanPin(db: DB, k: KirimanPin, ctx: KonteksTarik): Promise<boolean> {
   const tersimpan = (await db.get("settings", "utama")) ?? (SETTINGS_KOSONG as SettingsRecord);
   const waktuLokal = tersimpan.pinDiubahPada?.[k.peran];
+  const hashLokal =
+    k.peran === "admin" ? tersimpan.pinHash : k.peran === "owner" ? tersimpan.pinOwnerHash : tersimpan.pinKasirTokoHash;
+  if (waktuLokal === undefined && hashLokal !== null && k.hash === null) {
+    // Hub bilang "PIN dihapus", tapi perangkat ini punya PIN tanpa stempel
+    // waktu (diatur sebelum F3, saat pinDiubahPada belum ada): penghapusan
+    // tidak bisa dibuktikan lebih baru — PIN lokal dipertahankan dan
+    // dikirim ulang ke hub, lalu diberi stempel waktu supaya perbandingan
+    // berikutnya bisa diputuskan (C2). Tanpa ini, PIN yang baru disimpan
+    // di perangkat ini hilang diam-diam saat sync menarik baris pin lama.
+    const { tandaiUntukSync } = await import("./mesin.ts");
+    await tandaiUntukSync("pin", k.id);
+    await db.put("settings", {
+      ...tersimpan,
+      id: "utama",
+      pinDiubahPada: { ...(tersimpan.pinDiubahPada ?? {}), [k.peran]: new Date().toISOString() },
+      updatedAt: new Date().toISOString(),
+    });
+    return false;
+  }
   if (waktuLokal !== undefined && k.diubahPada < waktuLokal) {
     // Lokal lebih baru: pertahankan + kirim ulang supaya hub ikut terbaru.
     const { tandaiUntukSync } = await import("./mesin.ts");

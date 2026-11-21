@@ -4,6 +4,7 @@
  * Fungsi murni: tidak menyentuh IndexedDB. Semua nominal integer Rupiah.
  */
 import type { Rupiah } from "./money.ts";
+import { tanggalWIB } from "./tanggal.ts";
 import type { KategoriBiaya } from "../db/schema.ts";
 
 export interface BiayaRingkas {
@@ -104,7 +105,10 @@ export function hitungRingkasanKeuangan(
   biaya: readonly BiayaRingkas[],
   hari?: string,
 ): RingkasanKeuangan {
-  const padaHari = (waktu: string) => hari === undefined || waktu.slice(0, 10) === hari;
+  // Perbandingan hari memakai tanggal WIB (C9): `waktu` adalah stempel ISO
+  // (UTC), jadi potongan `slice(0, 10)`-nya adalah tanggal UTC — salah
+  // untuk transaksi malam hari WIB.
+  const padaHari = (waktu: string) => hari === undefined || tanggalWIB(waktu) === hari;
 
   let jumlahTransaksi = 0;
   let omzet = 0;
@@ -176,9 +180,9 @@ export function hitungRingkasanKeuangan(
   };
 }
 
-/** Hanya transaksi pada tanggal lokal tertentu ("YYYY-MM-DD"). */
+/** Hanya transaksi pada tanggal WIB tertentu ("YYYY-MM-DD"). */
 export function transaksiPadaHari(transaksi: readonly TransaksiRingkas[], hari: string): TransaksiRingkas[] {
-  return transaksi.filter((t) => t.waktu.slice(0, 10) === hari);
+  return transaksi.filter((t) => tanggalWIB(t.waktu) === hari);
 }
 
 export function biayaPadaHari(biaya: readonly BiayaRingkas[], hari: string): BiayaRingkas[] {

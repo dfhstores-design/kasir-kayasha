@@ -12,10 +12,13 @@
  * bukan menghasilkan data rusak diam-diam.
  */
 import { getDB, DB_VERSION, type KasirDB } from "./schema.ts";
+import { tanggalWIB } from "../lib/tanggal.ts";
 
 export const VERSI_CADANGAN = 1;
 export const NAMA_BERKAS_CADANGAN = (tgl: Date) =>
-  `Cadangan-KasirKayesa-${tgl.toISOString().slice(0, 10)}.json`;
+  // Tanggal nama berkas dalam WIB (C9) — sama dengan tanggal yang dilihat
+  // pengguna di layar.
+  `Cadangan-KasirKayesa-${tanggalWIB(tgl)}.json`;
 
 /** Store yang ikut dicadangkan (semua data bisnis). */
 export const STORE_CADANGAN = [

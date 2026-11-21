@@ -263,6 +263,13 @@ export default function KasirDetail({ id, onKembali }: Props) {
               <button type="button" className="pilihan__item" aria-pressed={metode === "transfer"} onClick={() => setMetode("transfer")}>
                 Transfer BCA
               </button>
+              {/* QRIS (C3, tes klik 22 Nov 2026): Tante menerima Tunai,
+                  Transfer, dan QRIS — sebelumnya Terima Pembayaran pesanan
+                  jahit hanya punya Tunai + Transfer, padahal keranjang
+                  penjualan barang sudah punya QRIS. */}
+              <button type="button" className="pilihan__item" aria-pressed={metode === "qris"} onClick={() => setMetode("qris")}>
+                QRIS
+              </button>
             </div>
 
             {pratinjau?.ok && (

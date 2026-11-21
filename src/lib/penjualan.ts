@@ -12,7 +12,7 @@
  */
 import type { Rupiah } from "./money.ts";
 import type { Ongkir } from "./ongkir.ts";
-import { tanggalHariIni } from "./tanggal.ts";
+import { tanggalHariIni, tanggalWIB } from "./tanggal.ts";
 import { hitungKeranjang, hitungPembayaran, type BarisKeranjang, type StatusBayar } from "./keranjang.ts";
 import { sapaanDariWaktu, type Sapaan } from "./sapaan.ts";
 import { sumberStokUntuk } from "./sumberStok.ts";
@@ -170,7 +170,9 @@ export async function cariDuplikatPenjualan(
   const semua = await daftarTransaksi();
   for (const t of semua) {
     if (t.jenisDokumen !== "penjualan" || t.dibatalkanPada !== null) continue;
-    if (t.waktu.slice(0, 10) !== hari || t.total !== total) continue;
+    // Tanggal transaksi dibandingkan dalam WIB (C9): stempel ISO yang
+    // dipotong `slice(0, 10)` adalah tanggal UTC.
+    if (tanggalWIB(t.waktu) !== hari || t.total !== total) continue;
     const lengkap = await ambilTransaksi(t.id);
     if (!lengkap) continue;
     const kunciLama = kunciItemPenjualan(
@@ -184,6 +186,24 @@ export async function cariDuplikatPenjualan(
 /** Nomor urut = jumlah transaksi yang sudah ada + 1. */
 export function nomorUrutBerikutnya(jumlahTransaksi: number): number {
   return jumlahTransaksi + 1;
+}
+
+/**
+ * Nomor resi penjualan berikutnya (C4, tes klik 22 Nov 2026): nomor resi
+ * KYS dihitung dari nomor KYS TERBESAR yang sudah ada + 1 — bukan dari
+ * jumlah semua transaksi. Hitungan lama (jumlah semua transaksi + 1)
+ * melompati nomor setiap ada pesanan jahit (KC) di antaranya, karena
+ * pesanan jahit juga tercatat sebagai transaksi: 3 penjualan + 2 pesanan
+ * jahit lalu penjualan berikutnya menjadi KYS-0006, bukan KYS-0004.
+ * Nomor lama yang sudah terpakai tidak dipakai ulang.
+ */
+export function nomorResiBerikutnya(transaksi: readonly Pick<TransaksiRecord, "nomorResi">[]): number {
+  let terbesar = 0;
+  for (const t of transaksi) {
+    const cocok = /^KYS-(\d+)$/.exec(t.nomorResi);
+    if (cocok) terbesar = Math.max(terbesar, Number(cocok[1]));
+  }
+  return terbesar + 1;
 }
 
 export interface TransaksiTersimpan {
@@ -221,7 +241,8 @@ export async function simpanPenjualan(
 
   const waktu = konteks.waktu ?? new Date();
   const id = konteks.idTransaksi ?? buatId();
-  const hari = waktu.toISOString().slice(0, 10);
+  // Hari transaksi dalam WIB (C9): potongan ISO adalah tanggal UTC.
+  const hari = tanggalWIB(waktu);
   // createdAt/updatedAt = saat transaksi DIMASUKKAN ke aplikasi (Fase 2C):
   // bila `waktu` dimundurkan (transaksi kertas), stempel sync harus tetap
   // memakai waktu masuk — kalau memakai tanggal lama, perangkat lain yang
@@ -240,7 +261,10 @@ export async function simpanPenjualan(
     }
   }
   const semua = await daftarTransaksi();
-  const urutHariIni = semua.filter((t) => t.waktu.slice(0, 10) === hari).length + 1;
+  // Urutan hari itu dihitung dari penjualan saja (C4): pesanan jahit tidak
+  // boleh menggeser nomor urut harian penjualan. Tanggal dalam WIB (C9).
+  const urutHariIni =
+    semua.filter((t) => t.jenisDokumen === "penjualan" && tanggalWIB(t.waktu) === hari).length + 1;
 
   const pembayaran: PembayaranRecord[] =
     cek.sudahDibayar > 0
@@ -269,7 +293,7 @@ export async function simpanPenjualan(
 
   const trx: TransaksiRecord = {
     id,
-    nomorResi: formatNomorResi(nomorUrutBerikutnya(semua.length)),
+    nomorResi: formatNomorResi(nomorResiBerikutnya(semua)),
     nomorUrutHari: urutHariIni,
     waktu: waktu.toISOString(),
     jenis: "langsung",

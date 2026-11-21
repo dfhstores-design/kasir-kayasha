@@ -25,6 +25,7 @@ import { mintaNomorUrutBulan } from "../sync/penomoran.ts";
 import type { Rupiah } from "./money.ts";
 import { sapaanDariWaktu } from "./sapaan.ts";
 import { recomputeJurnalDariDokumen, hitungSisa } from "./jurnal.ts";
+import { bulanWIB, tanggalHariIni, tanggalWIB } from "./tanggal.ts";
 
 /** Satu baris "biaya lain" (BU-15): nama + nominal. Nominal boleh 0 (tidak dicetak). */
 export interface BiayaLainInput {
@@ -56,6 +57,15 @@ export interface RencanaJahitan {
    * pesanan (BU-56) tanggal TIDAK berubah, jadi field ini tidak dipakai.
    */
   tanggalPesanan?: string | null;
+  /**
+   * Bazar tempat pesanan ini diterima (C7, tes klik 22 Nov 2026): id bazar
+   * bila kasir yang menerima sedang masuk sebagai kasir bazar itu,
+   * null bila diterima di butik/admin. Dipakai daftar konfirmasi ulang
+   * saat Tutup Bazar (hanya pesanan bazar itu yang ditampilkan) dan
+   * rekonsiliasi bazar. Pesanan lama (sebelum perbaikan ini) tidak punya
+   * bazarId — dianggap pesanan butik, tidak muncul di tutup bazar mana pun.
+   */
+  bazarId?: UUID | null;
 }
 
 export type HasilRencanaJahitan =
@@ -232,7 +242,8 @@ export async function cariDuplikatJahitan(
   const semua = await daftarTransaksi();
   for (const t of semua) {
     if (t.jenisDokumen !== "jasa" || t.dibatalkanPada !== null) continue;
-    if (t.waktu.slice(0, 10) !== hari || t.total !== total) continue;
+    // Tanggal dibandingkan dalam WIB (C9): potongan ISO adalah tanggal UTC.
+    if (tanggalWIB(t.waktu) !== hari || t.total !== total) continue;
     if ((t.namaPemesan ?? "").trim().toLowerCase() !== nama) continue;
     const lengkap = await ambilPesananJahit(t.id);
     if (!lengkap) continue;
@@ -254,12 +265,14 @@ export async function simpanPesananJahit(
 
   const waktu = konteks.waktu ?? new Date();
   const iso = waktu.toISOString();
+  // Hari transaksi dalam WIB (C9): potongan ISO adalah tanggal UTC.
+  const hariTransaksi = tanggalWIB(waktu);
   // Anti-dobel re-entry kertas (Fase 2C, sama seperti simpanPenjualan):
   // dicek SEBELUM meminta nomor ke hub, supaya nomor KC tidak terbuang bila
   // kasir membatalkan sesudah peringatan duplikat.
-  if (!konteks.izinkanDuplikat && iso.slice(0, 10) < tanggalHariIni()) {
+  if (!konteks.izinkanDuplikat && hariTransaksi < tanggalHariIni()) {
     const duplikat = await cariDuplikatJahitan(
-      iso.slice(0, 10),
+      hariTransaksi,
       rencana.namaPemesan,
       cek.total,
       kunciItemJahitan(rencana.items),
@@ -267,7 +280,7 @@ export async function simpanPesananJahit(
     if (duplikat) {
       return {
         ok: false,
-        pesan: `Sudah ada pesanan yang sama di ${iso.slice(0, 10)} (${duplikat.nomorResi}, total dan isi sama). Periksa lagi bon kertasnya — mungkin sudah dimasukkan.`,
+        pesan: `Sudah ada pesanan yang sama di ${hariTransaksi} (${duplikat.nomorResi}, total dan isi sama). Periksa lagi bon kertasnya — mungkin sudah dimasukkan.`,
         duplikat: true,
       };
     }
@@ -278,8 +291,8 @@ export async function simpanPesananJahit(
   // menarik pesanan kertas ini. Selisih waktu vs createdAt menjadi penanda
   // "dari kertas" (transaksiDariKertas di lib/tanggal.ts).
   const sekarangIso = new Date().toISOString();
-  const hari = iso.slice(0, 10);
-  const bulan = iso.slice(0, 7);
+  const hari = hariTransaksi;
+  const bulan = bulanWIB(waktu);
   // Nomor urut pesanan jahit (BU-19/21, diputuskan Tante 19 Nov 2026):
   // 5 digit, dihitung dalam BULAN yang sama (hanya jenisDokumen "jasa").
   // Saat online, nomor diminta ke hub (F4) supaya dua perangkat tidak
@@ -291,8 +304,9 @@ export async function simpanPesananJahit(
   const nomorHub = await mintaNomorUrutBulan({ urlSync, bulan, fetchImpl: konteks.fetchImpl });
   const semua = await daftarTransaksi();
   const nomorSementara = nomorHub === null;
-  const urutBulanIni = nomorHub ?? semua.filter((t) => t.waktu.slice(0, 7) === bulan && t.jenisDokumen === "jasa").length + 1;
-  const urutHariIni = semua.filter((t) => t.waktu.slice(0, 10) === hari && t.jenisDokumen === "jasa").length + 1;
+  // Bulan/hari dihitung dalam WIB (C9): potongan ISO adalah tanggal UTC.
+  const urutBulanIni = nomorHub ?? semua.filter((t) => bulanWIB(t.waktu) === bulan && t.jenisDokumen === "jasa").length + 1;
+  const urutHariIni = semua.filter((t) => tanggalWIB(t.waktu) === hari && t.jenisDokumen === "jasa").length + 1;
   const id = buatId();
   const pelangganId = buatId();
 
@@ -327,7 +341,8 @@ export async function simpanPesananJahit(
     arahStok: "tidak_ada",
     pelangganId,
     statusPesanan: "diproses",
-    bazarId: null,
+    // Bazar tempat pesanan diterima (C7): diisi App dari lokasi kasir.
+    bazarId: rencana.bazarId ?? null,
     namaPemesan: rencana.namaPemesan.trim(),
     kontak: rencana.kontak?.trim() || null,
     perkiraanSiap: rencana.perkiraanSelesai || null,
@@ -598,6 +613,7 @@ export async function daftarPesananJahit(): Promise<RingkasanJahitan[]> {
     const pembayaran = await db.getAllFromIndex("payments", "by-transaksi", t.id);
     const terbayar = uangDiterima(pembayaran);
     const kiriman = await db.getAllFromIndex("pengiriman", "by-dokumen", t.id);
+    const status = statusJahitan(t);
     hasil.push({
       id: t.id,
       nomor: t.nomorResi,
@@ -610,8 +626,11 @@ export async function daftarPesananJahit(): Promise<RingkasanJahitan[]> {
       total: t.total,
       terbayar,
       dikembalikan: uangDikembalikan(pembayaran),
-      sisa: hitungSisa(t.total, terbayar),
-      status: statusJahitan(t),
+      // Pesanan batal tidak lagi menagih apa-apa (C8): sisa 0 — bukan
+      // total dikurangi yang sudah dibayar — karena DP-nya sudah
+      // dikembalikan (F8/BU-63).
+      sisa: status === "batal" ? 0 : hitungSisa(t.total, terbayar),
+      status,
       sudahDikirim: kiriman.length > 0,
     });
   }
@@ -649,6 +668,7 @@ export async function ambilPesananJahit(id: UUID): Promise<PesananJahitLengkap |
     ukuran: (r.ukuran ?? null) || (i === 0 ? uraian.ukuranLama : null),
   }));
 
+  const status = statusJahitan(t);
   return {
     transaksi: t,
     items,
@@ -657,8 +677,9 @@ export async function ambilPesananJahit(id: UUID): Promise<PesananJahitLengkap |
     pelanggan: pelanggan ?? null,
     terbayar,
     dikembalikan: uangDikembalikan(pembayaran),
-    sisa: hitungSisa(t.total, terbayar),
-    status: statusJahitan(t),
+    // Pesanan batal: sisa 0 (C8) — lihat daftarPesananJahit.
+    sisa: status === "batal" ? 0 : hitungSisa(t.total, terbayar),
+    status,
     sudahDikirim: kiriman.length > 0,
   };
 }
@@ -706,13 +727,6 @@ export async function catatPengiriman(
     jenis,
     tujuan,
   });
-}
-
-function tanggalHariIni(sekarang: Date = new Date()): string {
-  const y = sekarang.getFullYear();
-  const m = String(sekarang.getMonth() + 1).padStart(2, "0");
-  const d = String(sekarang.getDate()).padStart(2, "0");
-  return `${y}-${m}-${d}`;
 }
 
 function modelDariTransaksi(t: TransaksiRecord): string {

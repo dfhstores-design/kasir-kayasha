@@ -27,6 +27,7 @@ import ContohResi from "./screens/ContohResi.tsx";
 import Cadangan from "./screens/Cadangan.tsx";
 import Kasir from "./screens/Kasir.tsx";
 import RiwayatSinkron from "./screens/RiwayatSinkron.tsx";
+import RiwayatPenjualan from "./screens/RiwayatPenjualan.tsx";
 import {
   ambilParkir,
   ambilSettings,
@@ -87,7 +88,8 @@ export type Layar =
   | { nama: "contoh-resi" }
   | { nama: "kasir" }
   | { nama: "cadangan" }
-  | { nama: "sinkronisasi" };
+  | { nama: "sinkronisasi" }
+  | { nama: "riwayat-penjualan" };
 
 interface NilaiKeranjang {
   diskonTotal: number;
@@ -247,8 +249,33 @@ export default function App() {
     if (layar.nama === "beranda" && sudahMuatAwal.current) void muat();
   }, [layar, muat]);
 
+  /**
+   * Konfirmasi duplikat di dalam aplikasi (C4, tes klik 22 Nov 2026):
+   * `window.confirm` diabaikan diam-diam oleh browser otomatis (dialog
+   * ditutup otomatis → confirm mengembalikan false), sehingga peringatan
+   * duplikat tidak pernah terlihat kasir dan penjualan ganda tersimpan
+   * begitu saja. Pola ini menggantikannya: pemanggil `await` jawaban
+   * kasir dari panel "Tetap Simpan / Batal" di atas layar.
+   */
+  const [tanyaDuplikat, setTanyaDuplikat] = useState<string | null>(null);
+  const penungguDuplikat = useRef<((ya: boolean) => void) | null>(null);
+  const mintaKonfirmasiDuplikat = useCallback(
+    (pesan: string) =>
+      new Promise<boolean>((selesai) => {
+        penungguDuplikat.current = selesai;
+        setTanyaDuplikat(pesan);
+      }),
+    [],
+  );
+  const jawabDuplikat = useCallback((ya: boolean) => {
+    penungguDuplikat.current?.(ya);
+    penungguDuplikat.current = null;
+    setTanyaDuplikat(null);
+  }, []);
+
   const kembali = useCallback(() => {
     const n = layar.nama;
+    if (n === "riwayat-penjualan") return setLayar({ nama: "beranda" });
     if (n === "detail-barang") return setLayar({ nama: "pilih-barang" });
     if (n === "keranjang") {
       if (keranjang.length > 0 && !window.confirm("Barang di keranjang belum disimpan. Mau kembali?")) return;
@@ -335,8 +362,9 @@ export default function App() {
       ...(waktu ? { waktu } : {}),
     });
     // Peringatan duplikat (Fase 2C): transaksi kertas yang sama persis sudah
-    // ada — tanyakan dulu, simpan lagi hanya bila kasir yakin.
-    if (!hasil.ok && hasil.duplikat && window.confirm(`${hasil.pesan} Tetap simpan?`)) {
+    // ada — tanyakan dulu di panel dalam aplikasi (C4), simpan lagi hanya
+    // bila kasir yakin.
+    if (!hasil.ok && hasil.duplikat && (await mintaKonfirmasiDuplikat(hasil.pesan))) {
       hasil = await simpanPenjualan(rencana, {
         rekening: settings?.rekening ?? [],
         ...(waktu ? { waktu } : {}),
@@ -356,7 +384,7 @@ export default function App() {
     setTanggalTransaksi(tanggalHariIni());
     await muat();
     setLayar({ nama: "tersimpan", transaksi: hasil.transaksi });
-  }, [keranjang, nilaiKeranjang, settings, bazar, muat, tanggalTransaksi]);
+  }, [keranjang, nilaiKeranjang, settings, bazar, muat, tanggalTransaksi, mintaKonfirmasiDuplikat]);
 
   /** Memarkir keranjang sekarang; butuh nama pembeli (maks 3 parkir). */
   const parkirSekarang = useCallback(async () => {
@@ -525,6 +553,23 @@ export default function App() {
         <div className="content" style={{ paddingBottom: 0 }}>
           <div className="panel panel--warn" role="alert">
             {pesanSimpan}
+          </div>
+        </div>
+      )}
+
+      {tanyaDuplikat && (
+        <div className="content" style={{ paddingBottom: 0 }}>
+          <div className="panel panel--warn" role="alert">
+            <strong>Transaksi yang sama sudah ada.</strong>
+            <p style={{ margin: "0.25rem 0 0" }}>{tanyaDuplikat}</p>
+            <div style={{ display: "flex", gap: "0.5rem", marginTop: "0.75rem" }}>
+              <button type="button" className="btn btn--primary" onClick={() => jawabDuplikat(true)}>
+                Tetap Simpan
+              </button>
+              <button type="button" className="btn" onClick={() => jawabDuplikat(false)}>
+                Batal
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -716,6 +761,13 @@ export default function App() {
         />
       )}
 
+      {layar.nama === "riwayat-penjualan" && (
+        <RiwayatPenjualan
+          onLihatResi={(id) => setLayar({ nama: "resi", transaksiId: id })}
+          onKembali={() => setLayar({ nama: "beranda" })}
+        />
+      )}
+
       {layar.nama === "pengaturan" && (
         <MenuPengaturan
           namaButik={settings?.namaButik ?? ""}
@@ -854,14 +906,22 @@ export default function App() {
                 waktu = parsed;
               }
               setSibukPesanan(true);
-              let h = await simpanPesananJahit(rencana, {
+              // Bazar tempat pesanan diterima (C7): kasir yang masuk sebagai
+              // kasir bazar → pesanan itu milik bazar tersebut; toko/admin →
+              // pesanan butik (null), tidak muncul di tutup bazar mana pun.
+              const rencanaSimpan = {
+                ...rencana,
+                bazarId: lokasiKasir?.jenis === "bazar" ? lokasiKasir.bazarId : null,
+              };
+              let h = await simpanPesananJahit(rencanaSimpan, {
                 rekening: settings?.rekening ?? [],
                 ...(waktu ? { waktu } : {}),
               });
               // Peringatan duplikat (Fase 2C): pesanan kertas yang sama persis
-              // sudah ada — tanyakan dulu, simpan lagi hanya bila kasir yakin.
-              if (!h.ok && h.duplikat && window.confirm(`${h.pesan} Tetap simpan?`)) {
-                h = await simpanPesananJahit(rencana, {
+              // sudah ada — tanyakan dulu di panel dalam aplikasi (C4),
+              // simpan lagi hanya bila kasir yakin.
+              if (!h.ok && h.duplikat && (await mintaKonfirmasiDuplikat(h.pesan))) {
+                h = await simpanPesananJahit(rencanaSimpan, {
                   rekening: settings?.rekening ?? [],
                   ...(waktu ? { waktu } : {}),
                   izinkanDuplikat: true,

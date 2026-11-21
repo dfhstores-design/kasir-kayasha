@@ -44,12 +44,16 @@ export default function TutupBazar({ bazar, onSelesai }: Props) {
   /** Total biaya bazar yang sudah tercatat (BU-34: admin memastikan biaya tercatat). */
   const [totalBiaya, setTotalBiaya] = useState<number | null>(null);
   /**
-   * Pesanan jahit yang belum selesai/lunas (BU-34: dikonfirmasi ulang saat tutup).
-   * Pesanan jahit TIDAK menyimpan bazarId, jadi yang ditampilkan adalah semua
-   * pesanan yang masih terbuka — admin mengonfirmasi semuanya sebelum tutup.
+   * Pesanan jahit bazar ini yang belum selesai/lunas (BU-34: dikonfirmasi
+   * ulang saat tutup). Hanya pesanan dengan bazarId bazar ini (C7) yang
+   * masih terbuka: sudah lunas DAN sudah selesai tidak perlu dikonfirmasi
+   * lagi. Pesanan lama tanpa bazarId dianggap pesanan butik — tidak muncul
+   * di tutup bazar mana pun.
    */
   const [pesananBelum, setPesananBelum] = useState<TransaksiRecord[] | null>(null);
   const [pesananDikonfirmasi, setPesananDikonfirmasi] = useState(false);
+  /** Konfirmasi dua langkah di dalam aplikasi (C1) — lihat `tutup()`. */
+  const [mintaKonfirmasi, setMintaKonfirmasi] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -76,7 +80,12 @@ export default function TutupBazar({ bazar, onSelesai }: Props) {
           (t) =>
             t.jenisDokumen === "jasa" &&
             t.dibatalkanPada === null &&
-            (t.statusPesanan !== "selesai" || t.statusBayar !== "lunas"),
+            // Hanya pesanan bazar ini (C7) yang MASIH terbuka: belum selesai
+            // DAN belum lunas. Logika lama memakai ATAU, sehingga pesanan
+            // yang sudah lunas tapi belum selesai ikut muncul.
+            t.bazarId === bazar.id &&
+            t.statusPesanan !== "selesai" &&
+            t.statusBayar !== "lunas",
         ),
       );
     })().catch(() => setBaris([]));
@@ -102,13 +111,17 @@ export default function TutupBazar({ bazar, onSelesai }: Props) {
       setGalat("Konfirmasi dulu pesanan yang belum selesai di bawah ini sebelum menutup bazar.");
       return;
     }
-    const pesanKonfirmasi = [
-      adaBeda ? "Ada selisih hitung. " : "",
-      totalBiaya === 0 ? "Belum ada biaya bazar yang tercatat. " : "",
-      "Tutup bazar ini? Setelah ditutup tidak bisa dibuka lagi.",
-    ].join("");
-    if (!window.confirm(pesanKonfirmasi)) return;
-
+    // Konfirmasi dua langkah di dalam aplikasi (C1, tes klik 22 Nov 2026):
+    // `window.confirm` diabaikan diam-diam oleh browser otomatis (dialog
+    // ditutup otomatis → confirm mengembalikan false), sehingga tombol
+    // "Tutup Bazar" tampak tidak berfungsi. Klik pertama hanya menampilkan
+    // panel konfirmasi di bawah; klik kedua yang benar-benar menutup.
+    if (!mintaKonfirmasi) {
+      setGalat(null);
+      setMintaKonfirmasi(true);
+      return;
+    }
+    setMintaKonfirmasi(false);
     setGalat(null);
     setSibuk(true);
     // Yang dikembalikan = angka FISIK.
@@ -122,6 +135,9 @@ export default function TutupBazar({ bazar, onSelesai }: Props) {
         return;
       }
       onSelesai();
+    } catch {
+      // Kegagalan sebelumnya diam-diam (tidak ada catch) — sekarang tampil.
+      setGalat("Gagal menutup bazar — coba lagi.");
     } finally {
       setSibuk(false);
     }
@@ -278,6 +294,34 @@ export default function TutupBazar({ bazar, onSelesai }: Props) {
           </>
         ) : (
           <div className="panel panel--ok">Tidak ada sisa barang.</div>
+        )}
+
+        {mintaKonfirmasi && (
+          <div className="panel panel--warn" role="alert">
+            <strong>Tutup bazar ini?</strong>
+            {adaBeda && (
+              <p style={{ margin: "0.25rem 0 0" }}>
+                Ada selisih hitung — yang dikembalikan ke gudang adalah angka fisik.
+              </p>
+            )}
+            {totalBiaya === 0 && (
+              <p style={{ margin: "0.25rem 0 0" }}>Belum ada biaya bazar yang tercatat.</p>
+            )}
+            <p style={{ margin: "0.25rem 0 0" }}>Setelah ditutup tidak bisa dibuka lagi.</p>
+            <div style={{ display: "flex", gap: "0.5rem", marginTop: "0.75rem" }}>
+              <button type="button" className="btn btn--primary" onClick={tutup} disabled={sibuk}>
+                {sibuk ? "Menutup…" : "Ya, Tutup Bazar"}
+              </button>
+              <button
+                type="button"
+                className="btn"
+                onClick={() => setMintaKonfirmasi(false)}
+                disabled={sibuk}
+              >
+                Batal
+              </button>
+            </div>
+          </div>
         )}
       </div>
 

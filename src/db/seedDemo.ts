@@ -175,7 +175,28 @@ export async function jalankanSeedDemo(): Promise<boolean> {
 
   const sekarang = new Date().toISOString();
   const logo = await ambilLogoDemo();
-  await simpanSettings({ ...SETTINGS_DEMO, logo, updatedAt: sekarang });
+  // Baca ulang settings TEPAT sebelum menulis (C2, tes klik 22 Nov 2026):
+  // di antara pengecekan database kosong dan penulisan ini ada fetch logo
+  // (async) — PIN yang disimpan di jendela itu sebelumnya TERTIMPA oleh
+  // penulisan seluruh record demo (pinHash null), sehingga "PIN tersimpan"
+  // tampil tapi setelah reload jadi "PIN belum diatur". Sekarang hanya
+  // field usaha demo yang diisi, dan hanya bila masih kosong; PIN,
+  // pinDiubahPada, perangkatId, dan jejak sync selalu dipertahankan.
+  const saatIni = await ambilSettings();
+  await simpanSettings({
+    ...saatIni,
+    id: "utama",
+    namaButik: saatIni.namaButik || SETTINGS_DEMO.namaButik,
+    alamatBaris1: saatIni.alamatBaris1 || SETTINGS_DEMO.alamatBaris1,
+    alamatBaris2: saatIni.alamatBaris2 || SETTINGS_DEMO.alamatBaris2,
+    kotaKodePos: saatIni.kotaKodePos || SETTINGS_DEMO.kotaKodePos,
+    telepon1: saatIni.telepon1 || SETTINGS_DEMO.telepon1,
+    telepon2: saatIni.telepon2 || SETTINGS_DEMO.telepon2,
+    teksPenutup: saatIni.teksPenutup || SETTINGS_DEMO.teksPenutup,
+    logo: saatIni.logo ?? logo,
+    rekening: saatIni.rekening.length > 0 ? saatIni.rekening : SETTINGS_DEMO.rekening,
+    updatedAt: sekarang,
+  });
 
   return true;
 }

@@ -2,7 +2,14 @@
  * Tes pembantu tanggal (Fase 2C, re-entry kertas, BU-34).
  */
 import { describe, expect, it } from "vitest";
-import { tanggalHariIni, transaksiDariKertas, waktuDariTanggal } from "./tanggal.ts";
+import {
+  formatJam,
+  formatTanggal,
+  tanggalHariIni,
+  tanggalWIB,
+  transaksiDariKertas,
+  waktuDariTanggal,
+} from "./tanggal.ts";
 
 describe("waktuDariTanggal", () => {
   it("tanggal valid menjadi jam 12 siang setempat", () => {
@@ -36,6 +43,37 @@ describe("tanggalHariIni", () => {
     // Jam 12 siang setempat supaya tanggal ISO-nya sama (tengah malam
     // setempat masih hari sebelumnya dalam UTC).
     expect(tanggalHariIni(new Date(2026, 10, 19, 12))).toBe("2026-11-19");
+  });
+});
+
+describe("tanggal WIB (C9, tes klik 22 Nov 2026)", () => {
+  it("tanggalWIB: 18:30 UTC = 01:30 WIB hari berikutnya", () => {
+    expect(tanggalWIB("2026-11-21T18:30:00.000Z")).toBe("2026-11-22");
+    expect(tanggalWIB("2026-11-21T10:00:00.000Z")).toBe("2026-11-21");
+    expect(tanggalWIB("2026-11-21T16:59:59.000Z")).toBe("2026-11-21");
+    expect(tanggalWIB("2026-11-21T17:00:00.000Z")).toBe("2026-11-22");
+  });
+
+  it("tanggalHariIni memakai WIB, bukan UTC", () => {
+    // 23:30 UTC = 06:30 WIB keesokan harinya.
+    expect(tanggalHariIni(new Date("2026-11-21T23:30:00.000Z"))).toBe("2026-11-22");
+    expect(tanggalHariIni(new Date("2026-11-21T12:00:00.000Z"))).toBe("2026-11-21");
+  });
+
+  it("formatTanggal/formatJam memakai WIB", () => {
+    expect(formatTanggal("2026-11-21T18:30:00.000Z")).toBe("22 Nov 2026");
+    expect(formatTanggal("2026-11-21T10:00:00.000Z")).toBe("21 Nov 2026");
+    // Locale id-ID memakai titik sebagai pemisah jam (konvensi yang sudah
+    // dipakai resi sebelumnya).
+    expect(formatJam("2026-11-21T18:30:00.000Z")).toBe("01.30");
+    expect(formatJam("2026-11-21T10:00:00.000Z")).toBe("17.00");
+  });
+
+  it("transaksiDariKertas membandingkan tanggal WIB, bukan UTC", () => {
+    // 18:30 UTC 21 Nov dan 02:00 UTC 22 Nov sama-sama 22 Nov WIB.
+    expect(transaksiDariKertas("2026-11-21T18:30:00.000Z", "2026-11-22T02:00:00.000Z")).toBe(false);
+    // 10:00 UTC = 17:00 WIB 21 Nov; 18:30 UTC = 01:30 WIB 22 Nov.
+    expect(transaksiDariKertas("2026-11-21T10:00:00.000Z", "2026-11-21T18:30:00.000Z")).toBe(true);
   });
 });
 

@@ -1,6 +1,6 @@
 ﻿import { useEffect, useMemo, useState } from "react";
 import { formatRupiah } from "../lib/money.ts";
-import { formatTanggal } from "../lib/tanggal.ts";
+import { formatTanggal, tanggalHariIni } from "../lib/tanggal.ts";
 import {
   daftarPesananJahit,
   labelStatusJahitan,
@@ -155,10 +155,3 @@ export default function DaftarPesananJahit({ onBuka, onBaru, segarkan }: Props) 
   );
 }
 
-function tanggalHariIni(): string {
-  const d = new Date();
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const dd = String(d.getDate()).padStart(2, "0");
-  return `${y}-${m}-${dd}`;
-}

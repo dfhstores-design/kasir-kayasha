@@ -130,6 +130,11 @@ export default function Beranda({ settings, storagePermanen, bazar, jumlahBazarA
         <button type="button" className="tile" onClick={() => buka("daftar-jahit")}>
           Pesanan Jahit
         </button>
+        {/* Riwayat penjualan (C5): semua peran — sebelumnya riwayat
+            penjualan barang tidak bisa dibuka dari layar mana pun. */}
+        <button type="button" className="tile" onClick={() => buka("riwayat-penjualan")}>
+          Riwayat Penjualan
+        </button>
 
         {bolehAdmin(peran) ? (
           <>

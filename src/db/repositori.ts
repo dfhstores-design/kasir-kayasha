@@ -11,6 +11,7 @@ import { hitungSaldoBazar } from "../lib/stok.ts";
 import { hitungRingkasanKeuangan, metodeBayarSah } from "../lib/bazar.ts";
 import { pesanStok, validasiSumberStok, type SumberStok } from "../lib/sumberStok.ts";
 import type { Rupiah } from "../lib/money.ts";
+import { tanggalWIB } from "../lib/tanggal.ts";
 
 // Tipe dipakai ulang oleh layar; diekspor ulang agar konsumen cukup mengimpor dari sini.
 export type { BazarRecord, BiayaBazarRecord, KategoriBiaya, FotoRecord, KeranjangTertahanRecord, ProdukRecord, SettingsRecord, TransaksiRecord, UUID };
@@ -694,8 +695,8 @@ export async function daftarPembayaran(): Promise<PembayaranRecord[]> {
   return db.getAll("payments");
 }
 
-/** Nomor urut hari itu untuk `#7` di resi. */
+/** Nomor urut hari itu untuk `#7` di resi. Hari dibandingkan dalam WIB (C9). */
 export async function nomorUrutBerikutnya(hari: string): Promise<number> {
   const semua = await daftarTransaksi();
-  return semua.filter((t) => t.waktu.slice(0, 10) === hari).length + 1;
+  return semua.filter((t) => tanggalWIB(t.waktu) === hari).length + 1;
 }

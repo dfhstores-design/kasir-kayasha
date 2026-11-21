@@ -145,6 +145,15 @@ describe("Beranda — Fase 2A (role & PIN, BU-32/34)", () => {
     expect(screen.getByRole("button", { name: "Kasir: Toko" })).toBeTruthy();
   });
 
+  it("semua peran melihat tile Riwayat Penjualan (C5)", () => {
+    renderBeranda("kasir");
+    expect(screen.getByRole("button", { name: "Riwayat Penjualan" })).toBeTruthy();
+    cleanup();
+
+    renderBeranda("admin");
+    expect(screen.getByRole("button", { name: "Riwayat Penjualan" })).toBeTruthy();
+  });
+
   it("admin TIDAK melihat Laporan Keuangan; owner melihatnya", () => {
     renderBeranda("admin");
     expect(screen.queryByText("Laporan Keuangan")).toBeNull();

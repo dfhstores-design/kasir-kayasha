@@ -16,7 +16,7 @@ import {
 } from "../db/repositori.ts";
 import type { ItemTransaksiRecord, JenisDokumen, PembayaranRecord, TransaksiRecord } from "../db/schema.ts";
 import { formatRupiah } from "../lib/money.ts";
-import { formatTanggal, formatTanggalJam, transaksiDariKertas } from "../lib/tanggal.ts";
+import { formatTanggal, formatTanggalJam, tanggalHariIni, transaksiDariKertas } from "../lib/tanggal.ts";
 import {
   biayaPadaHari,
   hitungRingkasanKeuangan,
@@ -108,7 +108,8 @@ export default function Ringkasan({ bazar }: Props) {
   // Pembayaran per transaksi (F2): uang masuk dihitung dari baris pembayaran.
   const [bayarPerTrx, setBayarPerTrx] = useState<Map<string, PembayaranRecord[]>>(new Map());
   const [selisih, setSelisih] = useState(0);
-  const [hari, setHari] = useState(new Date().toISOString().slice(0, 10));
+  // Tanggal hari ini dalam WIB (C9): potongan ISO adalah tanggal UTC.
+  const [hari, setHari] = useState(tanggalHariIni());
   const [memuat, setMemuat] = useState(true);
   // Rincian (item + pembayaran) hanya untuk baris riwayat yang sedang tampil,
   // supaya tidak membaca seluruh IndexedDB saat daftar panjang.

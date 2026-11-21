@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { IDBFactory } from "fake-indexeddb";
 import {
   formatNomorResi,
+  nomorResiBerikutnya,
   nomorUrutBerikutnya,
   periksaRencana,
   simpanPenjualan,
@@ -64,6 +65,31 @@ describe("formatNomorResi", () => {
   it("nomor urut = jumlah + 1", () => {
     expect(nomorUrutBerikutnya(0)).toBe(1);
     expect(nomorUrutBerikutnya(11)).toBe(12);
+  });
+});
+
+describe("nomorResiBerikutnya (C4, tes klik 22 Nov 2026)", () => {
+  it("database kosong -> 1", () => {
+    expect(nomorResiBerikutnya([])).toBe(1);
+  });
+
+  it("nomor = nomor KYS terbesar + 1, bukan jumlah transaksi", () => {
+    // 3 penjualan + 2 pesanan jahit (KC, bukan KYS): penjualan berikutnya
+    // KYS-0004, bukan KYS-0006 seperti hitungan lama (jumlah semua + 1).
+    expect(
+      nomorResiBerikutnya([
+        { nomorResi: "KYS-0001" },
+        { nomorResi: "KC.00001-20261119" },
+        { nomorResi: "KYS-0002" },
+        { nomorResi: "KC.00002-20261119" },
+        { nomorResi: "KYS-0003" },
+      ]),
+    ).toBe(4);
+  });
+
+  it("mengabaikan nomor yang tidak berpola KYS", () => {
+    expect(nomorResiBerikutnya([{ nomorResi: "KC.00001-20261119" }])).toBe(1);
+    expect(nomorResiBerikutnya([{ nomorResi: "KYS-0009" }, { nomorResi: "rusak" }])).toBe(10);
   });
 });
 
@@ -166,6 +192,49 @@ describe("simpanPenjualan", () => {
     await simpanPenjualan(rencana({ items: [item(blus, 1)] }), { rekening: [] });
     const kedua = await simpanPenjualan(rencana({ items: [item(blus, 1)] }), { rekening: [] });
     expect(kedua.ok && kedua.transaksi.nomorResi).toBe("KYS-0002");
+  });
+
+  it("nomor resi TIDAK loncat karena pesanan jahit di antaranya (C4)", async () => {
+    const blus = await produkBaru("Blus", 100000, 10);
+    const pertama = await simpanPenjualan(rencana({ items: [item(blus, 1)] }), { rekening: [] });
+    expect(pertama.ok && pertama.transaksi.nomorResi).toBe("KYS-0001");
+    const { simpanPesananJahit } = await import("./jahitan.ts");
+    const jahit = await simpanPesananJahit(
+      {
+        namaPemesan: "Ibu Sari",
+        kontak: null,
+        items: [{ nama: "Gaun", harga: 300000, kuantitas: 1, ukuran: null }],
+        perkiraanSelesai: null,
+        catatan: null,
+        biayaLain: [],
+      },
+      { rekening: [] },
+    );
+    expect(jahit.ok).toBe(true);
+    const kedua = await simpanPenjualan(rencana({ items: [item(blus, 1)] }), { rekening: [] });
+    // Sebelum perbaikan: KYS-0003 (jumlah semua transaksi + 1, pesanan
+    // jahit ikut dihitung). Sesudah: KYS-0002.
+    expect(kedua.ok && kedua.transaksi.nomorResi).toBe("KYS-0002");
+  });
+
+  it("nomor urut harian penjualan hanya menghitung penjualan (C4)", async () => {
+    const blus = await produkBaru("Blus", 100000, 10);
+    const pertama = await simpanPenjualan(rencana({ items: [item(blus, 1)] }), { rekening: [] });
+    expect(pertama.ok && pertama.transaksi.nomorUrutHari).toBe(1);
+    const { simpanPesananJahit } = await import("./jahitan.ts");
+    await simpanPesananJahit(
+      {
+        namaPemesan: "Ibu Sari",
+        kontak: null,
+        items: [{ nama: "Gaun", harga: 300000, kuantitas: 1, ukuran: null }],
+        perkiraanSelesai: null,
+        catatan: null,
+        biayaLain: [],
+      },
+      { rekening: [] },
+    );
+    const kedua = await simpanPenjualan(rencana({ items: [item(blus, 1)] }), { rekening: [] });
+    expect(kedua.ok && kedua.transaksi.nomorUrutHari).toBe(2);
   });
 
   it("menyimpan snapshot nama & harga sehingga katalog berubah tidak mengubah riwayat", async () => {
@@ -272,6 +341,20 @@ describe("anti-dobel re-entry kertas (Fase 2C, BU-34)", () => {
     expect((await simpanPenjualan(rencana({ items: [item(blus, 1)] }), { rekening: [], waktu: kemarin })).ok).toBe(true);
     // Isi sama tapi hari beda.
     expect((await simpanPenjualan(rencana({ items: [item(blus, 2)] }), { rekening: [], waktu: lusa })).ok).toBe(true);
+  });
+
+  it("duplikat dibandingkan dalam WIB, bukan UTC (C9)", async () => {
+    const blus = await produkBaru("Blus", 100000, 10);
+    const r = rencana({ items: [item(blus, 2)] });
+    // 18:30 UTC 20 Nov = 01:30 WIB 21 Nov; 01:00 UTC 21 Nov = 08:00 WIB
+    // 21 Nov. Dalam UTC keduanya beda hari (20 vs 21) — dalam WIB hari
+    // yang sama, jadi penjualan kedua adalah duplikat.
+    const pertama = await simpanPenjualan(r, { rekening: [], waktu: new Date("2026-11-20T18:30:00.000Z") });
+    expect(pertama.ok).toBe(true);
+    const kedua = await simpanPenjualan(r, { rekening: [], waktu: new Date("2026-11-21T01:00:00.000Z") });
+    expect(kedua.ok).toBe(false);
+    if (kedua.ok) return;
+    expect(kedua.duplikat).toBe(true);
   });
 
   it("penjualan hari ini TIDAK dicek duplikat (dua pelanggan boleh beli barang yang sama)", async () => {

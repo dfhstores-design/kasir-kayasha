@@ -2,6 +2,7 @@
 import { IDBFactory } from "fake-indexeddb";
 import { getDB, resetKoneksiDB, type Rekening } from "../db/schema.ts";
 import { terimaPembayaranKasir } from "../db/kasirOperasi.ts";
+import { batalkanTransaksi } from "../db/pesananOperasi.ts";
 import {
   ambilPesananJahit,
   bacaBiayaLainTersimpan,
@@ -395,6 +396,49 @@ describe("simpanPesananJahit — nomor urut dari hub (F4, BU-19/21)", () => {
   });
 });
 
+describe("bazarId pesanan jahit (C7, tes klik 22 Nov 2026)", () => {
+  beforeEach(resetDB);
+
+  it("pesanan yang diterima kasir bazar menyimpan bazarId; pesanan butik null", async () => {
+    const bazarId = crypto.randomUUID();
+    const diBazar = await simpanPesananJahit(rencana({ bazarId }), { rekening: [rekening] });
+    expect(diBazar.ok).toBe(true);
+    if (!diBazar.ok) return;
+    expect((await ambilPesananJahit(diBazar.pesanan.id))?.transaksi.bazarId).toBe(bazarId);
+
+    const diButik = await simpanPesananJahit(rencana({ namaPemesan: "Ibu Dewi" }), { rekening: [rekening] });
+    expect(diButik.ok).toBe(true);
+    if (!diButik.ok) return;
+    expect((await ambilPesananJahit(diButik.pesanan.id))?.transaksi.bazarId).toBeNull();
+  });
+});
+
+describe("pesanan batal tidak lagi menagih (C8, tes klik 22 Nov 2026)", () => {
+  beforeEach(resetDB);
+
+  it("sisa 0 dan status batal setelah dibatalkan — DP sudah dikembalikan (F8/BU-63)", async () => {
+    const h = await simpanPesananJahit(rencana(), { rekening: [rekening] });
+    expect(h.ok).toBe(true);
+    if (!h.ok) return;
+    // Total 350.000; DP 150.000 dibayar, lalu pesanan dibatalkan.
+    const dp = await terimaPembayaranKasir(h.pesanan.id, 150000, "tunai");
+    expect(dp.ok).toBe(true);
+    const batal = await batalkanTransaksi(h.pesanan.id, "Pelanggan batal");
+    expect(batal.ok).toBe(true);
+
+    const daftar = await daftarPesananJahit();
+    expect(daftar).toHaveLength(1);
+    expect(daftar[0]?.status).toBe("batal");
+    expect(daftar[0]?.sisa).toBe(0);
+    expect(daftar[0]?.dikembalikan).toBe(150000);
+
+    const detail = await ambilPesananJahit(h.pesanan.id);
+    expect(detail?.status).toBe("batal");
+    expect(detail?.sisa).toBe(0);
+    expect(detail?.dikembalikan).toBe(150000);
+  });
+});
+
 describe("anti-dobel re-entry kertas pesanan jahit (Fase 2C, BU-34)", () => {
   beforeEach(resetDB);
 
@@ -423,6 +467,18 @@ describe("anti-dobel re-entry kertas pesanan jahit (Fase 2C, BU-34)", () => {
 
     const ketiga = await simpanPesananJahit(r, { rekening: [rekening], waktu: kemarin, izinkanDuplikat: true });
     expect(ketiga.ok).toBe(true);
+  });
+
+  it("duplikat dibandingkan dalam WIB, bukan UTC (C9)", async () => {
+    const r = rencana();
+    // 18:30 UTC 20 Nov = 01:30 WIB 21 Nov; 01:00 UTC 21 Nov = 08:00 WIB
+    // 21 Nov — hari yang sama dalam WIB, beda hari dalam UTC.
+    const pertama = await simpanPesananJahit(r, { rekening: [rekening], waktu: new Date("2026-11-20T18:30:00.000Z") });
+    expect(pertama.ok).toBe(true);
+    const kedua = await simpanPesananJahit(r, { rekening: [rekening], waktu: new Date("2026-11-21T01:00:00.000Z") });
+    expect(kedua.ok).toBe(false);
+    if (kedua.ok) return;
+    expect(kedua.duplikat).toBe(true);
   });
 
   it("bukan duplikat: pemesan beda memesan barang yang sama di hari yang sama", async () => {

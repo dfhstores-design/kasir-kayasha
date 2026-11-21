@@ -6,6 +6,7 @@ import {
   bazarAktif,
   daftarProduk,
   daftarTransaksi,
+  SETTINGS_KOSONG,
   simpanProduk,
   simpanSettings,
 } from "./repositori.ts";
@@ -50,6 +51,23 @@ describe("seed demo KAYESA", () => {
     expect((await daftarProduk()).length).toBe(0);
     expect((await daftarTransaksi()).length).toBe(0);
     expect(await bazarAktif()).toBeUndefined();
+  });
+
+  it("seed TIDAK menghapus PIN yang sudah disimpan (C2, tes klik 22 Nov 2026)", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => ({ ok: true, blob: async () => new Blob(["logo-png"], { type: "image/png" }) })),
+    );
+    // PIN disimpan saat database masih kosong menurut guard seed (belum
+    // ada produk/transaksi/bazar) — persis jendela saat PIN pertama hilang
+    // di tes klik: seed menimpa seluruh record settings (pinHash null).
+    await simpanSettings({ ...SETTINGS_KOSONG, pinHash: "sha256$salt$digest" });
+    expect(await jalankanSeedDemo()).toBe(true);
+    const s = await ambilSettings();
+    expect(s.pinHash).toBe("sha256$salt$digest");
+    // Detail usaha tetap terisi dari demo.
+    expect(s.namaButik).toBe("KAYESA");
+    expect(s.telepon1).toBe("0812 1141 4017");
   });
 
   it("mengisi settings usaha saja, tanpa data contoh, bila DB kosong (serah terima 19 Nov 2026)", async () => {

@@ -12,6 +12,7 @@ import { ambilSettings, buatId, simpanSettings, SETTINGS_KOSONG } from "../db/re
 import { idPinSync, peranDariIdPin, type Kiriman, type Perubahan, type PeranPinSync } from "./logika.ts";
 import { mintaNomorUrutBulan } from "./penomoran.ts";
 import { nomorPlaceholder } from "../lib/dokumen.ts";
+import { bulanWIB } from "../lib/tanggal.ts";
 import { catatLogSinkron, simpanBayanganUntuk, terapkanPerubahan, type HasilTarik, type KonteksTarik } from "./tarik.ts";
 
 export type StatusSync = "mati" | "menunggu" | "mengirim" | "siap" | "gagal";
@@ -47,6 +48,15 @@ export async function simpanPin(peran: PeranPinSync, hash: string | null): Promi
   else if (peran === "owner") baru.pinOwnerHash = hash;
   else baru.pinKasirTokoHash = hash;
   await simpanSettings(baru);
+  // Verifikasi baca-ulang (C2): "PIN tersimpan" hanya boleh tampil bila
+  // hash benar-benar tertulis. Tanpa ini, kegagalan tulis (mis. record
+  // tertimpa seed sesudah simpan) tampil sebagai sukses lalu hilang.
+  const tertulis = await ambilSettings();
+  const hashTertulis =
+    peran === "admin" ? tertulis.pinHash : peran === "owner" ? tertulis.pinOwnerHash : tertulis.pinKasirTokoHash;
+  if (hashTertulis !== hash) {
+    throw new Error("PIN belum tersimpan — coba lagi.");
+  }
   await tandaiUntukSync("pin", idPinSync(peran));
 }
 
@@ -547,7 +557,9 @@ export async function perbaikiNomorSementara(
     const nomor = await mintaNomorUrutBulan({
       urlSync,
       token: opsi.token,
-      bulan: t.waktu.slice(0, 7),
+      // Bulan pesanan dalam WIB (C9) — sama seperti saat nomor diminta
+      // pertama kali di simpanPesananJahit.
+      bulan: bulanWIB(t.waktu),
       fetchImpl: opsi.fetchImpl,
     });
     if (nomor === null) break;
