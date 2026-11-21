@@ -52,3 +52,47 @@ describe("Bazar — multi-bazar & Buka Toko", () => {
     expect(screen.getByText("BAZAR AKTIF")).toBeTruthy();
   });
 });
+
+describe("Bazar — form buka bazar meminta waktu + lokasi (Fase 2C, BU-34)", () => {
+  beforeEach(resetDB);
+  afterEach(cleanup);
+
+  it("lokasi + tanggal mulai/selesai tersimpan dan tampil di kartu bazar", async () => {
+    render(<Bazar onAturBarang={vi.fn()} onTutupBazar={vi.fn()} onUbah={vi.fn()} />);
+    fireEvent.click(await screen.findByRole("button", { name: "+ Buka Bazar" }));
+
+    fireEvent.change(screen.getByLabelText("Nama bazar"), { target: { value: "Bazar Senayan" } });
+    fireEvent.change(screen.getByLabelText("Lokasi (opsional)"), { target: { value: "Plaza Senayan" } });
+    fireEvent.change(screen.getByLabelText("Mulai (opsional)"), { target: { value: "2026-11-21" } });
+    fireEvent.change(screen.getByLabelText("Selesai (opsional)"), { target: { value: "2026-11-23" } });
+    fireEvent.change(screen.getByLabelText("PIN kasir bazar (4–6 karakter, huruf atau angka)"), { target: { value: "2468" } });
+    fireEvent.change(screen.getByLabelText("Ulangi PIN kasir bazar"), { target: { value: "2468" } });
+    fireEvent.click(screen.getByRole("button", { name: "Simpan" }));
+
+    expect(await screen.findByText("Bazar Senayan")).toBeTruthy();
+    expect(await screen.findByText(/Plaza Senayan/)).toBeTruthy();
+    expect(await screen.findByText(/21 Nov 2026/)).toBeTruthy();
+    expect(await screen.findByText(/23 Nov 2026/)).toBeTruthy();
+
+    const daftar = await import("../db/repositori.ts").then((m) => m.daftarBazar());
+    expect(daftar[0]?.lokasi).toBe("Plaza Senayan");
+    expect(daftar[0]?.mulai).toBe("2026-11-21");
+    expect(daftar[0]?.selesai).toBe("2026-11-23");
+  });
+
+  it("tanggal selesai sebelum tanggal mulai ditolak", async () => {
+    render(<Bazar onAturBarang={vi.fn()} onTutupBazar={vi.fn()} onUbah={vi.fn()} />);
+    fireEvent.click(await screen.findByRole("button", { name: "+ Buka Bazar" }));
+
+    fireEvent.change(screen.getByLabelText("Nama bazar"), { target: { value: "Bazar Senayan" } });
+    fireEvent.change(screen.getByLabelText("Mulai (opsional)"), { target: { value: "2026-11-23" } });
+    fireEvent.change(screen.getByLabelText("Selesai (opsional)"), { target: { value: "2026-11-21" } });
+    fireEvent.change(screen.getByLabelText("PIN kasir bazar (4–6 karakter, huruf atau angka)"), { target: { value: "2468" } });
+    fireEvent.change(screen.getByLabelText("Ulangi PIN kasir bazar"), { target: { value: "2468" } });
+    fireEvent.click(screen.getByRole("button", { name: "Simpan" }));
+
+    expect(await screen.findByText(/tanggal selesai tidak boleh sebelum tanggal mulai/i)).toBeTruthy();
+    const daftar = await import("../db/repositori.ts").then((m) => m.daftarBazar());
+    expect(daftar).toHaveLength(0);
+  });
+});

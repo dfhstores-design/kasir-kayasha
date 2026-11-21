@@ -233,3 +233,65 @@ describe("simpanPenjualan", () => {
     expect((await ambilTransaksi(h.transaksi.id))?.transaksi.rekeningSnapshot).toEqual(rekening);
   });
 });
+
+describe("anti-dobel re-entry kertas (Fase 2C, BU-34)", () => {
+  beforeEach(resetDB);
+
+  it("kunciItemPenjualan: urutan pilih tidak penting, jumlah penting", async () => {
+    const a = await produkBaru("Blus", 100000, 10);
+    const b = await produkBaru("Rok", 50000, 10);
+    const { kunciItemPenjualan } = await import("./penjualan.ts");
+    expect(kunciItemPenjualan([item(a, 2), item(b, 1)])).toBe(kunciItemPenjualan([item(b, 1), item(a, 2)]));
+    expect(kunciItemPenjualan([item(a, 2)])).not.toBe(kunciItemPenjualan([item(a, 3)]));
+    expect(kunciItemPenjualan([item(a, 2)])).not.toBe(kunciItemPenjualan([item(b, 2)]));
+  });
+
+  it("penjualan kertas yang sama persis ditolak sebagai duplikat; izinkanDuplikat menyimpan", async () => {
+    const blus = await produkBaru("Blus", 100000, 10);
+    const kemarin = new Date(Date.now() - 86400000);
+    const r = rencana({ items: [item(blus, 2)] });
+    const pertama = await simpanPenjualan(r, { rekening: [], waktu: kemarin });
+    expect(pertama.ok).toBe(true);
+
+    const kedua = await simpanPenjualan(r, { rekening: [], waktu: kemarin });
+    expect(kedua.ok).toBe(false);
+    if (kedua.ok) return;
+    expect(kedua.duplikat).toBe(true);
+    expect(kedua.pesan).toMatch(/Sudah ada penjualan yang sama/);
+
+    const ketiga = await simpanPenjualan(r, { rekening: [], waktu: kemarin, izinkanDuplikat: true });
+    expect(ketiga.ok).toBe(true);
+  });
+
+  it("bukan duplikat: total beda, isi beda, atau hari beda", async () => {
+    const blus = await produkBaru("Blus", 100000, 10);
+    const kemarin = new Date(Date.now() - 86400000);
+    const lusa = new Date(Date.now() - 2 * 86400000);
+    await simpanPenjualan(rencana({ items: [item(blus, 2)] }), { rekening: [], waktu: kemarin });
+    // Total beda (jumlah beda) di hari yang sama.
+    expect((await simpanPenjualan(rencana({ items: [item(blus, 1)] }), { rekening: [], waktu: kemarin })).ok).toBe(true);
+    // Isi sama tapi hari beda.
+    expect((await simpanPenjualan(rencana({ items: [item(blus, 2)] }), { rekening: [], waktu: lusa })).ok).toBe(true);
+  });
+
+  it("penjualan hari ini TIDAK dicek duplikat (dua pelanggan boleh beli barang yang sama)", async () => {
+    const blus = await produkBaru("Blus", 100000, 10);
+    const r = rencana({ items: [item(blus, 1)] });
+    expect((await simpanPenjualan(r, { rekening: [] })).ok).toBe(true);
+    expect((await simpanPenjualan(r, { rekening: [] })).ok).toBe(true);
+  });
+
+  it("transaksi kertas: createdAt tetap hari dimasukkan, waktu tanggal asli (penanda dari kertas)", async () => {
+    const blus = await produkBaru("Blus", 100000, 10);
+    const tigaHariLalu = new Date(Date.now() - 3 * 86400000);
+    const h = await simpanPenjualan(rencana({ items: [item(blus, 1)] }), { rekening: [], waktu: tigaHariLalu });
+    expect(h.ok).toBe(true);
+    if (!h.ok) return;
+    const { ambilTransaksi } = await import("../db/repositori.ts");
+    const { transaksiDariKertas } = await import("./tanggal.ts");
+    const t = (await ambilTransaksi(h.transaksi.id))?.transaksi;
+    expect(t?.waktu.slice(0, 10)).toBe(tigaHariLalu.toISOString().slice(0, 10));
+    expect(t?.createdAt.slice(0, 10)).toBe(new Date().toISOString().slice(0, 10));
+    expect(transaksiDariKertas(t!.waktu, t!.createdAt)).toBe(true);
+  });
+});

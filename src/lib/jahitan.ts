@@ -50,6 +50,12 @@ export interface RencanaJahitan {
   perkiraanSelesai: string | null;
   catatan: string | null;
   biayaLain: readonly BiayaLainInput[];
+  /**
+   * Tanggal pesanan "YYYY-MM-DD" untuk re-entry kertas (Fase 2C, BU-34).
+   * Null/undefined = hari ini. Diisi wizard dari field tanggal; saat ubah
+   * pesanan (BU-56) tanggal TIDAK berubah, jadi field ini tidak dipakai.
+   */
+  tanggalPesanan?: string | null;
 }
 
 export type HasilRencanaJahitan =
@@ -107,7 +113,7 @@ export interface PesananJahitTersimpan {
 
 export type HasilSimpanJahitan =
   | { ok: true; pesanan: PesananJahitTersimpan }
-  | { ok: false; pesan: string };
+  | { ok: false; pesan: string; duplikat?: boolean };
 
 /**
  * Uang yang benar-benar DITERIMA = jumlah baris pembayaran bernominal positif.
@@ -197,18 +203,81 @@ export function simpanBiayaLainTersimpan(nama: string, terakhir: Rupiah): void {
 }
 
 /**
+ * Kunci isi pesanan jahit untuk pemeriksaan anti-dobel (Fase 2C, re-entry
+ * kertas): nama + harga + jumlah per item, diurutkan. Ukuran/catatan khusus
+ * TIDAK masuk kunci (catatan bebas, bukan isi pesanan).
+ */
+export function kunciItemJahitan(items: readonly ItemJahitanInput[]): string {
+  return items
+    .map((i) => `${i.nama.trim()}@${i.harga}×${i.kuantitas}`)
+    .sort()
+    .join("|");
+}
+
+/**
+ * Cari pesanan jahit yang sama persis di satu hari: tanggal + pemesan + total
+ * + isi sama. Dipakai sebagai PERINGATAN sebelum menyimpan pesanan kertas
+ * (Fase 2C) — sama seperti cariDuplikatPenjualan: diperingatkan, tetap boleh
+ * menyimpan. Nama pemesan ikut dibandingkan: dua pelanggan berbeda yang
+ * memesan barang yang sama di hari yang sama BUKAN dobel. Pesanan yang
+ * dibatalkan tidak dihitung.
+ */
+export async function cariDuplikatJahitan(
+  hari: string,
+  namaPemesan: string,
+  total: Rupiah,
+  kunci: string,
+): Promise<TransaksiRecord | null> {
+  const nama = namaPemesan.trim().toLowerCase();
+  const semua = await daftarTransaksi();
+  for (const t of semua) {
+    if (t.jenisDokumen !== "jasa" || t.dibatalkanPada !== null) continue;
+    if (t.waktu.slice(0, 10) !== hari || t.total !== total) continue;
+    if ((t.namaPemesan ?? "").trim().toLowerCase() !== nama) continue;
+    const lengkap = await ambilPesananJahit(t.id);
+    if (!lengkap) continue;
+    if (kunciItemJahitan(lengkap.items) === kunci) return t;
+  }
+  return null;
+}
+
+/**
  * Menyimpan pesanan jahit: satu dokumen `jasa`, satu entitas `pelanggan` (BU-28),
  * dan jurnal turunan (BU-02, recompute). Pembayaran masuk lewat alur kasir.
  */
 export async function simpanPesananJahit(
   rencana: RencanaJahitan,
-  konteks: { rekening: readonly Rekening[]; waktu?: Date; urlSync?: string; fetchImpl?: typeof fetch },
+  konteks: { rekening: readonly Rekening[]; waktu?: Date; urlSync?: string; fetchImpl?: typeof fetch; izinkanDuplikat?: boolean },
 ): Promise<HasilSimpanJahitan> {
   const cek = periksaRencanaJahitan(rencana);
   if (!cek.ok) return { ok: false, pesan: cek.pesan };
 
   const waktu = konteks.waktu ?? new Date();
   const iso = waktu.toISOString();
+  // Anti-dobel re-entry kertas (Fase 2C, sama seperti simpanPenjualan):
+  // dicek SEBELUM meminta nomor ke hub, supaya nomor KC tidak terbuang bila
+  // kasir membatalkan sesudah peringatan duplikat.
+  if (!konteks.izinkanDuplikat && iso.slice(0, 10) < tanggalHariIni()) {
+    const duplikat = await cariDuplikatJahitan(
+      iso.slice(0, 10),
+      rencana.namaPemesan,
+      cek.total,
+      kunciItemJahitan(rencana.items),
+    );
+    if (duplikat) {
+      return {
+        ok: false,
+        pesan: `Sudah ada pesanan yang sama di ${iso.slice(0, 10)} (${duplikat.nomorResi}, total dan isi sama). Periksa lagi bon kertasnya — mungkin sudah dimasukkan.`,
+        duplikat: true,
+      };
+    }
+  }
+  // createdAt/updatedAt = saat pesanan DIMASUKKAN (Fase 2C, sama seperti
+  // simpanPenjualan): stempel sync harus memakai waktu masuk, bukan tanggal
+  // transaksi yang dimundurkan — kalau tidak, perangkat lain tidak akan
+  // menarik pesanan kertas ini. Selisih waktu vs createdAt menjadi penanda
+  // "dari kertas" (transaksiDariKertas di lib/tanggal.ts).
+  const sekarangIso = new Date().toISOString();
   const hari = iso.slice(0, 10);
   const bulan = iso.slice(0, 7);
   // Nomor urut pesanan jahit (BU-19/21, diputuskan Tante 19 Nov 2026):
@@ -276,8 +345,8 @@ export async function simpanPesananJahit(
     jenisBayar: null,
     statusBayar: "belum_dibayar",
     dibatalkanPada: null,
-    createdAt: iso,
-    updatedAt: iso,
+    createdAt: sekarangIso,
+    updatedAt: sekarangIso,
   };
 
   const db = await getDB();
@@ -639,7 +708,7 @@ export async function catatPengiriman(
   });
 }
 
-function tanggalHariIni(sekarang: Date): string {
+function tanggalHariIni(sekarang: Date = new Date()): string {
   const y = sekarang.getFullYear();
   const m = String(sekarang.getMonth() + 1).padStart(2, "0");
   const d = String(sekarang.getDate()).padStart(2, "0");

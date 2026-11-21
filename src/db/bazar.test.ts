@@ -116,14 +116,86 @@ describe("tarikDariBazar", () => {
 describe("ringkasanBazar", () => {
   beforeEach(resetDB);
 
-  it("menghitung dibawa, terjual, sisa, dan uang masuk", async () => {
+  it("menghitung dibawa, terjual, sisa, dan uang masuk dari baris pembayaran (Fase 2C)", async () => {
     const p = await produkBaru("Blus", 40);
     const b = await buatBazar("Pameran", null, null);
     await alokasikanKeBazar(b.id, p.id, 10);
-    await simpanTransaksi(trx(b.id, 300000), [], [], sumberStokUntuk([{ produkId: p.id, kuantitas: 3 }], b.id));
+    const t = trx(b.id, 300000);
+    await simpanTransaksi(
+      t,
+      [],
+      [{ id: crypto.randomUUID(), transaksiId: t.id, nominal: 300000, waktu: t.waktu, metode: "tunai", catatan: null }],
+      sumberStokUntuk([{ produkId: p.id, kuantitas: 3 }], b.id),
+    );
 
     const r = await ringkasanBazar(b.id);
-    expect(r).toMatchObject({ dibawa: 10, terjualPcs: 3, sisaPcs: 7, uangMasuk: 300000, jumlahBarang: 1 });
+    expect(r).toMatchObject({
+      dibawa: 10,
+      terjualPcs: 3,
+      sisaPcs: 7,
+      uangMasuk: 300000,
+      tunai: 300000,
+      transfer: 0,
+      qris: 0,
+      pengembalian: 0,
+      jumlahBarang: 1,
+    });
+  });
+
+  it("uang masuk per metode dari baris pembayaran, bukan total penuh (kelas bug F2)", async () => {
+    const p = await produkBaru("Blus", 40);
+    const b = await buatBazar("Pameran", null, null);
+    await alokasikanKeBazar(b.id, p.id, 10);
+    // Pesanan jahit total 500rb: DP tunai 200rb + pelunasan transfer 300rb.
+    // Total penuh TIDAK boleh dibebankan ke satu metode.
+    const t = { ...trx(b.id, 500000), jenisDokumen: "jasa" as const, statusBayar: "lunas" as const };
+    await simpanTransaksi(
+      t,
+      [],
+      [
+        { id: crypto.randomUUID(), transaksiId: t.id, nominal: 200000, waktu: t.waktu, metode: "tunai" as const, catatan: null },
+        { id: crypto.randomUUID(), transaksiId: t.id, nominal: 300000, waktu: t.waktu, metode: "transfer" as const, catatan: null },
+      ],
+      sumberStokUntuk([{ produkId: p.id, kuantitas: 1 }], b.id),
+    );
+
+    const r = await ringkasanBazar(b.id);
+    expect(r.uangMasuk).toBe(500000);
+    expect(r.tunai).toBe(200000);
+    expect(r.transfer).toBe(300000);
+    expect(r.qris).toBe(0);
+  });
+
+  it("pesanan batal dengan pengembalian DP dihitung net 0; batal tanpa pengembalian dikecualikan (F8)", async () => {
+    const p = await produkBaru("Blus", 40);
+    const b = await buatBazar("Pameran", null, null);
+    await alokasikanKeBazar(b.id, p.id, 10);
+    const now = new Date().toISOString();
+    // Batal + DP dikembalikan (BU-63): diterima 200rb, dikembalikan 200rb.
+    const t1 = { ...trx(b.id, 200000), dibatalkanPada: now };
+    await simpanTransaksi(
+      t1,
+      [],
+      [
+        { id: crypto.randomUUID(), transaksiId: t1.id, nominal: 200000, waktu: now, metode: "tunai" as const, catatan: null },
+        { id: crypto.randomUUID(), transaksiId: t1.id, nominal: -200000, waktu: now, metode: "tunai" as const, catatan: "Pengembalian DP" },
+      ],
+      sumberStokUntuk([{ produkId: p.id, kuantitas: 1 }], b.id),
+    );
+    // Batal TANPA pengembalian (data lama): uangnya tidak dihitung sama sekali.
+    const t2 = { ...trx(b.id, 150000), dibatalkanPada: now };
+    await simpanTransaksi(
+      t2,
+      [],
+      [{ id: crypto.randomUUID(), transaksiId: t2.id, nominal: 150000, waktu: now, metode: "qris" as const, catatan: null }],
+      sumberStokUntuk([{ produkId: p.id, kuantitas: 1 }], b.id),
+    );
+
+    const r = await ringkasanBazar(b.id);
+    expect(r.uangMasuk).toBe(0);
+    expect(r.tunai).toBe(0);
+    expect(r.qris).toBe(0);
+    expect(r.pengembalian).toBe(200000);
   });
 });
 

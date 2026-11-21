@@ -30,6 +30,10 @@ export default function Bazar({ onAturBarang, onTutupBazar, onUbah }: Props) {
   const [ringkas, setRingkas] = useState<Record<string, RingkasanBazar>>({});
   const [formBuka, setFormBuka] = useState(false);
   const [nama, setNama] = useState("");
+  /** Waktu + lokasi bazar (Fase 2C, BU-34): lib sudah mendukung, form yang belum menanyakannya. */
+  const [tanggalMulai, setTanggalMulai] = useState("");
+  const [tanggalSelesai, setTanggalSelesai] = useState("");
+  const [lokasi, setLokasi] = useState("");
   const [galat, setGalat] = useState<string | null>(null);
   const [sibuk, setSibuk] = useState(false);
   /** PIN kasir bazar baru (Fase 2A, BU-34): satu bazar satu PIN. */
@@ -95,12 +99,22 @@ export default function Bazar({ onAturBarang, onTutupBazar, onUbah }: Props) {
       setGalat("PIN kasir bazar harus beda dengan PIN admin, PIN owner, dan PIN kasir toko.");
       return;
     }
+    if (tanggalMulai && tanggalSelesai && tanggalSelesai < tanggalMulai) {
+      setGalat("Perbaiki: tanggal selesai tidak boleh sebelum tanggal mulai.");
+      return;
+    }
     setSibuk(true);
     try {
       const hash = await buatHashPin(pinBazar);
-      await buatBazar(nama.trim(), null, null, { pinKasirHash: hash });
+      await buatBazar(nama.trim(), tanggalMulai || null, tanggalSelesai || null, {
+        lokasi: lokasi.trim() || null,
+        pinKasirHash: hash,
+      });
       setFormBuka(false);
       setNama("");
+      setTanggalMulai("");
+      setTanggalSelesai("");
+      setLokasi("");
       setPinBazar("");
       setUlangPinBazar("");
       setGalat(null);
@@ -170,6 +184,15 @@ export default function Bazar({ onAturBarang, onTutupBazar, onUbah }: Props) {
               <p className="h2" style={{ margin: "0.125rem 0" }}>
                 {b.nama}
               </p>
+              {(b.lokasi || b.mulai || b.selesai) && (
+                <p className="soft" style={{ margin: 0 }}>
+                  {b.lokasi ? b.lokasi : ""}
+                  {b.lokasi && (b.mulai || b.selesai) ? " · " : ""}
+                  {b.mulai ? formatTanggal(b.mulai) : ""}
+                  {b.mulai && b.selesai ? " – " : ""}
+                  {b.selesai ? formatTanggal(b.selesai) : ""}
+                </p>
+              )}
               <p className="soft" style={{ margin: 0 }}>
                 {ringkas[b.id]?.jumlahBarang ?? 0} barang · {ringkas[b.id]?.dibawa ?? 0} pcs dibawa
               </p>
@@ -268,6 +291,29 @@ export default function Bazar({ onAturBarang, onTutupBazar, onUbah }: Props) {
               onChange={(e) => setNama(e.target.value)}
               placeholder="Contoh: Pameran Mall Kelapa Gading, 15–20 Nov"
             />
+            <label htmlFor="lokasi-bazar">Lokasi (opsional)</label>
+            <input
+              id="lokasi-bazar"
+              value={lokasi}
+              onChange={(e) => setLokasi(e.target.value)}
+              placeholder="Contoh: Plaza Senayan, Jakarta"
+              autoComplete="off"
+            />
+            <div className="grid2">
+              <div>
+                <label htmlFor="mulai-bazar">Mulai (opsional)</label>
+                <input id="mulai-bazar" type="date" value={tanggalMulai} onChange={(e) => setTanggalMulai(e.target.value)} />
+              </div>
+              <div>
+                <label htmlFor="selesai-bazar">Selesai (opsional)</label>
+                <input
+                  id="selesai-bazar"
+                  type="date"
+                  value={tanggalSelesai}
+                  onChange={(e) => setTanggalSelesai(e.target.value)}
+                />
+              </div>
+            </div>
             <label htmlFor="pin-bazar">PIN kasir bazar (4–6 karakter, huruf atau angka)</label>
             <input
               id="pin-bazar"

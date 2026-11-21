@@ -150,6 +150,34 @@ Untuk hari yang dipilih (bawaan hari ini), pada bazar aktif atau terakhir:
 
 Laba dapat **negatif** dan harus ditampilkan apa adanya (tidak dibulatkan ke nol).
 
+### 5.3 Tutup harian kasir & tutup bazar (Fase 2C, 21 Nov 2026)
+
+- **Tutup harian kasir** (layar "Tutup Harian", tile di Beranda kasir): hanya angka
+  harian kasir sendiri — transaksi hari ini, uang masuk hari ini, **uang tunai di
+  tangan**, transfer, QRIS, pengembalian DP bila ada. Tanpa omzet total, laba,
+  biaya, atau riwayat (itu tetap di Ringkasan khusus admin). Angka dari baris
+  pembayaran (F2), lingkupnya lokasi kasir itu (bazar kasir / toko).
+- **Ringkasan bazar** (`ringkasanBazar`): uang masuk & per-metode dihitung dari
+  baris pembayaran, bukan jumlah `total` transaksi (kelas bug yang sama dengan
+  F2) — pesanan yang baru DP dihitung sebesar DP-nya; DP tunai + pelunasan
+  transfer dihitung terpisah per metode. Aturan batal sama seperti §5.1 (F8/BU-63).
+- **Tutup bazar** (hanya admin): menampilkan rekonsiliasi per metode
+  (tunai/transfer/QRIS + pengembalian DP) dan total biaya tercatat; bila belum
+  ada biaya tercatat, tampil peringatan dan konfirmasi menyebutkannya. Daftar
+  pesanan jahit yang belum selesai/lunas ditampilkan untuk dikonfirmasi ulang
+  (centang wajib sebelum tutup). Sisa stok kembali ke gudang sebagai catatan
+  balik sederhana (angka fisik + ringkasan di rekaman bazar) — dokumen transfer
+  lengkap adalah Tahap 3 (BU-36/BU-40).
+- **Re-entry kertas** (BU-34): transaksi kertas dimasukkan lagi dengan tanggal
+  transaksi asli (field tanggal di Keranjang dan di form pesanan jahit; tanggal
+  tidak boleh besok). Penanda "dari kertas" = tanggal transaksi lebih lama dari
+  tanggal dimasukkannya ke aplikasi (`createdAt`/`updatedAt` selalu memakai
+  waktu masuk — kalau memakai tanggal lama, perangkat lain tidak akan menarik
+  transaksi ini karena kursor sync memakai `updatedAt`); riwayat menampilkan
+  chip "Dari kertas". Bila transaksi yang sama persis sudah ada di hari itu
+  (hari + total + isi sama; pesanan jahit ditambah nama pemesan yang sama),
+  aplikasi memperingatkan dan kasir mengonfirmasi dulu sebelum menyimpan.
+
 ---
 
 ## 6. Hak akses ringkas

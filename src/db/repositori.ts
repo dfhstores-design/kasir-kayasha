@@ -8,6 +8,7 @@
  */
 import { getDB, type BazarItemRecord, type BazarRecord, type BiayaBazarRecord, type KategoriBiaya, type FotoRecord, type KeranjangTertahanRecord, type PembayaranRecord, type ProdukRecord, type SettingsRecord, type TransaksiRecord, type ItemTransaksiRecord, type UUID } from "./schema.ts";
 import { hitungSaldoBazar } from "../lib/stok.ts";
+import { hitungRingkasanKeuangan, metodeBayarSah } from "../lib/bazar.ts";
 import { pesanStok, validasiSumberStok, type SumberStok } from "../lib/sumberStok.ts";
 import type { Rupiah } from "../lib/money.ts";
 
@@ -292,21 +293,56 @@ export interface RingkasanBazar {
   terjualPcs: number;
   sisaPcs: number;
   uangMasuk: Rupiah;
+  /** Uang masuk per metode bayar, dihitung dari baris pembayaran (Fase 2C). */
+  tunai: Rupiah;
+  transfer: Rupiah;
+  qris: Rupiah;
+  /** Total DP yang dikembalikan karena pembatalan (F8/BU-63), angka positif. */
+  pengembalian: Rupiah;
   jumlahBarang: number;
 }
 
+/**
+ * Ringkasan bazar (Fase 2C — perbaikan kelas bug F2): uang masuk & per-metode
+ * dihitung dari baris PEMBAYARAN, bukan dari jumlah `total` transaksi.
+ * Pesanan yang baru DP dihitung sebesar DP-nya (bukan total penuh), dan DP
+ * tunai + pelunasan transfer dihitung terpisah per metode. Aturan batal sama
+ * seperti hitungRingkasanKeuangan (F8/BU-63).
+ */
 export async function ringkasanBazar(bazarId: UUID): Promise<RingkasanBazar> {
   const items = await itemBazar(bazarId);
   const trx = await db_transaksiBazar(bazarId);
-  const uangMasuk = trx
-    .filter((t) => !t.dibatalkanPada)
-    .reduce((n, t) => n + t.total, 0);
+  const semuaBayar = await daftarPembayaran();
+  const bayarPerTrx = new Map<string, PembayaranRecord[]>();
+  for (const p of semuaBayar) {
+    const daftar = bayarPerTrx.get(p.transaksiId) ?? [];
+    daftar.push(p);
+    bayarPerTrx.set(p.transaksiId, daftar);
+  }
+  const keuangan = hitungRingkasanKeuangan(
+    trx.map((t) => ({
+      total: t.total,
+      jenisBayar: metodeBayarSah(t.jenisBayar),
+      dibatalkan: t.dibatalkanPada !== null,
+      waktu: t.waktu,
+      pembayaran: (bayarPerTrx.get(t.id) ?? []).map((p) => ({
+        nominal: p.nominal,
+        metode: metodeBayarSah(p.metode),
+        waktu: p.waktu,
+      })),
+    })),
+    [],
+  );
 
   return {
     dibawa: items.reduce((n, i) => n + i.dibawa, 0),
     terjualPcs: items.reduce((n, i) => n + i.terjual, 0),
     sisaPcs: items.reduce((n, i) => n + hitungSaldoBazar(i), 0),
-    uangMasuk,
+    uangMasuk: keuangan.uangMasuk,
+    tunai: keuangan.tunai,
+    transfer: keuangan.transfer,
+    qris: keuangan.qris,
+    pengembalian: keuangan.pengembalian,
     jumlahBarang: items.length,
   };
 }

@@ -153,3 +153,35 @@ describe("mode ubah pesanan (BU-56)", () => {
     expect(screen.getByRole("button", { name: "Simpan Perubahan" })).toBeTruthy();
   });
 });
+
+describe("tanggal pesanan untuk re-entry kertas (Fase 2C, BU-34)", () => {
+  beforeEach(resetDB);
+
+  it("tanggal lama ikut terkirim sebagai tanggalPesanan + hint dari kertas tampil", () => {
+    window.history.pushState({}, "", "/?mode=satu-layar");
+    const onSimpan = vi.fn();
+    buka({ onSimpan });
+    fireEvent.change(screen.getByLabelText("Nama pemesan"), { target: { value: "Ibu Sari" } });
+    fireEvent.change(screen.getByLabelText("Nama item"), { target: { value: "Gaun pesta" } });
+    fireEvent.change(screen.getByLabelText("Harga"), { target: { value: "300000" } });
+    fireEvent.change(screen.getByLabelText("Tanggal pesanan"), { target: { value: "2026-11-19" } });
+    expect(screen.getByText(/Pesanan dari kertas/)).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Simpan Pesanan" }));
+    expect(onSimpan).toHaveBeenCalledTimes(1);
+    const rencana = onSimpan.mock.calls[0]?.[0] as { tanggalPesanan: string | null };
+    expect(rencana.tanggalPesanan).toBe("2026-11-19");
+  });
+
+  it("tanggal pesanan bawaan hari ini bila tidak diubah", () => {
+    window.history.pushState({}, "", "/?mode=satu-layar");
+    const onSimpan = vi.fn();
+    buka({ onSimpan });
+    fireEvent.change(screen.getByLabelText("Nama pemesan"), { target: { value: "Ibu Sari" } });
+    fireEvent.change(screen.getByLabelText("Nama item"), { target: { value: "Gaun pesta" } });
+    fireEvent.change(screen.getByLabelText("Harga"), { target: { value: "300000" } });
+    fireEvent.click(screen.getByRole("button", { name: "Simpan Pesanan" }));
+    const rencana = onSimpan.mock.calls[0]?.[0] as { tanggalPesanan: string | null };
+    expect(rencana.tanggalPesanan).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    expect(screen.queryByText(/Pesanan dari kertas/)).toBeNull();
+  });
+});

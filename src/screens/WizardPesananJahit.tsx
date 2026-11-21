@@ -9,6 +9,7 @@ import {
   type RencanaJahitan,
 } from "../lib/jahitan.ts";
 import { bacaModeInput, KUNCI_MODE_INPUT, type ModeInput } from "../lib/modeInput.ts";
+import { tanggalHariIni } from "../lib/tanggal.ts";
 
 interface Props {
   sibuk: boolean;
@@ -88,6 +89,12 @@ export default function WizardPesananJahit({ sibuk, pesanGalat, onSimpan, onBata
 
   const [nama, setNama] = useState("");
   const [kontak, setKontak] = useState("");
+  /**
+   * Tanggal pesanan (Fase 2C, re-entry kertas, BU-34): bawaan hari ini.
+   * Saat ubah pesanan (BU-56) tanggal TIDAK berubah, jadi field ini
+   * disembunyikan bila editId diisi.
+   */
+  const [tanggalPesanan, setTanggalPesanan] = useState(tanggalHariIni());
   const [items, setItems] = useState<ItemTerenun[]>([{ nama: "", hargaTeks: "", kuantitas: 1, ukuran: "" }]);
   const [perkiraan, setPerkiraan] = useState("");
   const [catatan, setCatatan] = useState("");
@@ -143,6 +150,8 @@ export default function WizardPesananJahit({ sibuk, pesanGalat, onSimpan, onBata
     })),
     perkiraanSelesai: perkiraan || null,
     catatan: catatan.trim() || null,
+    // Tanggal pesanan hanya untuk pesanan BARU; saat ubah (BU-56) tanggal lama dipertahankan.
+    tanggalPesanan: editId ? null : tanggalPesanan || null,
     biayaLain: biayaLain
       .filter((b) => b.nama.trim().length > 0)
       .map((b) => ({ nama: b.nama.trim(), nominal: b.nominal })),
@@ -261,6 +270,23 @@ export default function WizardPesananJahit({ sibuk, pesanGalat, onSimpan, onBata
                 autoComplete="off"
               />
             </div>
+            {!editId && (
+              <div style={{ marginTop: "0.75rem" }}>
+                <label htmlFor="jht-tanggal">Tanggal pesanan</label>
+                <input
+                  id="jht-tanggal"
+                  type="date"
+                  value={tanggalPesanan}
+                  max={tanggalHariIni()}
+                  onChange={(e) => setTanggalPesanan(e.target.value)}
+                />
+                {tanggalPesanan && tanggalPesanan < tanggalHariIni() && (
+                  <p className="hint" role="status">
+                    Pesanan dari kertas — tanggal ini dipakai sebagai tanggal pesanan.
+                  </p>
+                )}
+              </div>
+            )}
           </div>
         )}
 

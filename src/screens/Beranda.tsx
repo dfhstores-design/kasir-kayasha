@@ -145,6 +145,9 @@ export default function Beranda({ settings, storagePermanen, bazar, jumlahBazarA
           </>
         ) : (
           <>
+            <button type="button" className="tile" onClick={() => buka("tutup-harian")}>
+              Tutup Harian
+            </button>
             <button type="button" className="tile" onClick={onMintaAdmin}>
               Masuk Admin
             </button>

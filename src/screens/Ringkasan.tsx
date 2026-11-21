@@ -16,7 +16,7 @@ import {
 } from "../db/repositori.ts";
 import type { ItemTransaksiRecord, JenisDokumen, PembayaranRecord, TransaksiRecord } from "../db/schema.ts";
 import { formatRupiah } from "../lib/money.ts";
-import { formatTanggal, formatTanggalJam } from "../lib/tanggal.ts";
+import { formatTanggal, formatTanggalJam, transaksiDariKertas } from "../lib/tanggal.ts";
 import {
   biayaPadaHari,
   hitungRingkasanKeuangan,
@@ -418,6 +418,11 @@ export default function Ringkasan({ bazar }: Props) {
                   {dibatalkan && (
                     <span className="chip warn" style={{ marginLeft: "0.5rem" }}>
                       Dibatalkan
+                    </span>
+                  )}
+                  {transaksiDariKertas(t.waktu, t.createdAt) && (
+                    <span className="chip" style={{ marginLeft: "0.5rem" }}>
+                      Dari kertas
                     </span>
                   )}
                 </div>

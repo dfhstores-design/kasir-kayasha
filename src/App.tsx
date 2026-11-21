@@ -9,6 +9,7 @@ import TransaksiTersimpanLayar from "./screens/TransaksiTersimpan.tsx";
 import Bazar from "./screens/Bazar.tsx";
 import AlokasiBazar from "./screens/AlokasiBazar.tsx";
 import TutupBazar from "./screens/TutupBazar.tsx";
+import TutupHarian from "./screens/TutupHarian.tsx";
 import MasukAdmin from "./screens/MasukAdmin.tsx";
 import MasukKasir from "./screens/MasukKasir.tsx";
 import BiayaBazar from "./screens/BiayaBazar.tsx";
@@ -48,10 +49,10 @@ import { terapkanTampilan } from "./lib/tampilan.ts";
 import { jalankanSeedDemo, migrasiAlamatLama, migrasiRekeningKedua } from "./db/seedDemo.ts";
 import type { OngkirMode } from "./lib/ongkir.ts";
 import type { StatusBayar } from "./lib/keranjang.ts";
-import { bolehAdmin, khususAdmin, type LokasiKasir, type Peran } from "./lib/peran.ts";
+import { bolehAdmin, khususAdmin, labelLokasiKasir, type LokasiKasir, type Peran } from "./lib/peran.ts";
 import { simpanPenjualan, type JenisBayar, type TransaksiTersimpan } from "./lib/penjualan.ts";
 import { bikinIsiKeranjang, type IsiKeranjang } from "./lib/isiKeranjang.ts";
-import { formatJam } from "./lib/tanggal.ts";
+import { formatJam, tanggalHariIni, waktuDariTanggal } from "./lib/tanggal.ts";
 import { simpanPesananJahit, ubahPesananJahit } from "./lib/jahitan.ts";
 import { simpanPin } from "./sync/mesin.ts";
 import { layarAwalDariUrl } from "./lib/modeInput.ts";
@@ -67,6 +68,7 @@ export type Layar =
   | { nama: "bazar" }
   | { nama: "alokasi-bazar"; bazar: BazarRecord }
   | { nama: "tutup-bazar"; bazar: BazarRecord }
+  | { nama: "tutup-harian" }
   | { nama: "ringkasan" }
   | { nama: "pengaturan" }
   | { nama: "masuk-admin" }
@@ -118,6 +120,12 @@ export default function App() {
   const [keranjang, setKeranjang] = useState<IsiKeranjang[]>([]);
   const [nilaiKeranjang, setNilaiKeranjang] = useState<NilaiKeranjang>(KERANJANG_AWAL);
   const [namaPembeli, setNamaPembeli] = useState("");
+  /**
+   * Tanggal transaksi di keranjang (Fase 2C, re-entry kertas, BU-34):
+   * bawaan hari ini; tanggal lama berarti transaksi kertas yang dimasukkan
+   * lagi dengan tanggal aslinya.
+   */
+  const [tanggalTransaksi, setTanggalTransaksi] = useState(tanggalHariIni());
   const [parkir, setParkir] = useState<ParkirRingkas[]>([]);
   const [sedangMenyimpan, setSedangMenyimpan] = useState(false);
   /** Peran aktif. Bawaan kasir; naik ke admin/owner setelah PIN benar. */
@@ -287,28 +295,54 @@ export default function App() {
 
   const simpanTransaksiSekarang = useCallback(async () => {
     setPesanSimpan(null);
+    // Tanggal transaksi (Fase 2C, re-entry kertas): hari ini = waktu sekarang;
+    // tanggal lama = siang hari itu (tetap tanggal yang sama saat diubah ke ISO).
+    const hariIni = tanggalHariIni();
+    let waktu: Date | undefined;
+    if (tanggalTransaksi && tanggalTransaksi !== hariIni) {
+      const parsed = waktuDariTanggal(tanggalTransaksi);
+      if (!parsed) {
+        setPesanSimpan("Tanggal transaksi tidak valid.");
+        return;
+      }
+      if (tanggalTransaksi > hariIni) {
+        setPesanSimpan("Tanggal transaksi tidak boleh tanggal besok.");
+        return;
+      }
+      waktu = parsed;
+    }
     setSedangMenyimpan(true);
-    const hasil = await simpanPenjualan(
-      {
-        items: keranjang.map((k) => ({
-          produkId: k.produkId,
-          nama: k.nama,
-          hargaSatuan: k.hargaSatuan,
-          kuantitas: k.kuantitas,
-          diskonPerUnit: k.diskonPerUnit,
-        })),
-        diskonTotal: nilaiKeranjang.diskonTotal,
-        ongkir: {
-          mode: nilaiKeranjang.ongkirMode,
-          nominal: nilaiKeranjang.ongkirMode === "belum_ditentukan" ? null : nilaiKeranjang.ongkirNominal ?? 0,
-        },
-        jenisBayar: nilaiKeranjang.jenisBayar,
-        statusBayar: nilaiKeranjang.statusBayar,
-        dibayarSekarang: nilaiKeranjang.dibayarSekarang,
-        bazarId: bazar?.id ?? null,
+    const rencana = {
+      items: keranjang.map((k) => ({
+        produkId: k.produkId,
+        nama: k.nama,
+        hargaSatuan: k.hargaSatuan,
+        kuantitas: k.kuantitas,
+        diskonPerUnit: k.diskonPerUnit,
+      })),
+      diskonTotal: nilaiKeranjang.diskonTotal,
+      ongkir: {
+        mode: nilaiKeranjang.ongkirMode,
+        nominal: nilaiKeranjang.ongkirMode === "belum_ditentukan" ? null : nilaiKeranjang.ongkirNominal ?? 0,
       },
-      { rekening: settings?.rekening ?? [] },
-    );
+      jenisBayar: nilaiKeranjang.jenisBayar,
+      statusBayar: nilaiKeranjang.statusBayar,
+      dibayarSekarang: nilaiKeranjang.dibayarSekarang,
+      bazarId: bazar?.id ?? null,
+    };
+    let hasil = await simpanPenjualan(rencana, {
+      rekening: settings?.rekening ?? [],
+      ...(waktu ? { waktu } : {}),
+    });
+    // Peringatan duplikat (Fase 2C): transaksi kertas yang sama persis sudah
+    // ada — tanyakan dulu, simpan lagi hanya bila kasir yakin.
+    if (!hasil.ok && hasil.duplikat && window.confirm(`${hasil.pesan} Tetap simpan?`)) {
+      hasil = await simpanPenjualan(rencana, {
+        rekening: settings?.rekening ?? [],
+        ...(waktu ? { waktu } : {}),
+        izinkanDuplikat: true,
+      });
+    }
     setSedangMenyimpan(false);
 
     if (!hasil.ok) {
@@ -319,9 +353,10 @@ export default function App() {
     setKeranjang([]);
     setNilaiKeranjang(KERANJANG_AWAL);
     setNamaPembeli("");
+    setTanggalTransaksi(tanggalHariIni());
     await muat();
     setLayar({ nama: "tersimpan", transaksi: hasil.transaksi });
-  }, [keranjang, nilaiKeranjang, settings, bazar, muat]);
+  }, [keranjang, nilaiKeranjang, settings, bazar, muat, tanggalTransaksi]);
 
   /** Memarkir keranjang sekarang; butuh nama pembeli (maks 3 parkir). */
   const parkirSekarang = useCallback(async () => {
@@ -444,6 +479,7 @@ export default function App() {
     bazar: "Bazar",
     "alokasi-bazar": "Atur Barang Bazar",
     "tutup-bazar": "Tutup Bazar",
+    "tutup-harian": "Tutup Harian",
     ringkasan: "Ringkasan",
     pengaturan: "Pengaturan",
     "pengaturan-isi": "Pengaturan",
@@ -580,6 +616,8 @@ export default function App() {
           }
           onSimpan={simpanTransaksiSekarang}
           sedangMenyimpan={sedangMenyimpan}
+          tanggalTransaksi={tanggalTransaksi}
+          onUbahTanggalTransaksi={setTanggalTransaksi}
           namaPembeli={namaPembeli}
           onUbahNamaPembeli={setNamaPembeli}
           parkir={parkir}
@@ -652,13 +690,29 @@ export default function App() {
         />
       )}
 
-      {layar.nama === "tutup-bazar" && (
-        <TutupBazar
-          bazar={layar.bazar}
-          onSelesai={async () => {
-            await muat();
-            setLayar({ nama: "bazar" });
-          }}
+      {layar.nama === "tutup-bazar" &&
+        (bolehAdmin(peran) ? (
+          <TutupBazar
+            bazar={layar.bazar}
+            onSelesai={async () => {
+              await muat();
+              setLayar({ nama: "bazar" });
+            }}
+          />
+        ) : (
+          <AksesAdminSaja bazarAktifAda={!!bazar} onMintaAdmin={() => setLayar({ nama: "masuk-admin" })} />
+        ))}
+
+      {layar.nama === "tutup-harian" && (
+        <TutupHarian
+          bazarId={
+            lokasiKasir
+              ? lokasiKasir.jenis === "bazar"
+                ? lokasiKasir.bazarId
+                : null
+              : (bazar?.id ?? null)
+          }
+          label={lokasiKasir ? labelLokasiKasir(lokasiKasir) : (bazar?.nama ?? "Toko")}
         />
       )}
 
@@ -769,13 +823,50 @@ export default function App() {
             setLayar({ nama: "daftar-jahit" });
           }}
           onSimpan={(rencana) => {
-            setPesanPesanan(null);
-            setSibukPesanan(true);
-            // Mode ubah (BU-56): ubah pesanan lama, nomor + pembayaran tidak berubah.
-            const simpan = layar.editId
-              ? ubahPesananJahit(layar.editId, rencana)
-              : simpanPesananJahit(rencana, { rekening: settings?.rekening ?? [] });
-            void simpan.then((h) => {
+            void (async () => {
+              setPesanPesanan(null);
+              // Mode ubah (BU-56): ubah pesanan lama, nomor + tanggal + pembayaran tidak berubah.
+              if (layar.editId) {
+                setSibukPesanan(true);
+                const h = await ubahPesananJahit(layar.editId, rencana);
+                setSibukPesanan(false);
+                if (!h.ok) {
+                  setPesanPesanan(h.pesan);
+                  return;
+                }
+                setSegarkanJahitan((n) => n + 1);
+                setJahitanDibuka(h.pesanan.id);
+                setLayar({ nama: "detail-jahit", id: h.pesanan.id });
+                return;
+              }
+              // Tanggal pesanan (Fase 2C, re-entry kertas): hari ini = waktu sekarang.
+              let waktu: Date | undefined;
+              if (rencana.tanggalPesanan && rencana.tanggalPesanan !== tanggalHariIni()) {
+                const parsed = waktuDariTanggal(rencana.tanggalPesanan);
+                if (!parsed) {
+                  setPesanPesanan("Tanggal pesanan tidak valid.");
+                  return;
+                }
+                if (rencana.tanggalPesanan > tanggalHariIni()) {
+                  setPesanPesanan("Tanggal pesanan tidak boleh tanggal besok.");
+                  return;
+                }
+                waktu = parsed;
+              }
+              setSibukPesanan(true);
+              let h = await simpanPesananJahit(rencana, {
+                rekening: settings?.rekening ?? [],
+                ...(waktu ? { waktu } : {}),
+              });
+              // Peringatan duplikat (Fase 2C): pesanan kertas yang sama persis
+              // sudah ada — tanyakan dulu, simpan lagi hanya bila kasir yakin.
+              if (!h.ok && h.duplikat && window.confirm(`${h.pesan} Tetap simpan?`)) {
+                h = await simpanPesananJahit(rencana, {
+                  rekening: settings?.rekening ?? [],
+                  ...(waktu ? { waktu } : {}),
+                  izinkanDuplikat: true,
+                });
+              }
               setSibukPesanan(false);
               if (!h.ok) {
                 setPesanPesanan(h.pesan);
@@ -784,7 +875,7 @@ export default function App() {
               setSegarkanJahitan((n) => n + 1);
               setJahitanDibuka(h.pesanan.id);
               setLayar({ nama: "detail-jahit", id: h.pesanan.id });
-            });
+            })();
           }}
         />
       )}

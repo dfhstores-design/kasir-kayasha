@@ -4,6 +4,7 @@ import { dalamRupiah } from "../lib/ketikUang.ts";
 import { buatOngkir, labelOngkirPilihan, type OngkirMode } from "../lib/ongkir.ts";
 import { hitungKeranjang, hitungPembayaran, type StatusBayar } from "../lib/keranjang.ts";
 import { formatRupiahResi } from "../lib/money.ts";
+import { tanggalHariIni } from "../lib/tanggal.ts";
 import { JENIS_BAYAR, labelJenisBayar, type JenisBayar } from "../lib/penjualan.ts";
 import type { UUID } from "../db/schema.ts";
 import type { IsiKeranjang } from "../lib/isiKeranjang.ts";
@@ -28,6 +29,9 @@ interface Props {
   onUbahDiskon: (produkId: UUID, diskonPerUnit: number) => void;
   onSimpan: () => void;
   sedangMenyimpan: boolean;
+  /** Tanggal transaksi "YYYY-MM-DD" (Fase 2C, re-entry kertas, BU-34). */
+  tanggalTransaksi: string;
+  onUbahTanggalTransaksi: (tanggal: string) => void;
   /** Nama pembeli, dipakai saat memarkir transaksi. */
   namaPembeli: string;
   onUbahNamaPembeli: (nama: string) => void;
@@ -63,6 +67,8 @@ export default function Keranjang({
   onUbahDiskon,
   onSimpan,
   sedangMenyimpan,
+  tanggalTransaksi,
+  onUbahTanggalTransaksi,
   namaPembeli,
   onUbahNamaPembeli,
   parkir,
@@ -175,6 +181,22 @@ export default function Keranjang({
             maxLength={20}
             autoComplete="off"
           />
+        </div>
+
+        <div>
+          <label htmlFor="tanggal-transaksi">Tanggal transaksi</label>
+          <input
+            id="tanggal-transaksi"
+            type="date"
+            value={tanggalTransaksi}
+            max={tanggalHariIni()}
+            onChange={(e) => onUbahTanggalTransaksi(e.target.value)}
+          />
+          {tanggalTransaksi && tanggalTransaksi < tanggalHariIni() && (
+            <p className="hint" role="status">
+              Transaksi dari kertas — tanggal ini dipakai sebagai tanggal transaksi.
+            </p>
+          )}
         </div>
 
         {keranjang.map((k) => {

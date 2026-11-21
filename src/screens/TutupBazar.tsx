@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import {
+  daftarBiaya,
   daftarProduk,
+  daftarTransaksi,
   itemBazar,
   ringkasanBazar,
   tutupBazar,
@@ -10,7 +12,8 @@ import {
 import { hitungSaldoBazar } from "../lib/stok.ts";
 import { hitungUlangSisa, pesanSelisih } from "../lib/bazar.ts";
 import { formatRupiah } from "../lib/money.ts";
-import type { UUID } from "../db/schema.ts";
+import { formatTanggal } from "../lib/tanggal.ts";
+import type { TransaksiRecord, UUID } from "../db/schema.ts";
 
 interface Props {
   bazar: BazarRecord;
@@ -38,13 +41,24 @@ export default function TutupBazar({ bazar, onSelesai }: Props) {
   const [baris, setBaris] = useState<BarisSisa[] | null>(null);
   const [galat, setGalat] = useState<string | null>(null);
   const [sibuk, setSibuk] = useState(false);
+  /** Total biaya bazar yang sudah tercatat (BU-34: admin memastikan biaya tercatat). */
+  const [totalBiaya, setTotalBiaya] = useState<number | null>(null);
+  /**
+   * Pesanan jahit yang belum selesai/lunas (BU-34: dikonfirmasi ulang saat tutup).
+   * Pesanan jahit TIDAK menyimpan bazarId, jadi yang ditampilkan adalah semua
+   * pesanan yang masih terbuka — admin mengonfirmasi semuanya sebelum tutup.
+   */
+  const [pesananBelum, setPesananBelum] = useState<TransaksiRecord[] | null>(null);
+  const [pesananDikonfirmasi, setPesananDikonfirmasi] = useState(false);
 
   useEffect(() => {
     (async () => {
-      const [r, items, produk] = await Promise.all([
+      const [r, items, produk, biaya, semuaTrx] = await Promise.all([
         ringkasanBazar(bazar.id),
         itemBazar(bazar.id),
         daftarProduk(true),
+        daftarBiaya(bazar.id),
+        daftarTransaksi(),
       ]);
       setRingkas(r);
       setBaris(
@@ -55,6 +69,15 @@ export default function TutupBazar({ bazar, onSelesai }: Props) {
             return { produkId: i.produkId, nama: p?.nama ?? "Barang", sisa, teks: String(sisa) };
           })
           .filter((b) => b.sisa > 0),
+      );
+      setTotalBiaya(biaya.reduce((n, b) => n + b.nominal, 0));
+      setPesananBelum(
+        semuaTrx.filter(
+          (t) =>
+            t.jenisDokumen === "jasa" &&
+            t.dibatalkanPada === null &&
+            (t.statusPesanan !== "selesai" || t.statusBayar !== "lunas"),
+        ),
       );
     })().catch(() => setBaris([]));
   }, [bazar.id]);
@@ -74,9 +97,16 @@ export default function TutupBazar({ bazar, onSelesai }: Props) {
       setGalat(rekap.pesan);
       return;
     }
-    const pesanKonfirmasi = adaBeda
-      ? "Ada selisih hitung. Tetap tutup bazar ini? Setelah ditutup tidak bisa dibuka lagi."
-      : "Tutup bazar ini? Setelah ditutup tidak bisa dibuka lagi.";
+    // Pesanan yang belum selesai/lunas wajib dikonfirmasi dulu (BU-34).
+    if ((pesananBelum?.length ?? 0) > 0 && !pesananDikonfirmasi) {
+      setGalat("Konfirmasi dulu pesanan yang belum selesai di bawah ini sebelum menutup bazar.");
+      return;
+    }
+    const pesanKonfirmasi = [
+      adaBeda ? "Ada selisih hitung. " : "",
+      totalBiaya === 0 ? "Belum ada biaya bazar yang tercatat. " : "",
+      "Tutup bazar ini? Setelah ditutup tidak bisa dibuka lagi.",
+    ].join("");
     if (!window.confirm(pesanKonfirmasi)) return;
 
     setGalat(null);
@@ -126,12 +156,35 @@ export default function TutupBazar({ bazar, onSelesai }: Props) {
             <span className="money">{ringkas.terjualPcs} pcs</span>
           </div>
           <div className="ringkas">
+            <span>Dibawa</span>
+            <span className="money">{ringkas.dibawa} pcs</span>
+          </div>
+          <div className="ringkas">
             <span>Uang masuk</span>
             <span className="money">{formatRupiah(ringkas.uangMasuk)}</span>
           </div>
+          {/* Rekonsiliasi per metode (Fase 2C, BU-34): angka dari baris pembayaran. */}
+          <div className="ringkas soft">
+            <span>Tunai</span>
+            <span>{formatRupiah(ringkas.tunai)}</span>
+          </div>
+          <div className="ringkas soft">
+            <span>Transfer</span>
+            <span>{formatRupiah(ringkas.transfer)}</span>
+          </div>
+          <div className="ringkas soft">
+            <span>QRIS</span>
+            <span>{formatRupiah(ringkas.qris)}</span>
+          </div>
+          {ringkas.pengembalian > 0 && (
+            <div className="ringkas soft">
+              <span>Pengembalian DP</span>
+              <span>− {formatRupiah(ringkas.pengembalian)}</span>
+            </div>
+          )}
           <div className="ringkas">
-            <span>Dibawa</span>
-            <span className="money">{ringkas.dibawa} pcs</span>
+            <span>Biaya tercatat</span>
+            <span className="money">{totalBiaya === null ? "…" : `− ${formatRupiah(totalBiaya)}`}</span>
           </div>
           <div className="hr" style={{ height: 1, background: "var(--line)", margin: "0.5rem 0" }} />
           <div className="ringkas">
@@ -139,6 +192,42 @@ export default function TutupBazar({ bazar, onSelesai }: Props) {
             <strong className="money">{ringkas.sisaPcs} pcs</strong>
           </div>
         </div>
+
+        {totalBiaya === 0 && (
+          <div className="panel panel--warn" role="alert">
+            <strong>Belum ada biaya bazar yang tercatat.</strong>
+            <p style={{ margin: "0.25rem 0 0" }}>
+              Pastikan semua pengeluaran bazar sudah dicatat di layar Biaya Bazar sebelum menutup.
+            </p>
+          </div>
+        )}
+
+        {(pesananBelum?.length ?? 0) > 0 && (
+          <>
+            <span className="label">Pesanan yang belum selesai / belum lunas — konfirmasi ulang</span>
+            {(pesananBelum ?? []).map((t) => (
+              <div key={t.id} className="listrow">
+                <div style={{ flex: 1 }}>
+                  <strong>{t.namaPemesan ?? "—"}</strong>
+                  <div className="soft" style={{ fontSize: "0.95rem" }}>
+                    {t.nomorResi} · {formatTanggal(t.waktu)} ·{" "}
+                    {t.statusBayar === "lunas" ? "Lunas" : t.statusBayar === "dp" ? "Baru DP" : "Belum dibayar"}
+                  </div>
+                </div>
+                <strong className="money">{formatRupiah(t.total)}</strong>
+              </div>
+            ))}
+            <label style={{ display: "flex", gap: "0.5rem", alignItems: "flex-start" }}>
+              <input
+                type="checkbox"
+                checked={pesananDikonfirmasi}
+                onChange={(e) => setPesananDikonfirmasi(e.target.checked)}
+                style={{ width: "1.5rem", height: "1.5rem", flexShrink: 0 }}
+              />
+              <span>Pesanan di atas sudah dikonfirmasi (akan dikirim / diambil di butik).</span>
+            </label>
+          </>
+        )}
 
         {baris.length > 0 ? (
           <>
@@ -183,7 +272,8 @@ export default function TutupBazar({ bazar, onSelesai }: Props) {
             )}
             <div className="hint">
               Yang dikembalikan ke gudang adalah angka <strong>fisik</strong>. Selisih dicatat untuk
-              ditinjau admin.
+              ditinjau admin. Catatan balik ini yang tersimpan (sisa kembali ke gudang) — dokumen
+              transfer lengkap adalah Tahap 3.
             </div>
           </>
         ) : (

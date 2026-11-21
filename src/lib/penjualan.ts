@@ -12,10 +12,12 @@
  */
 import type { Rupiah } from "./money.ts";
 import type { Ongkir } from "./ongkir.ts";
+import { tanggalHariIni } from "./tanggal.ts";
 import { hitungKeranjang, hitungPembayaran, type BarisKeranjang, type StatusBayar } from "./keranjang.ts";
 import { sapaanDariWaktu, type Sapaan } from "./sapaan.ts";
 import { sumberStokUntuk } from "./sumberStok.ts";
 import {
+  ambilTransaksi,
   buatId,
   daftarTransaksi,
   simpanTransaksi,
@@ -139,6 +141,46 @@ export function formatNomorResi(urut: number): string {
   return `KYS-${String(urut).padStart(4, "0")}`;
 }
 
+/**
+ * Kunci isi keranjang untuk pemeriksaan anti-dobel (Fase 2C, re-entry kertas):
+ * produk + jumlah per produk, diurutkan — urutan pilih di keranjang tidak
+ * memengaruhi kunci, tapi produk atau jumlah yang beda menghasilkan kunci beda.
+ */
+export function kunciItemPenjualan(
+  items: readonly Pick<ItemPilihan, "produkId" | "kuantitas">[],
+): string {
+  return items
+    .map((i) => `${i.produkId}×${i.kuantitas}`)
+    .sort()
+    .join("|");
+}
+
+/**
+ * Cari penjualan yang sama persis di satu hari: tanggal + total + isi sama.
+ * Dipakai sebagai PERINGATAN sebelum menyimpan transaksi kertas (Fase 2C) —
+ * kasir yang memasukkan bon yang sama dua kali akan diperingatkan, tapi
+ * tetap boleh menyimpan bila memang ada dua penjualan yang sama persis.
+ * Transaksi yang dibatalkan tidak dihitung (bukan dobel, sudah tidak berlaku).
+ */
+export async function cariDuplikatPenjualan(
+  hari: string,
+  total: Rupiah,
+  kunci: string,
+): Promise<TransaksiRecord | null> {
+  const semua = await daftarTransaksi();
+  for (const t of semua) {
+    if (t.jenisDokumen !== "penjualan" || t.dibatalkanPada !== null) continue;
+    if (t.waktu.slice(0, 10) !== hari || t.total !== total) continue;
+    const lengkap = await ambilTransaksi(t.id);
+    if (!lengkap) continue;
+    const kunciLama = kunciItemPenjualan(
+      lengkap.item.map((i) => ({ produkId: i.produkId ?? "", kuantitas: i.kuantitas })),
+    );
+    if (kunciLama === kunci) return t;
+  }
+  return null;
+}
+
 /** Nomor urut = jumlah transaksi yang sudah ada + 1. */
 export function nomorUrutBerikutnya(jumlahTransaksi: number): number {
   return jumlahTransaksi + 1;
@@ -157,16 +199,22 @@ export interface TransaksiTersimpan {
 
 export type HasilSimpan =
   | { ok: true; transaksi: TransaksiTersimpan }
-  | { ok: false; pesan: string };
+  | { ok: false; pesan: string; duplikat?: boolean };
 
 /**
  * Menyimpan penjualan langsung. Idempoten: `id` dibuat sekali di sini, jadi
  * menekan "Simpan" dua kali tidak akan membuat dua transaksi asalkan pemanggil
  * memakai id yang sama (UI menonaktifkan tombol saat menyimpan).
+ *
+ * Anti-dobel re-entry kertas (Fase 2C): bila `waktu` dimundurkan (tanggal
+ * transaksi di masa lalu) dan sudah ada penjualan yang sama persis di hari
+ * itu (total + isi sama), simpan DITOLAK dengan `duplikat: true` — pemanggil
+ * (App) menanyakan konfirmasi ke kasir, dan bila kasir yakin, memanggil
+ * ulang dengan `izinkanDuplikat: true`.
  */
 export async function simpanPenjualan(
   rencana: RencanaPenjualan,
-  konteks: { rekening: readonly Rekening[]; waktu?: Date; idTransaksi?: UUID },
+  konteks: { rekening: readonly Rekening[]; waktu?: Date; idTransaksi?: UUID; izinkanDuplikat?: boolean },
 ): Promise<HasilSimpan> {
   const cek = periksaRencana(rencana);
   if (!cek.ok) return { ok: false, pesan: cek.pesan };
@@ -174,7 +222,23 @@ export async function simpanPenjualan(
   const waktu = konteks.waktu ?? new Date();
   const id = konteks.idTransaksi ?? buatId();
   const hari = waktu.toISOString().slice(0, 10);
+  // createdAt/updatedAt = saat transaksi DIMASUKKAN ke aplikasi (Fase 2C):
+  // bila `waktu` dimundurkan (transaksi kertas), stempel sync harus tetap
+  // memakai waktu masuk — kalau memakai tanggal lama, perangkat lain yang
+  // kursor tariknya sudah lewat tanggal itu tidak akan pernah menerima
+  // transaksi ini. Selisih waktu vs createdAt sekaligus menjadi penanda
+  // "dari kertas" (lihat transaksiDariKertas di lib/tanggal.ts).
 
+  if (!konteks.izinkanDuplikat && hari < tanggalHariIni()) {
+    const duplikat = await cariDuplikatPenjualan(hari, cek.total, kunciItemPenjualan(rencana.items));
+    if (duplikat) {
+      return {
+        ok: false,
+        pesan: `Sudah ada penjualan yang sama di ${hari} (${duplikat.nomorResi}, total dan isi sama). Periksa lagi bon kertasnya — mungkin sudah dimasukkan.`,
+        duplikat: true,
+      };
+    }
+  }
   const semua = await daftarTransaksi();
   const urutHariIni = semua.filter((t) => t.waktu.slice(0, 10) === hari).length + 1;
 
@@ -231,8 +295,8 @@ export async function simpanPenjualan(
     jenisBayar: rencana.jenisBayar,
     statusBayar: cek.status,
     dibatalkanPada: null,
-    createdAt: waktu.toISOString(),
-    updatedAt: waktu.toISOString(),
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
   };
 
   try {

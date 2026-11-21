@@ -394,3 +394,54 @@ describe("simpanPesananJahit — nomor urut dari hub (F4, BU-19/21)", () => {
     expect(t?.nomorUrutSementara).toBe(true);
   });
 });
+
+describe("anti-dobel re-entry kertas pesanan jahit (Fase 2C, BU-34)", () => {
+  beforeEach(resetDB);
+
+  it("kunciItemJahitan: urutan tidak penting, nama/harga/jumlah penting", async () => {
+    const { kunciItemJahitan } = await import("./jahitan.ts");
+    const a = { nama: "Gaun", harga: 300000, kuantitas: 1, ukuran: null };
+    const b = { nama: "Kebaya", harga: 200000, kuantitas: 2, ukuran: "M" };
+    expect(kunciItemJahitan([a, b])).toBe(kunciItemJahitan([b, a]));
+    expect(kunciItemJahitan([a])).not.toBe(kunciItemJahitan([{ ...a, harga: 310000 }]));
+    expect(kunciItemJahitan([a])).not.toBe(kunciItemJahitan([{ ...a, kuantitas: 2 }]));
+    // Ukuran/catatan khusus tidak masuk kunci.
+    expect(kunciItemJahitan([a])).toBe(kunciItemJahitan([{ ...a, ukuran: "L" }]));
+  });
+
+  it("pesanan kertas yang sama persis (pemesan sama) ditolak sebagai duplikat", async () => {
+    const kemarin = new Date(Date.now() - 86400000);
+    const r = rencana();
+    const pertama = await simpanPesananJahit(r, { rekening: [rekening], waktu: kemarin });
+    expect(pertama.ok).toBe(true);
+
+    const kedua = await simpanPesananJahit(r, { rekening: [rekening], waktu: kemarin });
+    expect(kedua.ok).toBe(false);
+    if (kedua.ok) return;
+    expect(kedua.duplikat).toBe(true);
+    expect(kedua.pesan).toMatch(/Sudah ada pesanan yang sama/);
+
+    const ketiga = await simpanPesananJahit(r, { rekening: [rekening], waktu: kemarin, izinkanDuplikat: true });
+    expect(ketiga.ok).toBe(true);
+  });
+
+  it("bukan duplikat: pemesan beda memesan barang yang sama di hari yang sama", async () => {
+    const kemarin = new Date(Date.now() - 86400000);
+    const a = await simpanPesananJahit(rencana(), { rekening: [rekening], waktu: kemarin });
+    expect(a.ok).toBe(true);
+    const b = await simpanPesananJahit(rencana({ namaPemesan: "Ibu Dewi" }), { rekening: [rekening], waktu: kemarin });
+    expect(b.ok).toBe(true);
+  });
+
+  it("pesanan kertas: createdAt tetap hari dimasukkan (penanda dari kertas)", async () => {
+    const tigaHariLalu = new Date(Date.now() - 3 * 86400000);
+    const h = await simpanPesananJahit(rencana(), { rekening: [rekening], waktu: tigaHariLalu });
+    expect(h.ok).toBe(true);
+    if (!h.ok) return;
+    const lengkap = await ambilPesananJahit(h.pesanan.id);
+    const { transaksiDariKertas } = await import("./tanggal.ts");
+    expect(lengkap?.transaksi.waktu.slice(0, 10)).toBe(tigaHariLalu.toISOString().slice(0, 10));
+    expect(lengkap?.transaksi.createdAt.slice(0, 10)).toBe(new Date().toISOString().slice(0, 10));
+    expect(transaksiDariKertas(lengkap!.transaksi.waktu, lengkap!.transaksi.createdAt)).toBe(true);
+  });
+});
