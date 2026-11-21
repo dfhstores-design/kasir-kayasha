@@ -6,14 +6,29 @@ import {
   pesanSelisih,
   transaksiPadaHari,
   type BiayaRingkas,
+  type PembayaranRingkas,
   type TransaksiRingkas,
 } from "./bazar.ts";
 
-const t = (total: number, jenisBayar: TransaksiRingkas["jenisBayar"], dibatalkan = false, waktu = "2026-11-10T10:00:00.000Z"): TransaksiRingkas => ({
+const p = (nominal: number, metode: PembayaranRingkas["metode"]): PembayaranRingkas => ({
+  nominal,
+  metode,
+  waktu: "2026-11-10T10:00:00.000Z",
+});
+
+/** Bawaan: lunas sekali bayar penuh dengan metodenya (bentuk lama). */
+const t = (
+  total: number,
+  jenisBayar: TransaksiRingkas["jenisBayar"],
+  pembayaran: PembayaranRingkas[] = [p(total, jenisBayar)],
+  dibatalkan = false,
+  waktu = "2026-11-10T10:00:00.000Z",
+): TransaksiRingkas => ({
   total,
   jenisBayar,
   dibatalkan,
   waktu,
+  pembayaran,
 });
 
 const b = (nominal: number, kategori: BiayaRingkas["kategori"] = "sewa_booth", tanggal = "2026-11-10"): BiayaRingkas => ({
@@ -28,15 +43,17 @@ describe("hitungRingkasanKeuangan", () => {
     const r = hitungRingkasanKeuangan([t(100000, "tunai"), t(250000, "transfer"), t(50000, "qris")], []);
     expect(r.jumlahTransaksi).toBe(3);
     expect(r.omzet).toBe(400000);
+    expect(r.uangMasuk).toBe(400000);
     expect(r.tunai).toBe(100000);
     expect(r.transfer).toBe(250000);
     expect(r.qris).toBe(50000);
   });
 
-  it("transaksi dibatalkan TIDAK masuk omzet", () => {
-    const r = hitungRingkasanKeuangan([t(100000, "tunai"), t(999999, "tunai", true)], []);
+  it("transaksi dibatalkan TIDAK masuk omzet maupun uang masuk", () => {
+    const r = hitungRingkasanKeuangan([t(100000, "tunai"), t(999999, "tunai", [p(999999, "tunai")], true)], []);
     expect(r.jumlahTransaksi).toBe(1);
     expect(r.omzet).toBe(100000);
+    expect(r.uangMasuk).toBe(100000);
   });
 
   it("menghitung laba = omzet − biaya", () => {
@@ -61,18 +78,77 @@ describe("hitungRingkasanKeuangan", () => {
   it("transaksi tanpa metode bayar dipisah", () => {
     const r = hitungRingkasanKeuangan([t(75000, null)], []);
     expect(r.tanpaMetode).toBe(75000);
+    expect(r.uangMasuk).toBe(75000);
     expect(r.tunai).toBe(0);
   });
 
   it("data kosong menghasilkan nol, bukan error", () => {
     const r = hitungRingkasanKeuangan([], []);
-    expect(r).toMatchObject({ jumlahTransaksi: 0, omzet: 0, totalBiaya: 0, laba: 0 });
+    expect(r).toMatchObject({ jumlahTransaksi: 0, omzet: 0, uangMasuk: 0, totalBiaya: 0, laba: 0 });
+  });
+
+  it("F2: DP + pelunasan beda metode dihitung terpisah, bukan dibebankan ke metode terakhir", () => {
+    // Pesanan total 350rb: DP tunai 175rb + pelunasan transfer 175rb.
+    // Cara lama: tunai 0 + transfer 350rb. Cara benar: tunai 175rb + transfer 175rb.
+    const r = hitungRingkasanKeuangan(
+      [t(350000, "transfer", [p(175000, "tunai"), p(175000, "transfer")])],
+      [],
+    );
+    expect(r.omzet).toBe(350000);
+    expect(r.uangMasuk).toBe(350000);
+    expect(r.tunai).toBe(175000);
+    expect(r.transfer).toBe(175000);
+  });
+
+  it("F2: omzet dipisah dari uang masuk bila pesanan baru DP", () => {
+    // Pesanan total 840rb, baru dibayar tunai 175rb + transfer 527.500.
+    const r = hitungRingkasanKeuangan(
+      [t(840000, "transfer", [p(175000, "tunai"), p(527500, "transfer")])],
+      [],
+    );
+    expect(r.omzet).toBe(840000);
+    expect(r.uangMasuk).toBe(702500);
+    expect(r.tunai).toBe(175000);
+    expect(r.transfer).toBe(527500);
+  });
+
+  it("F2: angka trial butik 21 Nov 2026 — omzet 5.840.000, uang masuk 5.702.500, tunai 2.735.000", () => {
+    const r = hitungRingkasanKeuangan(
+      [
+        t(5000000, "transfer", [p(2560000, "tunai"), p(2440000, "transfer")]),
+        t(840000, "transfer", [p(175000, "tunai"), p(527500, "transfer")]),
+      ],
+      [],
+    );
+    expect(r.omzet).toBe(5840000);
+    expect(r.uangMasuk).toBe(5702500);
+    expect(r.tunai).toBe(2735000);
+    expect(r.transfer).toBe(2967500);
+  });
+
+  it("F2: angka trial bazar 2 — tunai benar 1.445.000, bukan 1.745.000 versi lama", () => {
+    // Pesanan total 600rb jenisBayar tunai tapi dibayar tunai 300rb + transfer 300rb:
+    // cara lama membebankan penuh 600rb ke tunai.
+    const r = hitungRingkasanKeuangan(
+      [
+        t(4090000, "transfer", [p(1145000, "tunai"), p(2507500, "transfer")]),
+        t(600000, "tunai", [p(300000, "tunai"), p(300000, "transfer")]),
+      ],
+      [],
+    );
+    expect(r.omzet).toBe(4690000);
+    expect(r.uangMasuk).toBe(4252500);
+    expect(r.tunai).toBe(1445000);
+    expect(r.transfer).toBe(2807500);
   });
 });
 
 describe("filter harian", () => {
   it("transaksiPadaHari hanya hari tersebut", () => {
-    const daftar = [t(1, "tunai", false, "2026-11-10T08:00:00.000Z"), t(2, "tunai", false, "2026-11-11T08:00:00.000Z")];
+    const daftar = [
+      t(1, "tunai", undefined, false, "2026-11-10T08:00:00.000Z"),
+      t(2, "tunai", undefined, false, "2026-11-11T08:00:00.000Z"),
+    ];
     expect(transaksiPadaHari(daftar, "2026-11-10")).toHaveLength(1);
   });
 

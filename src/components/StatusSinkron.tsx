@@ -33,7 +33,7 @@ export default function StatusSinkron() {
           antrean,
           terakhirBerhasil: null,
           terakhirTarik: null,
-          ditarik: { transaksiBaru: 0, transaksiDigabung: 0, produk: 0, bazar: 0 },
+          ditarik: { transaksiBaru: 0, transaksiDigabung: 0, produk: 0, bazar: 0, biayaBazar: 0 },
           konflik: 0,
           pesan: null,
         });

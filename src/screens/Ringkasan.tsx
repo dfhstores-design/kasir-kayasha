@@ -7,6 +7,7 @@ import {
   ambilTransaksi,
   daftarBiaya as ambilBiaya,
   daftarBazar,
+  daftarPembayaran,
   daftarTransaksi,
   itemBazar,
   type BazarRecord,
@@ -20,6 +21,7 @@ import {
   biayaPadaHari,
   hitungRingkasanKeuangan,
   labelKategori,
+  metodeBayarSah,
   transaksiPadaHari,
 } from "../lib/bazar.ts";
 import { labelJenisBayar } from "../lib/penjualan.ts";
@@ -104,6 +106,8 @@ export default function Ringkasan({ bazar }: Props) {
   const [trx, setTrx] = useState<TransaksiRecord[]>([]);
   const [semuaTrx, setSemuaTrx] = useState<TransaksiRecord[]>([]);
   const [biaya, setBiaya] = useState<BiayaBazarRecord[]>([]);
+  // Pembayaran per transaksi (F2): uang masuk dihitung dari baris pembayaran.
+  const [bayarPerTrx, setBayarPerTrx] = useState<Map<string, PembayaranRecord[]>>(new Map());
   const [selisih, setSelisih] = useState(0);
   const [hari, setHari] = useState(new Date().toISOString().slice(0, 10));
   const [memuat, setMemuat] = useState(true);
@@ -123,10 +127,18 @@ export default function Ringkasan({ bazar }: Props) {
       const bz = bazar ?? (await daftarBazar()).find((b) => b.status === "selesai") ?? null;
       const biayaBazar = bz ? await ambilBiaya(bz.id) : [];
       const items = bz ? await itemBazar(bz.id) : [];
+      const semuaBayar = await daftarPembayaran();
       if (!hidup) return;
       setSemuaTrx(semua);
       setTrx(bz ? semua.filter((t) => t.bazarId === bz.id) : []);
       setBiaya(biayaBazar);
+      const petaBayar = new Map<string, PembayaranRecord[]>();
+      for (const p of semuaBayar) {
+        const daftar = petaBayar.get(p.transaksiId) ?? [];
+        daftar.push(p);
+        petaBayar.set(p.transaksiId, daftar);
+      }
+      setBayarPerTrx(petaBayar);
       setSelisih(items.reduce((n, i) => n + Math.abs(i.selisih ?? 0), 0));
       setMemuat(false);
     })().catch(() => setMemuat(false));
@@ -191,6 +203,13 @@ export default function Ringkasan({ bazar }: Props) {
       jenisBayar: t.jenisBayar,
       dibatalkan: t.dibatalkanPada !== null,
       waktu: t.waktu,
+      // F2: uang masuk & per-metode dihitung dari baris pembayaran ini,
+      // bukan dari total + jenisBayar transaksi.
+      pembayaran: (bayarPerTrx.get(t.id) ?? []).map((p) => ({
+        nominal: p.nominal,
+        metode: metodeBayarSah(p.metode),
+        waktu: p.waktu,
+      })),
     }));
 
   const daftarTrx = keRingkas(trx);
@@ -234,6 +253,10 @@ export default function Ringkasan({ bazar }: Props) {
           <span>Omzet hari itu</span>
           <span className="money">{formatRupiah(harian.omzet)}</span>
         </div>
+        <div className="ringkas">
+          <span>Uang masuk hari itu</span>
+          <span className="money">{formatRupiah(harian.uangMasuk)}</span>
+        </div>
         <div className="ringkas soft">
           <span>Tunai</span>
           <span>{formatRupiah(harian.tunai)}</span>
@@ -269,6 +292,10 @@ export default function Ringkasan({ bazar }: Props) {
         <div className="ringkas">
           <span>Omzet bazar</span>
           <span className="money">{formatRupiah(total.omzet)}</span>
+        </div>
+        <div className="ringkas">
+          <span>Uang masuk</span>
+          <span className="money">{formatRupiah(total.uangMasuk)}</span>
         </div>
         <div className="ringkas">
           <span>Biaya bazar</span>

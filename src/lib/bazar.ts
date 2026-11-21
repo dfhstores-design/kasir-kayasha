@@ -27,16 +27,45 @@ export function labelKategori(k: KategoriBiaya): string {
 
 export type MetodeBayar = "tunai" | "transfer" | "qris" | null;
 
+/**
+ * Metode bayar yang sah. Nilai lain (mis. data lama berisi string bebas)
+ * dihitung sebagai tanpa metode — jangan sampai merusak hitungan per-metode.
+ */
+export function metodeBayarSah(metode: string | null): MetodeBayar {
+  return metode === "tunai" || metode === "transfer" || metode === "qris" ? metode : null;
+}
+
+/** Satu baris pembayaran yang sudah diterima untuk sebuah transaksi. */
+export interface PembayaranRingkas {
+  nominal: Rupiah;
+  metode: MetodeBayar;
+  waktu: string;
+}
+
 export interface TransaksiRingkas {
   total: Rupiah;
+  /**
+   * Metode bayar TERAKHIR (hanya untuk label di riwayat). Perhitungan uang
+   * per metode di hitungRingkasanKeuangan memakai `pembayaran`, BUKAN kolom
+   * ini — pesanan yang dibayar bertahap (DP tunai + pelunasan transfer)
+   * tidak boleh dibebankan penuh ke satu metode (F2, trial 21 Nov 2026).
+   */
   jenisBayar: MetodeBayar;
   dibatalkan: boolean;
   waktu: string;
+  /** Semua pembayaran yang sudah diterima untuk transaksi ini. */
+  pembayaran: readonly PembayaranRingkas[];
 }
 
 export interface RingkasanKeuangan {
   jumlahTransaksi: number;
+  /** Nilai pesanan (Σ total). Bisa lebih besar dari uangMasuk bila ada
+   *  pesanan yang baru DP — omzet BUKAN uang di tangan kasir. */
   omzet: Rupiah;
+  /** Uang yang benar-benar sudah diterima (Σ baris pembayaran).
+   *  Inilah yang dipakai tutup harian: "uang tunai yang seharusnya ada
+   *  di tangan kasir" dihitung dari pembayaran tunai di sini (BU-34). */
+  uangMasuk: Rupiah;
   tunai: Rupiah;
   transfer: Rupiah;
   qris: Rupiah;
@@ -48,8 +77,14 @@ export interface RingkasanKeuangan {
 }
 
 /**
- * Menghitung omzet, biaya, dan laba.
- * Transaksi yang DIBATALKAN tidak dihitung sebagai omzet.
+ * Menghitung omzet, uang masuk, biaya, dan laba — dari baris PEMBAYARAN,
+ * bukan dari total pesanan (F2, trial 21 Nov 2026).
+ * - Omzet = Σ total pesanan (nilai pesanan, termasuk yang baru DP).
+ * - Uang masuk & per-metode = Σ baris pembayaran (uang yang benar-benar
+ *   diterima). Pesanan DP tunai + pelunasan transfer dihitung terpisah
+ *   per metode, bukan dibebankan penuh ke metode terakhir.
+ * Transaksi yang DIBATALKAN tidak dihitung sama sekali (omzet maupun
+ * uang masuk) — nasib DP pesanan void masih menunggu keputusan (F8).
  */
 export function hitungRingkasanKeuangan(
   transaksi: readonly TransaksiRingkas[],
@@ -58,6 +93,7 @@ export function hitungRingkasanKeuangan(
   const sah = transaksi.filter((t) => !t.dibatalkan);
 
   let omzet = 0;
+  let uangMasuk = 0;
   let tunai = 0;
   let transfer = 0;
   let qris = 0;
@@ -65,18 +101,21 @@ export function hitungRingkasanKeuangan(
 
   for (const t of sah) {
     omzet += t.total;
-    switch (t.jenisBayar) {
-      case "tunai":
-        tunai += t.total;
-        break;
-      case "transfer":
-        transfer += t.total;
-        break;
-      case "qris":
-        qris += t.total;
-        break;
-      default:
-        tanpaMetode += t.total;
+    for (const p of t.pembayaran) {
+      uangMasuk += p.nominal;
+      switch (p.metode) {
+        case "tunai":
+          tunai += p.nominal;
+          break;
+        case "transfer":
+          transfer += p.nominal;
+          break;
+        case "qris":
+          qris += p.nominal;
+          break;
+        default:
+          tanpaMetode += p.nominal;
+      }
     }
   }
 
@@ -90,6 +129,7 @@ export function hitungRingkasanKeuangan(
   return {
     jumlahTransaksi: sah.length,
     omzet,
+    uangMasuk,
     tunai,
     transfer,
     qris,

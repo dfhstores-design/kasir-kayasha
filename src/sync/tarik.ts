@@ -19,6 +19,7 @@
 import type { IDBPDatabase } from "idb";
 import {
   getDB,
+  KATEGORI_BIAYA,
   type BazarRecord,
   type JournalRecord,
   type KasirDB,
@@ -29,7 +30,7 @@ import {
 import { buatId } from "../db/repositori.ts";
 import { recomputeJurnalDariDokumen } from "../lib/jurnal.ts";
 import { sapaanDariWaktu } from "../lib/sapaan.ts";
-import { periksaKiriman, type Kiriman, type KirimanBazar, type KirimanProduk, type KirimanTransaksi, type Perubahan } from "./logika.ts";
+import { periksaKiriman, type Kiriman, type KirimanBazar, type KirimanBiayaBazar, type KirimanProduk, type KirimanTransaksi, type Perubahan } from "./logika.ts";
 
 type DB = IDBPDatabase<KasirDB>;
 
@@ -44,6 +45,8 @@ export interface HasilTarik {
   transaksiDigabung: number;
   produkDigabung: number;
   bazarDigabung: number;
+  /** Biaya bazar yang masuk/dihapus dari hub (F1). */
+  biayaBazarDigabung: number;
   konflik: number;
   /** `diubah_pada` terbaru di antara semua baris yang diterima (kursor). */
   kursorBaru: string | null;
@@ -528,6 +531,36 @@ async function terapkanBazar(db: DB, k: KirimanBazar, ctx: KonteksTarik): Promis
 }
 
 /**
+ * Menerapkan satu biaya bazar dari hub (F1, BU-34). Biaya tidak pernah
+ * diubah di aplikasi, jadi gabungnya sederhana: yang terbaru menang,
+ * tombstone menghapus baris lokal. Mengembalikan true bila ada yang berubah.
+ */
+async function terapkanBiayaBazar(db: DB, k: KirimanBiayaBazar): Promise<boolean> {
+  if (k.dihapus === true) {
+    const lokal = await db.get("bazar_biaya", k.id);
+    if (!lokal) return false;
+    await db.delete("bazar_biaya", k.id);
+    return true;
+  }
+  if (!(KATEGORI_BIAYA as readonly string[]).includes(k.kategori)) return false;
+  const lokal = await db.get("bazar_biaya", k.id);
+  // Baris lokal yang sama/lebih baru dipertahankan (tidak ada edit biaya,
+  // jadi ini hanya pengaman jam perangkat yang selisih).
+  if (lokal && k.diubahPada <= lokal.createdAt) return false;
+  await db.put("bazar_biaya", {
+    id: k.id,
+    bazarId: k.bazarId ?? "",
+    kategori: k.kategori,
+    judul: k.judul,
+    nominal: k.nominal,
+    tanggal: k.tanggal,
+    catatan: k.catatan ?? null,
+    createdAt: k.dibuatPada,
+  });
+  return true;
+}
+
+/**
  * Menerapkan satu paket perubahan dari hub. Satu baris yang rusak dicatat
  * di log lalu dilewati — tidak pernah menggagalkan paket lainnya.
  */
@@ -537,6 +570,7 @@ export async function terapkanPerubahan(db: DB, perubahan: Perubahan, ctx: Konte
     transaksiDigabung: 0,
     produkDigabung: 0,
     bazarDigabung: 0,
+    biayaBazarDigabung: 0,
     konflik: 0,
     kursorBaru: null,
   };
@@ -545,7 +579,12 @@ export async function terapkanPerubahan(db: DB, perubahan: Perubahan, ctx: Konte
     if (!kursor || waktu > kursor) kursor = waktu;
   };
 
-  const semua: Kiriman[] = [...perubahan.transaksi, ...perubahan.produk, ...perubahan.bazar];
+  const semua: Kiriman[] = [
+    ...perubahan.transaksi,
+    ...perubahan.produk,
+    ...perubahan.bazar,
+    ...perubahan.biayaBazar,
+  ];
   for (const mentah of semua) {
     const cek = periksaKiriman(mentah);
     if (!cek.ok) {
@@ -567,9 +606,11 @@ export async function terapkanPerubahan(db: DB, perubahan: Perubahan, ctx: Konte
       } else if (k.jenis === "produk") {
         await terapkanProduk(db, k, ctx);
         hasil.produkDigabung += 1;
-      } else {
+      } else if (k.jenis === "bazar") {
         await terapkanBazar(db, k, ctx);
         hasil.bazarDigabung += 1;
+      } else {
+        if (await terapkanBiayaBazar(db, k)) hasil.biayaBazarDigabung += 1;
       }
       catatKursor(k.diubahPada);
     } catch (e) {

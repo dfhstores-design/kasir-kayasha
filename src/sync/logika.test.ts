@@ -17,6 +17,7 @@ import {
   periksaKiriman,
   prosesBatch,
   type DBCloud,
+  type KirimanBiayaBazar,
   type KirimanTransaksi,
 } from "./logika.ts";
 
@@ -28,6 +29,7 @@ class DBTiruan implements DBCloud {
     payments: [],
     products: [],
     bazars: [],
+    bazar_biaya: [],
     sync_log: [],
   };
 
@@ -83,8 +85,17 @@ class DBTiruan implements DBCloud {
       const t = this.tabel[tabel]!;
       const id = baris.id as string;
       const i = t.findIndex((r) => r.id === id);
-      if (i >= 0) for (const [k, v] of Object.entries(baris)) t[i]![k] = v;
-      else t.push(baris);
+      if (i >= 0) {
+        // Setia dengan SQLite: ON CONFLICT DO UPDATE SET hanya mengubah
+        // kolom yang disebut (mis. tombstone hanya mengubah dihapus_pada).
+        const m = sql.match(/DO UPDATE SET (.+)$/);
+        if (m) {
+          const hanya = m[1]!.split(",").map((s) => s.trim().split("=")[0]!.trim());
+          for (const k of hanya) t[i]![k] = baris[k];
+        } else {
+          for (const [k, v] of Object.entries(baris)) t[i]![k] = v;
+        }
+      } else t.push(baris);
       return;
     }
     throw new Error("SQL tak dikenal: " + sql.slice(0, 40));
@@ -93,6 +104,9 @@ class DBTiruan implements DBCloud {
   private cari(sql: string, nilai: unknown[]) {
     if (sql.includes("FROM sync_log")) {
       return this.tabel.sync_log!.find((r) => r.kunci === nilai[0]) ?? null;
+    }
+    if (sql.includes("FROM bazar_biaya")) {
+      return this.tabel.bazar_biaya!.find((r) => r.id === nilai[0]) ?? null;
     }
     throw new Error("SELECT tak dikenal");
   }
@@ -157,9 +171,47 @@ const transaksi = (over: Partial<KirimanTransaksi> = {}): KirimanTransaksi => ({
   ...over,
 });
 
+const biaya = (over: Partial<KirimanBiayaBazar> = {}): KirimanBiayaBazar => ({
+  jenis: "biaya_bazar",
+  id: "55555555-5555-5555-5555-555555555555",
+  bazarId: "44444444-4444-4444-4444-444444444444",
+  kategori: "sewa_booth",
+  judul: "Sewa booth",
+  nominal: 750000,
+  tanggal: "2026-11-10",
+  catatan: null,
+  dibuatPada: "2026-11-10T08:00:00.000Z",
+  diubahPada: "2026-11-10T08:00:00.000Z",
+  ...over,
+});
+
 describe("periksaKiriman", () => {
   it("menerima transaksi yang sah", () => {
     expect(periksaKiriman(transaksi()).ok).toBe(true);
+  });
+
+  it("F1: menerima biaya bazar yang sah", () => {
+    expect(periksaKiriman(biaya()).ok).toBe(true);
+  });
+
+  it("F1: menolak biaya dengan kategori tak dikenal", () => {
+    const h = periksaKiriman(biaya({ kategori: "entah" as KirimanBiayaBazar["kategori"] }));
+    expect(h.ok).toBe(false);
+  });
+
+  it("F1: menolak biaya dengan nominal negatif", () => {
+    expect(periksaKiriman(biaya({ nominal: -1000 })).ok).toBe(false);
+  });
+
+  it("F1: tombstone biaya hanya butuh id + waktu hapus", () => {
+    expect(
+      periksaKiriman({
+        jenis: "biaya_bazar",
+        id: "55555555-5555-5555-5555-555555555555",
+        diubahPada: "2026-11-10T09:00:00.000Z",
+        dihapus: true,
+      }).ok,
+    ).toBe(true);
   });
 
   it("menolak total non-integer (uang harus integer)", () => {
@@ -375,5 +427,78 @@ describe("ambilPerubahan — tarik (Fase 2B)", () => {
     expect(baris.kontak).toBe("0812000000");
     expect(baris.nomor_urut_bulan).toBe(3);
     expect(baris.jenis_bayar).toBe("transfer");
+  });
+});
+
+describe("biaya bazar tersinkron (F1, BU-34)", () => {
+  it("biaya tersimpan dan ditarik perangkat lain", async () => {
+    const db = new DBTiruan();
+    const hasil = await prosesBatch(db, [biaya()], "2026-11-10T09:00:00.000Z");
+    expect(hasil.ditolak).toHaveLength(0);
+    expect(db.tabel.bazar_biaya).toHaveLength(1);
+    expect(db.tabel.bazar_biaya[0]?.judul).toBe("Sewa booth");
+    expect(db.tabel.bazar_biaya[0]?.nominal).toBe(750000);
+
+    const tarik = await ambilPerubahan(db, {});
+    expect(tarik.biayaBazar).toHaveLength(1);
+    expect(tarik.biayaBazar[0]?.judul).toBe("Sewa booth");
+    expect(tarik.biayaBazar[0]?.dihapus).toBeUndefined();
+  });
+
+  it("kirim ulang biaya yang sama tidak menggandakan", async () => {
+    const db = new DBTiruan();
+    await prosesBatch(db, [biaya()], "2026-11-10T09:00:00.000Z");
+    const ulang = await prosesBatch(db, [biaya()], "2026-11-10T09:05:00.000Z");
+    expect(ulang.diterima).toHaveLength(1);
+    expect(db.tabel.bazar_biaya).toHaveLength(1);
+  });
+
+  it("tombstone menandai hapus dan ikut ditarik", async () => {
+    const db = new DBTiruan();
+    await prosesBatch(db, [biaya()], "2026-11-10T09:00:00.000Z");
+    const hapus = await prosesBatch(
+      db,
+      [biaya({ diubahPada: "2026-11-10T10:00:00.000Z", dihapus: true })],
+      "2026-11-10T10:00:00.000Z",
+    );
+    expect(hapus.ditolak).toHaveLength(0);
+    expect(db.tabel.bazar_biaya).toHaveLength(1);
+    expect(db.tabel.bazar_biaya[0]?.dihapus_pada).toBe("2026-11-10T10:00:00.000Z");
+
+    const tarik = await ambilPerubahan(db, { sejak: "2026-11-10T09:30:00.000Z" });
+    expect(tarik.biayaBazar).toHaveLength(1);
+    expect(tarik.biayaBazar[0]?.dihapus).toBe(true);
+  });
+
+  it("upsert yang lebih lama dari tombstone tidak menghidupkan lagi", async () => {
+    const db = new DBTiruan();
+    await prosesBatch(db, [biaya()], "2026-11-10T09:00:00.000Z");
+    await prosesBatch(
+      db,
+      [biaya({ diubahPada: "2026-11-10T10:00:00.000Z", dihapus: true })],
+      "2026-11-10T10:00:00.000Z",
+    );
+    // Kiriman lama yang datang belakangan (jam perangkat selisih): tetap diterima
+    // (supaya antrean pengirim bersih) tapi tidak menulis ulang baris.
+    const telat = await prosesBatch(
+      db,
+      [biaya({ diubahPada: "2026-11-10T09:30:00.000Z", judul: "Sewa booth (lama)" })],
+      "2026-11-10T10:30:00.000Z",
+    );
+    expect(telat.diterima).toHaveLength(1);
+    expect(db.tabel.bazar_biaya[0]?.dihapus_pada).toBe("2026-11-10T10:00:00.000Z");
+    expect(db.tabel.bazar_biaya[0]?.judul).toBe("Sewa booth");
+  });
+
+  it("biaya rusak ditolak sendiri, biaya sah tetap masuk", async () => {
+    const db = new DBTiruan();
+    const hasil = await prosesBatch(
+      db,
+      [biaya(), biaya({ id: "66666666-6666-6666-6666-666666666666", nominal: -5 })],
+      "2026-11-10T09:00:00.000Z",
+    );
+    expect(hasil.diterima).toHaveLength(1);
+    expect(hasil.ditolak).toHaveLength(1);
+    expect(db.tabel.bazar_biaya).toHaveLength(1);
   });
 });

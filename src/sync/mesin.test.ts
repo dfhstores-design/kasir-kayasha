@@ -375,3 +375,87 @@ describe("daftarAntrean — daftar belum terkirim (Fase 2B)", () => {
     expect(daftar[0]?.judul).toContain("Sari");
   });
 });
+
+describe("biaya bazar masuk antrean sync (F1, BU-34)", () => {
+  beforeEach(() => {
+    (globalThis as unknown as { indexedDB: IDBFactory }).indexedDB = new IDBFactory();
+    resetKoneksiDB();
+  });
+
+  async function bazarDenganBiaya() {
+    const { buatBazar, tambahBiaya } = await import("../db/repositori.ts");
+    const bz = await buatBazar("Pameran", "2026-11-10", null);
+    const hasil = await tambahBiaya(bz.id, {
+      kategori: "sewa_booth",
+      judul: "Sewa booth",
+      nominal: 750000,
+      tanggal: "2026-11-10",
+      catatan: null,
+    });
+    if (!hasil.ok) throw new Error("tambahBiaya gagal");
+    return { bz, biaya: hasil.biaya };
+  }
+
+  it("tambahBiaya menandai biaya untuk sync", async () => {
+    const { biaya } = await bazarDenganBiaya();
+    expect(await jumlahAntrean()).toBe(2); // bazar baru + biaya
+    const antrean = await daftarAntrean();
+    const baris = antrean.find((a) => a.jenis === "Biaya bazar");
+    expect(baris?.judul).toContain("Sewa booth");
+    expect(baris?.judul).toContain("750.000");
+    expect(biaya.id).toBeTruthy();
+  });
+
+  it("hapus menggantikan upsert yang masih antre (satu baris, aksi hapus)", async () => {
+    const { hapusBiaya } = await import("../db/repositori.ts");
+    const { biaya } = await bazarDenganBiaya();
+    await hapusBiaya(biaya.id);
+    const db = await getDB();
+    const outbox = await db.getAll("outbox");
+    const baris = outbox.filter((o) => o.idRecord === biaya.id);
+    expect(baris).toHaveLength(1);
+    expect(baris[0]?.aksi).toBe("hapus");
+  });
+
+  it("kirimAntrean mengirim kiriman biaya_bazar, bukan mengabaikannya", async () => {
+    const { biaya } = await bazarDenganBiaya();
+    let terkirim: Array<Record<string, unknown>> = [];
+    const r = await kirimAntrean({
+      url: "https://contoh/api/sync",
+      fetchImpl: (async (_u: string, init?: RequestInit) => {
+        terkirim = JSON.parse(String(init?.body ?? "{}")).kiriman as Array<Record<string, unknown>>;
+        const diterima = terkirim.map((k) => String(k.id));
+        return new Response(JSON.stringify({ ok: true, diterima }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      }) as unknown as typeof fetch,
+    });
+    expect(r.status).toBe("siap");
+    const kirimanBiaya = terkirim.find((k) => k.jenis === "biaya_bazar");
+    expect(kirimanBiaya?.id).toBe(biaya.id);
+    expect(kirimanBiaya?.judul).toBe("Sewa booth");
+    expect(kirimanBiaya?.nominal).toBe(750000);
+    expect(await jumlahAntrean()).toBe(0);
+  });
+
+  it("kirimAntrean mengirim tombstone untuk biaya yang dihapus", async () => {
+    const { hapusBiaya } = await import("../db/repositori.ts");
+    const { biaya } = await bazarDenganBiaya();
+    await hapusBiaya(biaya.id);
+    let terkirim: Array<Record<string, unknown>> = [];
+    await kirimAntrean({
+      url: "https://contoh/api/sync",
+      fetchImpl: (async (_u: string, init?: RequestInit) => {
+        terkirim = JSON.parse(String(init?.body ?? "{}")).kiriman as Array<Record<string, unknown>>;
+        const diterima = terkirim.map((k) => String(k.id));
+        return new Response(JSON.stringify({ ok: true, diterima }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      }) as unknown as typeof fetch,
+    });
+    const tombstone = terkirim.find((k) => k.jenis === "biaya_bazar" && k.id === biaya.id);
+    expect(tombstone?.dihapus).toBe(true);
+  });
+});

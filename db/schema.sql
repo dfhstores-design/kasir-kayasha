@@ -100,6 +100,32 @@ CREATE TABLE IF NOT EXISTS bazars (
   diubah_pada TEXT NOT NULL
 );
 
+-- ---------------------------------------------------------------- biaya bazar (F1, BU-34)
+--
+-- Pengeluaran bazar harus tersinkron agar owner di perangkat lain bisa
+-- melihatnya saat rekonsiliasi tutup bazar. Biaya tidak pernah diubah
+-- (hanya tambah + hapus): `diubah_pada` = `dibuat_pada` untuk baris biasa.
+-- `dihapus_pada` = tombstone: baris yang sudah dihapus di perangkat pengirim
+-- tetap tersimpan di sini supaya perangkat lain ikut menghapus (bukan
+-- dihapus fisik dari hub, supaya yang menarik belakangan masih tahu).
+
+CREATE TABLE IF NOT EXISTS bazar_biaya (
+  id          TEXT PRIMARY KEY,
+  bazar_id    TEXT,
+  kategori    TEXT NOT NULL DEFAULT '',
+  judul       TEXT NOT NULL DEFAULT '',
+  nominal     INTEGER NOT NULL DEFAULT 0,
+  tanggal     TEXT NOT NULL DEFAULT '',
+  catatan     TEXT,
+  dibuat_pada TEXT NOT NULL DEFAULT '',
+  diubah_pada TEXT NOT NULL,
+  perangkat   TEXT,
+  dihapus_pada TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_biaya_bazar ON bazar_biaya (bazar_id);
+CREATE INDEX IF NOT EXISTS idx_biaya_diubah ON bazar_biaya (diubah_pada);
+
 -- ---------------------------------------------------------------- jejak sync
 
 -- Mencatat setiap kiriman yang sudah diterima, agar retry tidak menggandakan data.
@@ -173,3 +199,9 @@ CREATE INDEX IF NOT EXISTS idx_pengiriman_pelanggan ON pengiriman (pelanggan_id)
 --   ALTER TABLE bazars ADD COLUMN catatan TEXT;
 --   ALTER TABLE bazars ADD COLUMN pin_kasir_hash TEXT;
 -- Jangan jalankan ALTER dua kali pada kolom yang sama (SQLite menolak).
+--
+-- ---------------------------------------------------------------- migrasi F1 (biaya bazar tersinkron)
+--
+-- Tabel `bazar_biaya` di atas dibuat otomatis di database BARU. Database yang
+-- SUDAH ADA cukup menjalankan ulang berkas ini (CREATE TABLE IF NOT EXISTS):
+--   npx wrangler d1 execute <nama-db> --remote --file=./db/schema.sql

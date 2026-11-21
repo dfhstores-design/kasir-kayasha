@@ -24,7 +24,7 @@ export interface RingkasanSync {
 /** Ringkasan satu putaran sinkronisasi penuh (kirim + tarik, Fase 2B). */
 export interface RingkasanSinkronisasi extends RingkasanSync {
   terakhirTarik: string | null;
-  ditarik: { transaksiBaru: number; transaksiDigabung: number; produk: number; bazar: number };
+  ditarik: { transaksiBaru: number; transaksiDigabung: number; produk: number; bazar: number; biayaBazar: number };
   konflik: number;
 }
 
@@ -60,10 +60,16 @@ async function simpanTerakhirTarik(waktu: string | null): Promise<void> {
   if (settings) await db.put("settings", { ...settings, syncTarikTerakhir: waktu });
 }
 
-/** Menambah satu baris outbox. TIDAK menyentuh jaringan. */
+/**
+ * Menambah satu baris outbox. TIDAK menyentuh jaringan.
+ * `aksi` "hapus" (F1) menggantikan upsert yang masih antre untuk record yang
+ * sama: baris yang sudah dihapus tidak perlu lagi dikirim isinya, cukup
+ * tombstone-nya.
+ */
 export async function tandaiUntukSync(
   jenisRecord: OutboxRecord["jenisRecord"],
   idRecord: string,
+  aksi: OutboxRecord["aksi"] = "upsert",
 ): Promise<void> {
   const db = await getDB();
   // Satu baris per record: kiriman berulang tidak menumpuk.
@@ -71,6 +77,7 @@ export async function tandaiUntukSync(
   if (ada.length > 0) {
     await db.put("outbox", {
       ...ada[0]!,
+      aksi,
       terakhirDicoba: null,
       dibuatPada: new Date().toISOString(),
     });
@@ -80,7 +87,7 @@ export async function tandaiUntukSync(
     id: buatId(),
     jenisRecord,
     idRecord,
-    aksi: "upsert",
+    aksi,
     percobaan: 0,
     terakhirDicoba: null,
     dibuatPada: new Date().toISOString(),
@@ -186,6 +193,42 @@ async function siapkanKiriman(o: OutboxRecord, perangkat: string): Promise<Kirim
       catatan: b.catatan,
       pinKasirHash: b.pinKasirHash,
       diubahPada: b.updatedAt ?? b.createdAt,
+    };
+  }
+
+  if (o.jenisRecord === "biaya_bazar") {
+    // Hapusan: baris lokal sudah tidak ada — kirim tombstone saja. Waktu
+    // hapus = waktu antrean dibuat (dibuatPada diperbarui saat ditandai).
+    if (o.aksi === "hapus") {
+      return {
+        jenis: "biaya_bazar",
+        id: o.idRecord,
+        bazarId: null,
+        kategori: "lainnya",
+        judul: "",
+        nominal: 0,
+        tanggal: "",
+        dibuatPada: o.dibuatPada,
+        diubahPada: o.dibuatPada,
+        perangkat,
+        dihapus: true,
+      };
+    }
+    const b = await db.get("bazar_biaya", o.idRecord);
+    if (!b) return null;
+    return {
+      jenis: "biaya_bazar",
+      id: b.id,
+      bazarId: b.bazarId,
+      kategori: b.kategori,
+      judul: b.judul,
+      nominal: b.nominal,
+      tanggal: b.tanggal,
+      catatan: b.catatan,
+      dibuatPada: b.createdAt,
+      // Biaya tidak pernah diubah: createdAt adalah versinya.
+      diubahPada: b.createdAt,
+      perangkat,
     };
   }
 
@@ -399,7 +442,14 @@ export async function tarikPerubahan(opsi: OpsiTarik = {}): Promise<{
   };
   const ditarik = await terapkanPerubahan(
     db,
-    { sekarang: String(o.sekarang ?? ctx.sekarang), transaksi: o.transaksi, produk: o.produk, bazar: o.bazar },
+    {
+      sekarang: String(o.sekarang ?? ctx.sekarang),
+      transaksi: o.transaksi,
+      produk: o.produk,
+      bazar: o.bazar,
+      // Hub lama belum mengirim biaya: perlakukan sebagai kosong, bukan rusak.
+      biayaBazar: Array.isArray(o.biayaBazar) ? o.biayaBazar : [],
+    },
     ctx,
   );
   const kursorBaru = ditarik.kursorBaru ?? (typeof o.sekarang === "string" ? o.sekarang : null);
@@ -427,7 +477,7 @@ export async function sinkronkan(opsi: OpsiKirim & OpsiTarik = {}): Promise<Ring
       antrean: antreanAwal,
       terakhirBerhasil: await bacaTerakhirBerhasil(),
       terakhirTarik: terakhirTarikAwal,
-      ditarik: { transaksiBaru: 0, transaksiDigabung: 0, produk: 0, bazar: 0 },
+      ditarik: { transaksiBaru: 0, transaksiDigabung: 0, produk: 0, bazar: 0, biayaBazar: 0 },
       konflik: 0,
       pesan: null,
     };
@@ -456,8 +506,9 @@ export async function sinkronkan(opsi: OpsiKirim & OpsiTarik = {}): Promise<Ring
           transaksiDigabung: hasilTarik.ditarik.transaksiDigabung,
           produk: hasilTarik.ditarik.produkDigabung,
           bazar: hasilTarik.ditarik.bazarDigabung,
+          biayaBazar: hasilTarik.ditarik.biayaBazarDigabung,
         }
-      : { transaksiBaru: 0, transaksiDigabung: 0, produk: 0, bazar: 0 },
+      : { transaksiBaru: 0, transaksiDigabung: 0, produk: 0, bazar: 0, biayaBazar: 0 },
     konflik: hasilTarik.ditarik?.konflik ?? 0,
     pesan: hasilKirim.pesan ?? hasilTarik.pesan,
   };
@@ -500,6 +551,19 @@ export async function daftarAntrean(): Promise<AntreanTampil[]> {
         jenis: "Bazar",
         judul: b ? b.nama : o.idRecord,
         subjudul: b ? `Status ${b.status}` : "Data tidak ditemukan di perangkat.",
+      });
+    } else if (o.jenisRecord === "biaya_bazar") {
+      const b = await db.get("bazar_biaya", o.idRecord);
+      const bz = b ? await db.get("bazars", b.bazarId) : undefined;
+      hasil.push({
+        id: o.id,
+        jenis: "Biaya bazar",
+        judul: b
+          ? `${b.judul} — Rp${b.nominal.toLocaleString("id-ID")}`
+          : o.aksi === "hapus"
+            ? "Biaya bazar (dihapus)"
+            : o.idRecord,
+        subjudul: b ? (bz ? bz.nama : "Biaya bazar") : "Menunggu terkirim.",
       });
     } else {
       hasil.push({ id: o.id, jenis: "Lainnya", judul: o.idRecord, subjudul: o.jenisRecord });

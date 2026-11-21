@@ -242,10 +242,27 @@ export async function tambahBiaya(
     createdAt: new Date().toISOString(),
   };
   await db.put("bazar_biaya", biaya);
+  // Antrean sinkronisasi (F1, BU-34): biaya bazar harus terlihat di perangkat
+  // lain agar owner bisa merekonsiliasi tutup bazar.
+  try {
+    const { tandaiUntukSync } = await import("../sync/mesin.ts");
+    await tandaiUntukSync("biaya_bazar", biaya.id);
+  } catch {
+    // Sengaja diam: biaya lokal sudah sah, hanya sinkronisasi yang tertunda.
+  }
   return { ok: true, biaya };
 }
 
 export async function hapusBiaya(id: UUID): Promise<void> {
+  // Antrekan hapusan DULU sebagai tombstone (F1): begitu baris lokal dihapus,
+  // isinya sudah tidak bisa dibaca lagi saat kirim — jadi antrean hapus harus
+  // tercatat sebelum penghapusan.
+  try {
+    const { tandaiUntukSync } = await import("../sync/mesin.ts");
+    await tandaiUntukSync("biaya_bazar", id, "hapus");
+  } catch {
+    // Sengaja diam: penghapusan lokal tetap jalan.
+  }
   const db = await getDB();
   await db.delete("bazar_biaya", id);
 }
@@ -631,6 +648,13 @@ export async function daftarTransaksi(): Promise<TransaksiRecord[]> {
   const db = await getDB();
   const semua = await db.getAll("transactions");
   return semua.sort((a, b) => b.waktu.localeCompare(a.waktu));
+}
+
+/** Semua baris pembayaran (dipakai Ringkasan: uang masuk dihitung dari
+ *  baris pembayaran, bukan dari total pesanan — F2, trial 21 Nov 2026). */
+export async function daftarPembayaran(): Promise<PembayaranRecord[]> {
+  const db = await getDB();
+  return db.getAll("payments");
 }
 
 /** Nomor urut hari itu untuk `#7` di resi. */

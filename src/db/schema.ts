@@ -363,9 +363,15 @@ export interface PengirimanRecord {
 
 export interface OutboxRecord {
   id: UUID;
-  jenisRecord: "produk" | "transaksi" | "pembayaran" | "settings" | "bazar";
+  jenisRecord: "produk" | "transaksi" | "pembayaran" | "settings" | "bazar" | "biaya_bazar";
   idRecord: string;
-  aksi: "upsert";
+  /**
+   * "upsert" = kirim isi record terbaru; "hapus" = kirim tombstone agar
+   * perangkat lain ikut menghapus record itu (F1, biaya bazar). Tombstone
+   * perlu aksi sendiri: begitu baris lokal dihapus, isinya sudah tidak
+   * bisa dibaca lagi saat kirim.
+   */
+  aksi: "upsert" | "hapus";
   percobaan: number;
   terakhirDicoba: string | null;
   dibuatPada: string;

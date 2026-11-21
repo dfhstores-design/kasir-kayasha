@@ -10,9 +10,10 @@
  *  3. Kiriman yang tidak valid DITOLAK per-kiriman, bukan menggagalkan seluruh batch.
  */
 
-import type { JenisDokumen, ArahStok } from "../db/schema.ts";
+import type { JenisDokumen, ArahStok, KategoriBiaya } from "../db/schema.ts";
+import { KATEGORI_BIAYA } from "../db/schema.ts";
 
-export type JenisKiriman = "transaksi" | "produk" | "bazar";
+export type JenisKiriman = "transaksi" | "produk" | "bazar" | "biaya_bazar";
 
 export interface KirimanTransaksi {
   jenis: "transaksi";
@@ -102,7 +103,30 @@ export interface KirimanBazar {
   diubahPada: string;
 }
 
-export type Kiriman = KirimanTransaksi | KirimanProduk | KirimanBazar;
+/**
+ * Satu pengeluaran bazar (F1, BU-34): harus tersinkron agar owner di
+ * perangkat lain bisa melihat biaya saat rekonsiliasi tutup bazar.
+ * Biaya tidak pernah diubah (hanya tambah + hapus di aplikasi), jadi
+ * `diubahPada` = `dibuatPada` untuk kiriman biasa. `dihapus` = tombstone:
+ * baris ini sudah dihapus di perangkat pengirim; hub menyimpannya sebagai
+ * penanda hapus supaya perangkat lain ikut menghapus.
+ */
+export interface KirimanBiayaBazar {
+  jenis: "biaya_bazar";
+  id: string;
+  bazarId: string | null;
+  kategori: KategoriBiaya;
+  judul: string;
+  nominal: number;
+  tanggal: string;
+  catatan?: string | null;
+  dibuatPada: string;
+  diubahPada: string;
+  perangkat?: string;
+  dihapus?: boolean;
+}
+
+export type Kiriman = KirimanTransaksi | KirimanProduk | KirimanBazar | KirimanBiayaBazar;
 
 export interface HasilKirim {
   diterima: string[];
@@ -128,7 +152,7 @@ export function periksaKiriman(k: unknown): { ok: true; nilai: Kiriman } | { ok:
   const id = o.id;
   if (typeof id !== "string" || id.length < 8) return { ok: false, pesan: "id tidak valid." };
   const jenis = o.jenis;
-  if (jenis !== "transaksi" && jenis !== "produk" && jenis !== "bazar") {
+  if (jenis !== "transaksi" && jenis !== "produk" && jenis !== "bazar" && jenis !== "biaya_bazar") {
     return { ok: false, pesan: "jenis tidak dikenal." };
   }
 
@@ -154,6 +178,24 @@ export function periksaKiriman(k: unknown): { ok: true; nilai: Kiriman } | { ok:
   if (jenis === "bazar") {
     const b = o as unknown as KirimanBazar;
     if (typeof b.nama !== "string" || !b.nama.trim()) return { ok: false, pesan: "nama bazar kosong." };
+  }
+
+  if (jenis === "biaya_bazar") {
+    const b = o as unknown as KirimanBiayaBazar;
+    if (typeof b.diubahPada !== "string" || Number.isNaN(Date.parse(b.diubahPada))) {
+      return { ok: false, pesan: "diubahPada biaya tidak valid." };
+    }
+    // Tombstone hanya butuh id + waktu hapus; isi lain boleh kosong.
+    if (b.dihapus === true) return { ok: true, nilai: k as Kiriman };
+    if (typeof b.bazarId !== "string" || !b.bazarId) return { ok: false, pesan: "bazarId biaya kosong." };
+    if (typeof b.judul !== "string" || !b.judul.trim()) return { ok: false, pesan: "judul biaya kosong." };
+    if (!Number.isInteger(b.nominal) || b.nominal < 0) return { ok: false, pesan: "nominal biaya harus integer ≥ 0." };
+    if (!(KATEGORI_BIAYA as readonly string[]).includes(b.kategori)) {
+      return { ok: false, pesan: "kategori biaya tidak dikenal." };
+    }
+    if (typeof b.tanggal !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(b.tanggal)) {
+      return { ok: false, pesan: "tanggal biaya tidak valid." };
+    }
   }
 
   return { ok: true, nilai: k as Kiriman };
@@ -298,6 +340,75 @@ async function simpanBazar(db: DBCloud, k: KirimanBazar, sekarang: string): Prom
 }
 
 /**
+ * Menyimpan satu biaya bazar (F1, BU-34). Biaya tidak pernah diubah, jadi
+ * upsert cukup menimpa berdasarkan id. Tombstone (`dihapus`) hanya menandai
+ * `dihapus_pada` — barisnya tetap ada supaya perangkat yang menarik belakangan
+ * masih tahu baris itu sudah dihapus. Upsert yang datang SESUDAH tombstone
+ * yang lebih baru tidak boleh menghidupkan lagi baris yang sudah dihapus.
+ */
+async function simpanBiayaBazar(db: DBCloud, k: KirimanBiayaBazar, sekarang: string): Promise<void> {
+  if (k.dihapus === true) {
+    await db
+      .prepare(
+        `INSERT INTO bazar_biaya (id, bazar_id, kategori, judul, nominal, tanggal, catatan, dibuat_pada, diubah_pada, perangkat, dihapus_pada)
+         VALUES (?,?,?,?,?,?,?,?,?,?,?)
+         ON CONFLICT(id) DO UPDATE SET dihapus_pada=excluded.dihapus_pada, diubah_pada=excluded.diubah_pada`,
+      )
+      .bind(
+        k.id,
+        k.bazarId,
+        "",
+        "",
+        0,
+        "",
+        null,
+        k.dibuatPada,
+        k.diubahPada,
+        k.perangkat ?? null,
+        k.diubahPada,
+      )
+      .run();
+  } else {
+    const ada = await db
+      .prepare(`SELECT dihapus_pada, diubah_pada FROM bazar_biaya WHERE id = ?`)
+      .bind(k.id)
+      .first<{ dihapus_pada: string | null; diubah_pada: string }>();
+    const sudahDihapusLebihBaru =
+      ada && ada.dihapus_pada !== null && k.diubahPada <= String(ada.diubah_pada ?? "");
+    if (!sudahDihapusLebihBaru) {
+      await db
+        .prepare(
+          `INSERT INTO bazar_biaya (id, bazar_id, kategori, judul, nominal, tanggal, catatan, dibuat_pada, diubah_pada, perangkat, dihapus_pada)
+           VALUES (?,?,?,?,?,?,?,?,?,?,?)
+           ON CONFLICT(id) DO UPDATE SET bazar_id=excluded.bazar_id, kategori=excluded.kategori,
+             judul=excluded.judul, nominal=excluded.nominal, tanggal=excluded.tanggal,
+             catatan=excluded.catatan, diubah_pada=excluded.diubah_pada, perangkat=excluded.perangkat,
+             dihapus_pada=NULL`,
+        )
+        .bind(
+          k.id,
+          k.bazarId,
+          k.kategori,
+          k.judul,
+          k.nominal,
+          k.tanggal,
+          k.catatan ?? null,
+          k.dibuatPada,
+          k.diubahPada,
+          k.perangkat ?? null,
+          null,
+        )
+        .run();
+    }
+  }
+
+  await db
+    .prepare(`INSERT OR REPLACE INTO sync_log (kunci, jenis, id_record, diterima_pada) VALUES (?,?,?,?)`)
+    .bind(kunciSync(k), "biaya_bazar", k.id, sekarang)
+    .run();
+}
+
+/**
  * Memproses satu batch kiriman.
  * Tiap kiriman ditangani sendiri-sendiri: satu rusak tidak membatalkan yang lain.
  */
@@ -331,7 +442,8 @@ export async function prosesBatch(
 
       if (k.jenis === "transaksi") await simpanTransaksi(db, k, sekarang);
       else if (k.jenis === "produk") await simpanProduk(db, k, sekarang);
-      else await simpanBazar(db, k, sekarang);
+      else if (k.jenis === "bazar") await simpanBazar(db, k, sekarang);
+      else await simpanBiayaBazar(db, k, sekarang);
 
       diterima.push(k.id);
     } catch (e) {
@@ -348,6 +460,9 @@ export interface Perubahan {
   transaksi: KirimanTransaksi[];
   produk: KirimanProduk[];
   bazar: KirimanBazar[];
+  /** Biaya bazar, termasuk tombstone (F1): baris yang sudah dihapus di
+   *  perangkat lain ikut dikembalikan dengan `dihapus: true`. */
+  biayaBazar: KirimanBiayaBazar[];
 }
 
 export interface OpsiTarik {
@@ -491,5 +606,25 @@ export async function ambilPerubahan(db: DBCloud, opsi: OpsiTarik = {}): Promise
     diubahPada: String(b.diubah_pada ?? ""),
   }));
 
-  return { sekarang, transaksi, produk, bazar };
+  const biayaBazar: KirimanBiayaBazar[] = (
+    await db
+      .prepare(`SELECT * FROM bazar_biaya WHERE diubah_pada > ? ORDER BY diubah_pada ASC LIMIT ?`)
+      .bind(sejak, batas)
+      .all<Record<string, unknown>>()
+  ).results.map((b) => ({
+    jenis: "biaya_bazar" as const,
+    id: String(b.id),
+    bazarId: (b.bazar_id as string | null) ?? null,
+    kategori: (b.kategori as KirimanBiayaBazar["kategori"]) ?? "lainnya",
+    judul: String(b.judul ?? ""),
+    nominal: Number(b.nominal ?? 0),
+    tanggal: String(b.tanggal ?? ""),
+    catatan: (b.catatan as string | null) ?? null,
+    dibuatPada: String(b.dibuat_pada ?? ""),
+    diubahPada: String(b.diubah_pada ?? ""),
+    ...(typeof b.perangkat === "string" && b.perangkat ? { perangkat: b.perangkat } : {}),
+    ...(b.dihapus_pada != null ? { dihapus: true as const } : {}),
+  }));
+
+  return { sekarang, transaksi, produk, bazar, biayaBazar };
 }

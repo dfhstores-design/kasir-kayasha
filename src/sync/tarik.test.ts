@@ -155,6 +155,7 @@ describe("terapkanPerubahan — transaksi append-only", () => {
       transaksi: [kirimanTransaksi()],
       produk: [],
       bazar: [],
+      biayaBazar: [],
     };
     const hasil = await terapkanPerubahan(db, perubahan, CTX);
     expect(hasil.transaksiBaru).toBe(1);
@@ -191,6 +192,7 @@ describe("terapkanPerubahan — transaksi append-only", () => {
       ],
       produk: [],
       bazar: [],
+      biayaBazar: [],
     };
     const hasil = await terapkanPerubahan(db, perubahan, CTX);
     expect(hasil.transaksiDigabung).toBe(1);
@@ -211,6 +213,7 @@ describe("terapkanPerubahan — transaksi append-only", () => {
       transaksi: [kirimanTransaksi({ statusPesanan: "diproses", statusBayar: "dp", diubahPada: "2026-11-10T09:00:00.000Z" })],
       produk: [],
       bazar: [],
+      biayaBazar: [],
     };
     await terapkanPerubahan(db, perubahan, CTX);
     const t = await db.get("transactions", "11111111-1111-1111-1111-111111111111");
@@ -237,6 +240,7 @@ describe("terapkanPerubahan — transaksi append-only", () => {
       ],
       produk: [],
       bazar: [],
+      biayaBazar: [],
     };
     await terapkanPerubahan(db, perubahan, CTX);
     const t = await db.get("transactions", lokal.id);
@@ -253,6 +257,7 @@ describe("terapkanPerubahan — transaksi append-only", () => {
       transaksi: [kirimanTransaksi(), { jenis: "transaksi", id: "pendek" } as unknown as KirimanTransaksi],
       produk: [],
       bazar: [],
+      biayaBazar: [],
     };
     const hasil = await terapkanPerubahan(db, perubahan, CTX);
     expect(hasil.transaksiBaru).toBe(1);
@@ -293,6 +298,7 @@ describe("terapkanPerubahan — produk gabung 3-arah", () => {
         },
       ],
       bazar: [],
+      biayaBazar: [],
     };
     const hasil = await terapkanPerubahan(db, perubahan, CTX);
     expect(hasil.produkDigabung).toBe(1);
@@ -329,6 +335,7 @@ describe("terapkanPerubahan — produk gabung 3-arah", () => {
         },
       ],
       bazar: [],
+      biayaBazar: [],
     };
     await terapkanPerubahan(db, perubahan, CTX);
     const p = await db.get("products", "produk-1");
@@ -336,5 +343,95 @@ describe("terapkanPerubahan — produk gabung 3-arah", () => {
     const log = await db.getAll("logSinkron");
     expect(log).toHaveLength(1);
     expect(log[0]?.judul).toContain("Kebaya");
+  });
+});
+
+describe("terapkanPerubahan — biaya bazar (F1, BU-34)", () => {
+  beforeEach(resetDB);
+
+  const biayaLokal = (over: Partial<import("../db/schema.ts").BiayaBazarRecord> = {}) => ({
+    id: "55555555-5555-5555-5555-555555555555",
+    bazarId: "44444444-4444-4444-4444-444444444444",
+    kategori: "sewa_booth" as const,
+    judul: "Sewa booth",
+    nominal: 750000,
+    tanggal: "2026-11-10",
+    catatan: null,
+    createdAt: "2026-11-10T08:00:00.000Z",
+    ...over,
+  });
+
+  const kirimanBiaya = (
+    over: Partial<import("./logika.ts").KirimanBiayaBazar> = {},
+  ): import("./logika.ts").KirimanBiayaBazar => ({
+    jenis: "biaya_bazar",
+    id: "55555555-5555-5555-5555-555555555555",
+    bazarId: "44444444-4444-4444-4444-444444444444",
+    kategori: "sewa_booth",
+    judul: "Sewa booth",
+    nominal: 750000,
+    tanggal: "2026-11-10",
+    catatan: null,
+    dibuatPada: "2026-11-10T08:00:00.000Z",
+    diubahPada: "2026-11-10T08:00:00.000Z",
+    ...over,
+  });
+
+  const paket = (biayaBazar: import("./logika.ts").KirimanBiayaBazar[]): Perubahan => ({
+    sekarang: "2026-11-10T12:00:00.000Z",
+    transaksi: [],
+    produk: [],
+    bazar: [],
+    biayaBazar,
+  });
+
+  it("biaya baru dari perangkat lain masuk ke lokal", async () => {
+    const db = await getDB();
+    const hasil = await terapkanPerubahan(db, paket([kirimanBiaya()]), CTX);
+    expect(hasil.biayaBazarDigabung).toBe(1);
+    const b = await db.get("bazar_biaya", "55555555-5555-5555-5555-555555555555");
+    expect(b?.judul).toBe("Sewa booth");
+    expect(b?.nominal).toBe(750000);
+  });
+
+  it("tombstone menghapus biaya lokal", async () => {
+    const db = await getDB();
+    await db.put("bazar_biaya", biayaLokal());
+    const hasil = await terapkanPerubahan(
+      db,
+      paket([kirimanBiaya({ diubahPada: "2026-11-10T09:00:00.000Z", dihapus: true })]),
+      CTX,
+    );
+    expect(hasil.biayaBazarDigabung).toBe(1);
+    expect(await db.get("bazar_biaya", "55555555-5555-5555-5555-555555555555")).toBeUndefined();
+  });
+
+  it("tombstone untuk biaya yang tidak ada tidak error dan tidak dihitung", async () => {
+    const db = await getDB();
+    const hasil = await terapkanPerubahan(
+      db,
+      paket([kirimanBiaya({ diubahPada: "2026-11-10T09:00:00.000Z", dihapus: true })]),
+      CTX,
+    );
+    expect(hasil.biayaBazarDigabung).toBe(0);
+    expect(hasil.konflik).toBe(0);
+  });
+
+  it("kiriman biaya rusak dicatat di log, tidak menggagalkan paket", async () => {
+    const db = await getDB();
+    const hasil = await terapkanPerubahan(
+      db,
+      paket([
+        kirimanBiaya(),
+        kirimanBiaya({
+          id: "66666666-6666-6666-6666-666666666666",
+          kategori: "entah" as import("./logika.ts").KirimanBiayaBazar["kategori"],
+        }),
+      ]),
+      CTX,
+    );
+    expect(hasil.biayaBazarDigabung).toBe(1);
+    expect(hasil.konflik).toBe(1);
+    expect(await db.get("bazar_biaya", "55555555-5555-5555-5555-555555555555")).toBeDefined();
   });
 });

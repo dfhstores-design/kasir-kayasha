@@ -129,9 +129,10 @@ Untuk hari yang dipilih (bawaan hari ini), pada bazar aktif atau terakhir:
 | Angka | Arti |
 | --- | --- |
 | Transaksi | jumlah transaksi tidak dibatalkan |
-| Omzet | Σ total transaksi hari itu |
+| Omzet | Σ total transaksi hari itu (nilai pesanan — bisa lebih besar dari uang masuk bila ada pesanan yang baru DP) |
+| Uang masuk hari itu | Σ baris pembayaran hari itu (uang yang benar-benar sudah diterima; inilah angka tutup harian — "uang tunai yang seharusnya ada di tangan kasir" diambil dari baris Tunai di bawah) |
 | Terjual | jumlah pcs |
-| Tunai / Transfer / QRIS | omzet per metode bayar |
+| Tunai / Transfer / QRIS | uang masuk per metode, dari baris pembayaran (bukan total pesanan dibebankan ke metode terakhir — F2, 21 Nov 2026) |
 | Biaya bazar hari itu | Σ biaya bertanggal hari itu |
 
 ### 5.2 Ringkasan total setelah bazar ditutup
@@ -139,6 +140,7 @@ Untuk hari yang dipilih (bawaan hari ini), pada bazar aktif atau terakhir:
 | Angka | Arti |
 | --- | --- |
 | Omzet bazar | Σ total semua transaksi bazar itu |
+| Uang masuk | Σ semua baris pembayaran bazar itu |
 | Biaya bazar | Σ semua biaya |
 | **Laba bazar** | omzet − biaya |
 | Terjual / dibawa | pcs |
