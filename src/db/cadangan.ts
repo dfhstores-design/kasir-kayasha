@@ -32,7 +32,28 @@ export const STORE_CADANGAN = [
   "transaction_items",
   "payments",
   "parked_carts",
+  // F16, tes klik putaran 4 (22 Nov 2026): store data usaha yang dulu tidak
+  // ikut dicadangkan — restore "Ganti semua data" tidak menghapusnya,
+  // sehingga perangkat tidak pernah benar-benar bersih (catatan Tutup Harian
+  // lama tetap tampil dan hari tidak bisa ditutup lagi). Format ini memang
+  // diniatkan berisi SEMUA object store (lihat kepala berkas), jadi yang
+  // berisi data usaha harus ikut; cadangan lama tanpa store ini tetap bisa
+  // dibaca (store yang hilang dianggap kosong).
+  "journal",
+  "pelanggan",
+  "pengiriman",
+  "logSinkron",
+  "tutupHarian",
 ] as const;
+
+/**
+ * Store state sync internal — TIDAK PERNAH diekspor ke berkas cadangan,
+ * tapi DIHAPUS pada mode "ganti". Alasannya: antrean kirim (outbox) yang
+ * tersisa akan menghidupkan lagi data yang baru dihapus (push ulang ke hub),
+ * dan bayangan usang akan merusak gabung 3-arah berikutnya. Perangkat yang
+ * datanya diganti total harus mulai sync dari nol.
+ */
+export const STORE_SYNC_INTERNAL = ["bayangan", "outbox"] as const;
 
 type NamaStore = (typeof STORE_CADANGAN)[number];
 
@@ -223,6 +244,11 @@ const LABEL: Record<NamaStore, string> = {
   transaction_items: "baris transaksi",
   payments: "pembayaran",
   parked_carts: "transaksi tertahan",
+  journal: "jurnal",
+  pelanggan: "pelanggan",
+  pengiriman: "pengiriman",
+  logSinkron: "log sinkron",
+  tutupHarian: "tutup harian",
 };
 
 export function labelStore(store: NamaStore): string {
@@ -273,9 +299,25 @@ export async function pulihkanCadangan(cadangan: BerkasCadangan, opsi: OpsiPulih
     "transaction_items",
     "payments",
     "parked_carts",
+    "journal",
+    "pelanggan",
+    "pengiriman",
+    "logSinkron",
+    "tutupHarian",
   ];
 
   try {
+    // F16: pada mode "ganti", state sync internal ikut dihapus (tidak pernah
+    // diekspor — lihat STORE_SYNC_INTERNAL). Tanpa ini, antrean kirim yang
+    // tersisa akan menghidupkan lagi data yang baru dihapus.
+    if (opsi.mode === "ganti") {
+      for (const store of STORE_SYNC_INTERNAL) {
+        const txInternal = db.transaction(store, "readwrite");
+        await txInternal.store.clear();
+        await txInternal.done;
+      }
+    }
+
     for (const store of urutan) {
       const baris = Array.isArray(cadangan.data[store]) ? (cadangan.data[store] as unknown[]) : [];
       if (baris.length === 0 && opsi.mode === "gabung") continue;

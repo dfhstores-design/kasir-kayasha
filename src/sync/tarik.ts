@@ -488,13 +488,15 @@ async function terapkanProduk(db: DB, k: KirimanProduk, ctx: KonteksTarik): Prom
     updatedAt: lokal.updatedAt > k.diubahPada ? lokal.updatedAt : k.diubahPada,
   };
   await db.put("products", hasilProduk);
-  await simpanBayangan(
-    db,
-    "produk",
-    k.id,
-    hasilProduk as unknown as Record<string, unknown>,
-    hasilProduk.updatedAt,
-  );
+  // F15, tes klik putaran 4 (22 Nov 2026): bayangan = snapshot terakhir yang
+  // DIKETAHUI HUB, jadi yang disimpan di sini adalah record JAUH (apa yang
+  // dikirim hub), BUKAN hasil gabung. Dulu bayangan disimpan dari hasil
+  // gabung (nilai lokal) — padahal hub belum menerima nilai itu. Pull
+  // berikutnya lalu menyimpulkan "hanya sisi jauh yang berubah" (lokal ==
+  // bayangan, jauh beda) dan menimpa stok lokal dengan nilai hub yang sudah
+  // usang. Dengan bayangan = jauh, pull ulang yang sama tidak mengubah apa
+  // pun, dan nilai lokal yang belum terkirim tetap dipertahankan.
+  await simpanBayangan(db, "produk", k.id, jauh as unknown as Record<string, unknown>, k.diubahPada);
   if (konflik.length > 0) {
     await catatLogSinkron(db, {
       jenis: "konflik",

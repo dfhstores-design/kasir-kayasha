@@ -265,6 +265,18 @@ export async function batalkanTransaksi(id: UUID, alasan: string): Promise<Hasil
   try {
     const { tandaiUntukSync } = await import("../sync/mesin.ts");
     await tandaiUntukSync("transaksi", id);
+    // F15/F6, tes klik putaran 4 (22 Nov 2026): pembatalan mengembalikan stok
+    // gudang, jadi produknya HARUS ikut ditandai untuk sync (alasan sama
+    // seperti simpanTransaksi: tanpa ini hub tetap menyimpan stok lama dan
+    // pull berikutnya menulis ulang pengembalian stok lokal). Hanya bila
+    // stok memang dikembalikan ke gudang — penjualan bazar mengembalikan
+    // saldo bazar (tidak disinkronkan, Tahap 3) dan PO yang belum selesai
+    // tidak pernah mengurangi stok.
+    if (sudahKeluarStok && !t.bazarId) {
+      for (const it of lengkap.item) {
+        if (it.produkId) await tandaiUntukSync("produk", it.produkId);
+      }
+    }
   } catch {
     // Sengaja diam: pembatalan lokal sudah sah.
   }

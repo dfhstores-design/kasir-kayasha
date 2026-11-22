@@ -10,7 +10,7 @@ import {
   sepertiBlob,
   VERSI_CADANGAN,
 } from "./cadangan.ts";
-import { ambilSettings, SETTINGS_KOSONG, simpanProduk, simpanSettings } from "./repositori.ts";
+import { ambilSettings, ambilTutupHarian, SETTINGS_KOSONG, simpanProduk, simpanSettings, simpanTutupHarian } from "./repositori.ts";
 import { getDB, resetKoneksiDB, type ProdukRecord } from "./schema.ts";
 import { simpanPenjualan } from "../lib/penjualan.ts";
 
@@ -255,6 +255,118 @@ describe("pulihkanCadangan — mode ganti di IndexedDB asli (F2, tes klik 22 Nov
     expect(await db.count("transactions")).toBe(0);
     expect(await db.count("transaction_items")).toBe(0);
     expect(await db.count("payments")).toBe(0);
+  });
+});
+
+describe("pulihkanCadangan — tutup harian ikut dicadangkan (F16, tes klik putaran 4, 22 Nov 2026)", () => {
+  async function tutupHarianContoh() {
+    return {
+      id: crypto.randomUUID(),
+      tanggal: "2026-11-22",
+      bazarId: null,
+      label: "Toko",
+      peran: "kasir" as const,
+      jumlahTransaksi: 4,
+      uangMasuk: 1180000,
+      tunai: 680000,
+      transfer: 0,
+      qris: 500000,
+      pengembalian: 0,
+      pengembalianDp: 0,
+      pengembalianBatal: 0,
+      ditutupPada: "2026-11-22T01:37:00.000Z",
+    };
+  }
+
+  it("cadangan kosong + mode ganti menghapus catatan tutup harian (bukan hanya barang & transaksi)", async () => {
+    resetKoneksiDB();
+    const db = await getDB();
+    await db.clear("tutupHarian");
+    await db.clear("logSinkron");
+    await db.clear("outbox");
+    await db.clear("bayangan");
+
+    // Cadangan kosong (semua store kosong).
+    const kosong = await buatCadangan();
+    expect(kosong.ok).toBe(true);
+    if (!kosong.ok) return;
+
+    // Isi data: tutup harian + log sinkron + state sync internal.
+    await simpanTutupHarian(await tutupHarianContoh());
+    await db.put("logSinkron", {
+      id: crypto.randomUUID(),
+      waktu: "2026-11-22T02:00:00.000Z",
+      jenis: "info",
+      judul: "Tes log",
+      rincian: "Rincian tes.",
+      perangkat: null,
+    });
+    await db.put("outbox", {
+      id: crypto.randomUUID(),
+      jenisRecord: "transaksi",
+      idRecord: "transaksi-lama",
+      aksi: "upsert",
+      dibuatPada: "2026-11-22T02:00:00.000Z",
+      percobaan: 0,
+      terakhirDicoba: null,
+    });
+    await db.put("bayangan", {
+      id: "produk:produk-lama",
+      jenis: "produk",
+      idRecord: "produk-lama",
+      data: { stokGudang: 10 },
+      diubahPada: "2026-11-22T02:00:00.000Z",
+    });
+    expect(await db.count("tutupHarian")).toBe(1);
+    expect(await db.count("logSinkron")).toBe(1);
+
+    // Pulihkan cadangan kosong dengan mode ganti: SEMUA data usaha hilang,
+    // dan state sync internal ikut dibersihkan (tidak menghidupkan lagi
+    // data yang baru dihapus).
+    const h = await pulihkanCadangan(kosong.berkas, { mode: "ganti" });
+    expect(h.ok).toBe(true);
+    expect(await db.count("tutupHarian")).toBe(0);
+    expect(await ambilTutupHarian("2026-11-22", null)).toBeNull();
+    expect(await db.count("logSinkron")).toBe(0);
+    expect(await db.count("outbox")).toBe(0);
+    expect(await db.count("bayangan")).toBe(0);
+  });
+
+  it("cadangan mengekspor tutup harian & log sinkron; mode gabung mengembalikannya tanpa menghapus yang sudah ada", async () => {
+    resetKoneksiDB();
+    const db = await getDB();
+    await db.clear("tutupHarian");
+    await db.clear("logSinkron");
+
+    const tutup = await tutupHarianContoh();
+    await simpanTutupHarian(tutup);
+    await db.put("logSinkron", {
+      id: crypto.randomUUID(),
+      waktu: "2026-11-22T02:00:00.000Z",
+      jenis: "info",
+      judul: "Tes log",
+      rincian: "Rincian tes.",
+      perangkat: null,
+    });
+
+    const cadangan = await buatCadangan();
+    expect(cadangan.ok).toBe(true);
+    if (!cadangan.ok) return;
+    expect(cadangan.berkas.data.tutupHarian).toHaveLength(1);
+    expect(cadangan.berkas.data.logSinkron).toHaveLength(1);
+    // State sync internal tidak pernah diekspor.
+    expect(cadangan.berkas.data.bayangan).toBeUndefined();
+    expect(cadangan.berkas.data.outbox).toBeUndefined();
+
+    // Hapus lokal, lalu pulihkan dengan mode gabung.
+    await db.clear("tutupHarian");
+    await db.clear("logSinkron");
+    expect(await db.count("tutupHarian")).toBe(0);
+    const h = await pulihkanCadangan(cadangan.berkas, { mode: "gabung" });
+    expect(h.ok).toBe(true);
+    expect(await db.count("tutupHarian")).toBe(1);
+    expect((await ambilTutupHarian("2026-11-22", null))?.jumlahTransaksi).toBe(4);
+    expect(await db.count("logSinkron")).toBe(1);
   });
 });
 

@@ -694,6 +694,16 @@ export async function simpanTransaksi(
   try {
     const { tandaiUntukSync } = await import("../sync/mesin.ts");
     await tandaiUntukSync("transaksi", trx.id);
+    // F15, tes klik putaran 4 (22 Nov 2026): penjualan mengubah stok gudang,
+    // jadi produknya HARUS ikut ditandai untuk sync — seperti alokasi dan
+    // tutup bazar (yang sudah menandai produk). Tanpa ini hub tetap menyimpan
+    // stok lama, dan pull berikutnya menulis ulang stok lokal dengan nilai
+    // hub yang usang (gabung 3-arah mengira sisi jauh yang berubah, karena
+    // bayangan sudah berisi nilai lokal). Penjualan bazar tidak mengubah
+    // stok gudang, jadi tidak ada produk yang ditandai di jalur itu.
+    for (const s of stokBaru) {
+      if (s.tipe === "gudang") await tandaiUntukSync("produk", s.produkId);
+    }
   } catch {
     // Sengaja diam: data lokal sudah aman dan tidak boleh dibatalkan.
   }
