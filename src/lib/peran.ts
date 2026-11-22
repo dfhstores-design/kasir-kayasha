@@ -1,3 +1,5 @@
+import type { BazarRecord } from "../db/schema.ts";
+
 /**
  * Peran aktif di aplikasi (ROLE-BIAYA-RINGKASAN.md; Fase 2A, BU-32).
  *
@@ -53,4 +55,48 @@ export type LokasiKasir = { jenis: "toko" } | { jenis: "bazar"; bazarId: string;
 /** Label pendek lokasi kasir untuk Beranda. */
 export function labelLokasiKasir(lokasi: LokasiKasir): string {
   return lokasi.jenis === "toko" ? "Toko" : lokasi.nama;
+}
+
+/**
+ * Boleh membuka Penjualan (F14, BU-66, tes klik 22 Nov 2026): kasir toko
+ * (butik/gudang) adalah yang core — selalu boleh jualan dari stok butik,
+ * dengan atau tanpa bazar aktif. Kasir bazar / kasir tanpa lokasi tetap
+ * perlu bazar aktif. Admin/owner seperti semula: selalu boleh.
+ */
+export function bolehJualBarang(
+  peran: Peran,
+  lokasiKasir: LokasiKasir | null,
+  bazarAktifAda: boolean,
+): boolean {
+  if (bolehAdmin(peran)) return true;
+  if (lokasiKasir?.jenis === "toko") return true;
+  return bazarAktifAda;
+}
+
+/**
+ * Bazar yang dipakai penjualan barang (F14, BU-66): kasir toko selalu
+ * menjual dari gudang (null), apa pun status bazar. Ini penjualan
+ * berbasis lokasi yang jatuh keluar dari perbaikan F14 tanpa pengerjaan
+ * ulang parallel-selling: stok gudang dibaca dari produk itu sendiri,
+ * tidak perlu peta saldo per bazar.
+ *
+ * Peran lain memakai bazar aktif (perilaku lama, belum diubah). Jualan
+ * toko + bazar barengan dari stok masing-masing untuk kasir BAZAR yang
+ * bazarnya bukan yang terakhir dibuka tetap Tahap 3 (BU-39/BU-58):
+ * saldo bazar di App hanya memuat bazar terakhir dibuka.
+ */
+export function bazarPenjualan(
+  lokasiKasir: LokasiKasir | null,
+  bazarAktif: BazarRecord | null,
+): BazarRecord | null {
+  if (lokasiKasir?.jenis === "toko") return null;
+  return bazarAktif;
+}
+
+/** Id bazar dari `bazarPenjualan` (null = penjualan memakai stok gudang). */
+export function bazarIdPenjualan(
+  lokasiKasir: LokasiKasir | null,
+  bazarAktif: BazarRecord | null,
+): string | null {
+  return bazarPenjualan(lokasiKasir, bazarAktif)?.id ?? null;
 }

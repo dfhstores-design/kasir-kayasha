@@ -7,6 +7,15 @@ interface Props {
   peran: Extract<Peran, "admin" | "owner">;
   /** Hash PIN peran itu; null = belum diatur (aplikasi terbuka sebagai kasir). */
   pinHash: string | null;
+  /**
+   * Pengaturan belum selesai dimuat (F3/F4, tes klik 22 Nov 2026): selama
+   * ini layar TIDAK BOLEH menyimpulkan "PIN belum diatur" (masuk gratis)
+   * atau "PIN sudah diatur" (minta PIN) — keduanya pernah tampil bergantian
+   * dari satu sumber yang sama (settings null = belum dimuat, bukan "tidak
+   * ada PIN"). Tampilkan "Memuat…" + tombol coba lagi.
+   */
+  memuat?: boolean;
+  onMuatUlang?: () => void;
   onMasukAdmin: () => void;
   onBatal: () => void;
   /** Membuka layar "Lupa PIN" (BU-65): reset dengan kode dari Andri. */
@@ -20,7 +29,7 @@ interface Props {
  * peran tetap boleh masuk SEKALI untuk mengatur PIN — tanpa ini aplikasi akan
  * terkunci selamanya di mode kasir.
  */
-export default function MasukAdmin({ peran, pinHash, onMasukAdmin, onBatal, onLupaPin }: Props) {
+export default function MasukAdmin({ peran, pinHash, memuat, onMuatUlang, onMasukAdmin, onBatal, onLupaPin }: Props) {
   const [pin, setPin] = useState("");
   const [galat, setGalat] = useState<string | null>(null);
   const [percobaan, setPercobaan] = useState(0);
@@ -63,6 +72,26 @@ export default function MasukAdmin({ peran, pinHash, onMasukAdmin, onBatal, onLu
         : "PIN salah. Coba lagi.",
     );
   }, [pin, pinHash, percobaan, kunci.terkunci, onMasukAdmin]);
+
+  // Pengaturan belum dimuat: jangan simpulkan apa pun soal PIN (F3/F4).
+  // Cabang ini sesudah semua hooks supaya jumlah hooks tetap sama.
+  if (memuat) {
+    return (
+      <>
+        <div className="content">
+          <p className="soft">Memuat pengaturan…</p>
+        </div>
+        <div className="bottombar">
+          <button type="button" className="btn btn--primary" onClick={onMuatUlang}>
+            Coba lagi
+          </button>
+          <button type="button" className="btn btn--ghost btn--small" onClick={onBatal}>
+            Tetap sebagai kasir
+          </button>
+        </div>
+      </>
+    );
+  }
 
   if (!pinHash) {
     return (

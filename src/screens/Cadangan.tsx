@@ -28,6 +28,14 @@ export default function Cadangan({ onDipulihkan }: Props) {
   const [sibuk, setSibuk] = useState(false);
   const [calon, setCalon] = useState<{ berkas: BerkasCadangan; ringkas: string[] } | null>(null);
   const [gantiSemua, setGantiSemua] = useState(false);
+  /** Konfirmasi dua langkah di dalam aplikasi (F2, tes klik 22 Nov 2026):
+   * `window.confirm` diabaikan diam-diam oleh browser otomatis (dialog
+   * ditutup otomatis → confirm mengembalikan false), sehingga tombol
+   * "Pulihkan sekarang" tampak mati dan restore tidak pernah jalan.
+   * Klik pertama hanya menampilkan panel konfirmasi di bawah; klik
+   * kedua ("Ya, Pulihkan") yang benar-benar memulihkan. Pola yang sama
+   * dengan perbaikan C1/C4. */
+  const [mintaKonfirmasi, setMintaKonfirmasi] = useState(false);
 
   function unduh(blob: Blob, nama: string) {
     const url = URL.createObjectURL(blob);
@@ -86,11 +94,13 @@ export default function Cadangan({ onDipulihkan }: Props) {
 
   async function pulihkan() {
     if (!calon) return;
-    const konfirmasi = gantiSemua
-      ? "Ganti SEMUA data dengan isi cadangan? Data sekarang akan dihapus lebih dulu."
-      : "Gabungkan isi cadangan ke data sekarang? Data yang ada tidak dihapus.";
-    if (!window.confirm(konfirmasi)) return;
-
+    // Langkah 1: tampilkan panel konfirmasi di dalam aplikasi (F2).
+    if (!mintaKonfirmasi) {
+      setGalat(null);
+      setMintaKonfirmasi(true);
+      return;
+    }
+    setMintaKonfirmasi(false);
     setSibuk(true);
     setGalat(null);
     try {
@@ -103,6 +113,8 @@ export default function Cadangan({ onDipulihkan }: Props) {
       setCalon(null);
       setGantiSemua(false);
       onDipulihkan();
+    } catch {
+      setGalat("Cadangan belum dipulihkan. Coba lagi.");
     } finally {
       setSibuk(false);
     }
@@ -167,7 +179,14 @@ export default function Cadangan({ onDipulihkan }: Props) {
                 {calon.ringkas.length === 0 ? <li>tidak ada data</li> : calon.ringkas.map((r) => <li key={r}>{r}</li>)}
               </ul>
               <label className="tampil-arsip" style={{ marginTop: "0.5rem" }}>
-                <input type="checkbox" checked={gantiSemua} onChange={(e) => setGantiSemua(e.target.checked)} />
+                <input
+                  type="checkbox"
+                  checked={gantiSemua}
+                  onChange={(e) => {
+                    setGantiSemua(e.target.checked);
+                    setMintaKonfirmasi(false);
+                  }}
+                />
                 Ganti semua data (hapus data sekarang lebih dulu)
               </label>
               <button
@@ -179,6 +198,28 @@ export default function Cadangan({ onDipulihkan }: Props) {
               >
                 {sibuk ? "Memulihkan…" : "Pulihkan sekarang"}
               </button>
+              {mintaKonfirmasi && (
+                <div className="panel panel--warn" role="alert" style={{ marginTop: "0.5rem" }}>
+                  <strong>
+                    {gantiSemua
+                      ? "Ganti SEMUA data dengan isi cadangan? Data sekarang akan dihapus lebih dulu."
+                      : "Gabungkan isi cadangan ke data sekarang? Data yang ada tidak dihapus."}
+                  </strong>
+                  <div style={{ display: "flex", gap: "0.5rem", marginTop: "0.75rem" }}>
+                    <button type="button" className="btn btn--primary btn--small" onClick={pulihkan} disabled={sibuk}>
+                      {sibuk ? "Memulihkan…" : "Ya, Pulihkan"}
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn--ghost btn--small"
+                      onClick={() => setMintaKonfirmasi(false)}
+                      disabled={sibuk}
+                    >
+                      Batal
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </div>

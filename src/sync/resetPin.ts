@@ -31,11 +31,21 @@ function apiBase(): string {
 /**
  * Meminta hub memeriksa kode reset untuk satu peran.
  * Gagal jaringan = tidak ada internet (bukan kode salah) — pesannya dibedakan.
+ *
+ * Batas tunggu (F1, tes klik 22 Nov 2026): fetch TANPA timeout membuat
+ * layar "Lupa PIN" macet di "Memeriksa…" selamanya bila respons hilang
+ * di jalan (server sudah memproses, klien tidak pernah menerima jawaban
+ * — kode 998677/859435 hangus begitu saja, PIN tidak terhapus). Dengan
+ * AbortSignal.timeout, permintaan yang menggantung dibatalkan dan layar
+ * menampilkan pesan + bisa dicoba lagi. Catatan jujur: bila server sempat
+ * memakai kode itu sebelum respons hilang, coba ulang akan dibilang
+ * kedaluwarsa — minta kode baru ke Andri.
  */
 export async function verifikasiKodeReset(
   peran: PeranResetPin,
   kode: string,
   fetchImpl: typeof fetch = fetch,
+  batasMs = 15000,
 ): Promise<HasilVerifikasiKode> {
   const token = import.meta.env.VITE_SYNC_TOKEN;
   let jawab: Response;
@@ -47,8 +57,15 @@ export async function verifikasiKodeReset(
         ...(token ? { "x-sync-token": token } : {}),
       },
       body: JSON.stringify({ peran, kode }),
+      signal: AbortSignal.timeout(batasMs),
     });
-  } catch {
+  } catch (e) {
+    if (e instanceof DOMException && e.name === "AbortError") {
+      return {
+        ok: false,
+        pesan: "Server tidak menjawab. Coba lagi — bila kode dibilang sudah kedaluwarsa, minta kode baru ke Andri.",
+      };
+    }
     return { ok: false, pesan: "Tidak ada internet. Sambungkan internet dulu, lalu coba lagi." };
   }
   let isi: unknown = null;

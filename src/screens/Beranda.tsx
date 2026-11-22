@@ -3,7 +3,7 @@ import StatusSinkron from "../components/StatusSinkron.tsx";
 import { daftarParkir, daftarProduk, profilTerisi, type ProdukRecord } from "../db/repositori.ts";
 import type { SettingsRecord } from "../db/schema.ts";
 import type { BazarRecord } from "../db/schema.ts";
-import { bolehAdmin, bolehLaporanOwner, labelLokasiKasir, type LokasiKasir, type Peran } from "../lib/peran.ts";
+import { bolehAdmin, bolehJualBarang, bolehLaporanOwner, labelLokasiKasir, type LokasiKasir, type Peran } from "../lib/peran.ts";
 import type { Layar } from "../App.tsx";
 
 interface Props {
@@ -106,6 +106,12 @@ export default function Beranda({ settings, storagePermanen, bazar, jumlahBazarA
             Buka Bazar
           </div>
         </button>
+      ) : lokasiKasir?.jenis === "toko" ? (
+        // F14 (BU-66): kasir toko jualan dari stok gudang — tidak ada bazar
+        // aktif bukan halangan, jadi bukan panel peringatan.
+        <div className="panel panel--ok" role="status">
+          <strong>Toko (Butik) — penjualan memakai stok gudang.</strong>
+        </div>
       ) : (
         <div className="panel panel--warn" role="status">
           <strong>Belum ada bazar aktif.</strong>
@@ -118,7 +124,7 @@ export default function Beranda({ settings, storagePermanen, bazar, jumlahBazarA
           <button type="button" className="tile tile--hero" disabled aria-describedby="alasan-jual">
             Penjualan
           </button>
-        ) : bolehAdmin(peran) || bazar ? (
+        ) : bolehJualBarang(peran, lokasiKasir, bazar !== null) ? (
           <button type="button" className="tile tile--hero" onClick={() => buka("pilih-barang")}>
             Penjualan
           </button>
@@ -177,9 +183,9 @@ export default function Beranda({ settings, storagePermanen, bazar, jumlahBazarA
         )}
       </div>
 
-      {peran === "kasir" && !memuatAwal && !bazar && (
+      {peran === "kasir" && !memuatAwal && !bolehJualBarang(peran, lokasiKasir, bazar !== null) && (
         <p className="hint" id="alasan-jual" style={{ margin: 0 }}>
-          Kasir hanya mencatat transaksi saat ada bazar aktif.
+          Kasir bazar hanya mencatat transaksi saat ada bazar aktif.
         </p>
       )}
 

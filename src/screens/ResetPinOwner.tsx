@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { daftarBazarAktif, type BazarRecord, type SettingsRecord } from "../db/repositori.ts";
+import { ambilSettings, daftarBazarAktif, type BazarRecord, type SettingsRecord } from "../db/repositori.ts";
 import type { PeranResetPin } from "../sync/resetKode.ts";
 
 /**
@@ -30,29 +30,60 @@ interface Props {
 }
 
 export default function ResetPinOwner({ settings, onReset, onKembali }: Props) {
+  /**
+   * Status PIN dibaca SEGAR dari IndexedDB saat panel dibuka (F3(b), tes
+   * klik 22 Nov 2026): prop `settings` dari App bisa basi — panel pernah
+   * menampilkan "PIN Admin — Belum diatur" dengan tombol nonaktif padahal
+   * login admin sedang meminta PIN, dan tidak ada baris bazar sama sekali
+   * karena daftar bazar gagal dimuat diam-diam (catch → []). Sekarang:
+   * gagal muat = panel galat + tombol "Coba lagi", bukan status kosong.
+   */
+  const [pengaturan, setPengaturan] = useState<SettingsRecord | null>(settings);
   const [bazarAktif, setBazarAktif] = useState<BazarRecord[]>([]);
+  const [memuat, setMemuat] = useState(true);
+  const [galatMuat, setGalatMuat] = useState<string | null>(null);
   const [konfirmasi, setKonfirmasi] = useState<PeranResetPin | null>(null);
   const [pesan, setPesan] = useState<string | null>(null);
   const [galat, setGalat] = useState<string | null>(null);
   const [sibuk, setSibuk] = useState(false);
 
+  async function muatStatus() {
+    setMemuat(true);
+    setGalatMuat(null);
+    try {
+      const [s, d] = await Promise.all([ambilSettings(), daftarBazarAktif()]);
+      setPengaturan(s);
+      setBazarAktif(d);
+    } catch {
+      setGalatMuat("Status PIN belum bisa dimuat. Coba lagi.");
+    } finally {
+      setMemuat(false);
+    }
+  }
+
   useEffect(() => {
     let hidup = true;
-    daftarBazarAktif()
-      .then((d) => {
-        if (hidup) setBazarAktif(d);
-      })
-      .catch(() => {
-        if (hidup) setBazarAktif([]);
-      });
+    (async () => {
+      try {
+        const [s, d] = await Promise.all([ambilSettings(), daftarBazarAktif()]);
+        if (!hidup) return;
+        setPengaturan(s);
+        setBazarAktif(d);
+      } catch {
+        if (hidup) setGalatMuat("Status PIN belum bisa dimuat. Coba lagi.");
+      } finally {
+        if (hidup) setMemuat(false);
+      }
+    })();
     return () => {
       hidup = false;
     };
+    // Sekali saat panel dibuka: status dibaca segar, bukan dari prop basi.
   }, []);
 
   const baris: BarisReset[] = [
-    { peran: "admin", label: "PIN Admin", pinAda: !!settings?.pinHash },
-    { peran: "kasir_toko", label: "PIN Kasir Toko", pinAda: !!settings?.pinKasirTokoHash },
+    { peran: "admin", label: "PIN Admin", pinAda: !!pengaturan?.pinHash },
+    { peran: "kasir_toko", label: "PIN Kasir Toko", pinAda: !!pengaturan?.pinKasirTokoHash },
     ...bazarAktif.map((b) => ({
       peran: `bazar:${b.id}` as PeranResetPin,
       label: `PIN Kasir Bazar: ${b.nama}`,
@@ -70,7 +101,9 @@ export default function ResetPinOwner({ settings, onReset, onKembali }: Props) {
       await onReset(peran);
       setKonfirmasi(null);
       setPesan(`${label} sudah dihapus. Pemilik peran itu harus mengatur PIN baru.`);
-      const d = await daftarBazarAktif().catch(() => [] as BazarRecord[]);
+      // Segarkan status dari sumber yang sama (settings + bazar aktif).
+      const [s, d] = await Promise.all([ambilSettings(), daftarBazarAktif().catch(() => [] as BazarRecord[])]);
+      setPengaturan(s);
       setBazarAktif(d);
     } catch {
       setGalat(`${label} belum dihapus. Coba lagi.`);
@@ -100,7 +133,20 @@ export default function ResetPinOwner({ settings, onReset, onKembali }: Props) {
           </div>
         )}
 
-        {baris.map((b) => (
+        {memuat && <p className="soft">Memuat status PIN…</p>}
+
+        {galatMuat && (
+          <div className="panel panel--warn" role="alert">
+            {galatMuat}
+            <div style={{ marginTop: "0.5rem" }}>
+              <button type="button" className="btn btn--ghost btn--small" onClick={() => void muatStatus()}>
+                Coba lagi
+              </button>
+            </div>
+          </div>
+        )}
+
+        {!memuat && !galatMuat && baris.map((b) => (
           <div key={b.peran} className="panel" style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
             <span style={{ flex: 1 }}>
               <strong>{b.label}</strong>

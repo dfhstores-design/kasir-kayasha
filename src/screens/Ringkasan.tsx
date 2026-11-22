@@ -165,6 +165,15 @@ export default function Ringkasan({ bazar }: Props) {
   // Tanggal hari ini dalam WIB (C9): potongan ISO adalah tanggal UTC.
   const [hari, setHari] = useState(tanggalHariIni());
   const [memuat, setMemuat] = useState(true);
+  /**
+   * F7 (tes klik 22 Nov 2026): muat yang GAGAL dulu disamarkan jadi
+   * "tidak ada data" (nol semua + panel "Belum ada data ringkasan"),
+   * padahal datanya ada — pengguna panik lalu reload. Sekarang gagal
+   * muat ditampilkan apa adanya, dengan tombol "Coba lagi"; angka nol
+   * hanya tampil bila muat berhasil dan memang tidak ada data.
+   */
+  const [galatMuat, setGalatMuat] = useState<string | null>(null);
+  const [cobaMuat, setCobaMuat] = useState(0);
   // Rincian (item + pembayaran) hanya untuk baris riwayat yang sedang tampil,
   // supaya tidak membaca seluruh IndexedDB saat daftar panjang.
   const [rincian, setRincian] = useState<
@@ -184,12 +193,17 @@ export default function Ringkasan({ bazar }: Props) {
       setBiaya(data.biaya);
       setBayarPerTrx(data.bayarPerTrx);
       setSelisih(data.selisih);
+      setGalatMuat(null);
       setMemuat(false);
-    })().catch(() => setMemuat(false));
+    })().catch(() => {
+      if (!hidup) return;
+      setGalatMuat("Ringkasan tidak bisa dimuat.");
+      setMemuat(false);
+    });
     return () => {
       hidup = false;
     };
-  }, [bazar]);
+  }, [bazar, cobaMuat]);
 
   const riwayatTampil = useMemo(
     () => batasiRiwayat(urutRiwayatBaruDulu(semuaTrx), tampilkanSemua),
@@ -224,6 +238,30 @@ export default function Ringkasan({ bazar }: Props) {
     return (
       <div className="content">
         <p className="soft">Menghitung ringkasan…</p>
+      </div>
+    );
+  }
+
+  // F7: gagal muat ≠ tidak ada data. Tampilkan galat + "Coba lagi",
+  // jangan panel "Belum ada data" dengan angka nol.
+  if (galatMuat) {
+    return (
+      <div className="content">
+        <div className="panel panel--warn" role="alert">
+          <strong>Ringkasan tidak bisa dimuat.</strong>
+          <p style={{ margin: "0.25rem 0 0.5rem" }}>Datanya tidak hilang — coba muat lagi.</p>
+          <button
+            type="button"
+            className="btn btn--primary"
+            onClick={() => {
+              setGalatMuat(null);
+              setMemuat(true);
+              setCobaMuat((n) => n + 1);
+            }}
+          >
+            Coba lagi
+          </button>
+        </div>
       </div>
     );
   }

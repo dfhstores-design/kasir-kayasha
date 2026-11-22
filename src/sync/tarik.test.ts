@@ -664,4 +664,65 @@ describe("terapkanPerubahan — nomor dokumen ikut diperbarui (F4, BU-19/21)", (
     expect(sesudah?.nomorUrutBulan).toBe(7);
     expect(sesudah?.nomorUrutSementara).toBe(false);
   });
+
+  it("F9: edit hub yang lebih baru TIDAK mengganti nomor yang sudah final", async () => {
+    const db = await getDB();
+    // Pesanan lokal dengan nomor RESMI (dibuat online, bukan sementara).
+    const lokal = transaksiLokal({
+      jenisDokumen: "jasa",
+      nomorResi: "KC.00004-20261110",
+      nomorUrutBulan: 4,
+      nomorUrutSementara: false,
+      namaPemesan: "Rina",
+      total: 500000,
+      waktu: "2026-11-10T08:00:00.000Z",
+      updatedAt: "2026-11-10T08:00:00.000Z",
+    });
+    await db.put("transactions", lokal);
+    await db.put("transaction_items", {
+      id: "item-1",
+      transaksiId: lokal.id,
+      produkId: null,
+      namaSnapshot: "Gaun",
+      hargaSatuan: 500000,
+      kuantitas: 1,
+      diskonPerUnit: 0,
+      subtotalBersih: 500000,
+      urutan: 0,
+    });
+
+    // Hub membawa salinan yang lebih baru (diubah di perangkat lain) tapi
+    // dengan nomor BERBEDA — mis. salinan lama sebelum nomor resmi didapat.
+    const kiriman = kirimanTransaksi({
+      id: lokal.id,
+      nomorResi: "KC.00002-20261110",
+      nomorUrutBulan: 2,
+      nomorUrutSementara: false,
+      jenisDokumen: "jasa",
+      statusPesanan: "diproses",
+      statusBayar: "belum_dibayar",
+      diubahPada: "2026-11-10T09:00:00.000Z",
+      perangkat: "hp-a",
+      pembayaran: [],
+    });
+    const hasil = await terapkanPerubahan(
+      db,
+      {
+        sekarang: "2026-11-10T12:00:00.000Z",
+        transaksi: [kiriman],
+        produk: [],
+        bazar: [],
+        biayaBazar: [],
+        pin: [],
+      },
+      CTX,
+    );
+    expect(hasil.transaksiDigabung).toBe(1);
+    const sesudah = await db.get("transactions", lokal.id);
+    // Nomor final bertahan — resi yang sudah dibagikan tetap menunjuk
+    // ke pesanan yang sama.
+    expect(sesudah?.nomorResi).toBe("KC.00004-20261110");
+    expect(sesudah?.nomorUrutBulan).toBe(4);
+    expect(sesudah?.nomorUrutSementara).toBe(false);
+  });
 });

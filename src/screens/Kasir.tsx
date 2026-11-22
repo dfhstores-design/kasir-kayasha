@@ -9,7 +9,8 @@ interface Props {
   onPesananBaru: () => void;
   /**
    * Buka alur jual barang (pilih-barang). Null = tombol Penjualan nonaktif:
-   * penjaga yang sama dengan Beranda — kasir hanya menjual bila ada bazar aktif.
+   * penjaga yang sama dengan Beranda (F14, BU-66) — kasir toko selalu boleh
+   * (dari gudang); kasir bazar perlu bazar aktif.
    */
   onPenjualan: (() => void) | null;
 }
@@ -21,8 +22,9 @@ type Tab = "belum-lunas" | "riwayat";
  * Dua alur besar: "Pesanan Jahit" dan "Penjualan". Entri "Penjualan" dari layar Kasir
  * dibuka atas keputusan Andri 17 Nov 2026 (P0+P1): penjualan barang sudah berjalan
  * lewat Beranda, jadi bukan lagi ditunda sampai tahap stok (kunci BU-24 lama).
- * Penjualan tetap hanya untuk kasir bila ada bazar aktif — penjaga yang sama dengan
- * Beranda (onPenjualan null = tombol nonaktif).
+ * Penjualan untuk kasir mengikuti penjaga yang sama dengan Beranda (F14,
+ * BU-66): kasir toko selalu boleh jualan dari gudang; kasir bazar perlu
+ * bazar aktif (onPenjualan null = tombol nonaktif).
  * Daftar memakai dua tab besar: Belum Lunas (default) & Riwayat; kartu besar menampilkan
  * nama, jenis jahitan, sisa, dan tanda sudah dikirim. Ketuk kartu untuk detail (terima bayar).
  * Daftar & entitas dipakai ulang dari `lib/jahitan.ts` (agent ui-tante) — tidak diduplikasi.

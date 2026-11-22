@@ -6,11 +6,13 @@ import {
   buatCsvTransaksi,
   kutipCsv,
   periksaCadangan,
+  pulihkanCadangan,
   sepertiBlob,
   VERSI_CADANGAN,
 } from "./cadangan.ts";
 import { ambilSettings, SETTINGS_KOSONG, simpanProduk, simpanSettings } from "./repositori.ts";
 import { getDB, resetKoneksiDB, type ProdukRecord } from "./schema.ts";
+import { simpanPenjualan } from "../lib/penjualan.ts";
 
 /**
  * CATATAN PENTING soal cara tes ini bekerja.
@@ -210,6 +212,49 @@ describe("buatCadangan (IndexedDB asli, data non-Blob)", () => {
 
     // data di DB tidak berubah karena ekspor
     expect((await ambilSettings()).namaButik).toBe("Kayesa");
+  });
+});
+
+describe("pulihkanCadangan — mode ganti di IndexedDB asli (F2, tes klik 22 Nov 2026)", () => {
+  it("cadangan kosong + mode ganti benar-benar mengosongkan barang & transaksi", async () => {
+    resetKoneksiDB();
+    const db = await getDB();
+    // Bersihkan dulu supaya cadangan kosong di bawah memang kosong.
+    for (const store of ["settings", "products", "transactions", "transaction_items", "payments"] as const) {
+      await db.clear(store);
+    }
+
+    // Cadangan kosong (semua store kosong).
+    const kosong = await buatCadangan();
+    expect(kosong.ok).toBe(true);
+    if (!kosong.ok) return;
+
+    // Isi data: 1 barang + 1 penjualan.
+    const p = produk("Blus F2", 180000, 10);
+    await simpanProduk(p);
+    const jual = await simpanPenjualan(
+      {
+        items: [{ produkId: p.id, nama: p.nama, hargaSatuan: 180000, kuantitas: 1, diskonPerUnit: 0 }],
+        diskonTotal: 0,
+        ongkir: { mode: "ambil_sendiri", nominal: 0 },
+        jenisBayar: "tunai",
+        statusBayar: "lunas",
+        dibayarSekarang: 0,
+        bazarId: null,
+      },
+      { rekening: [] },
+    );
+    expect(jual.ok).toBe(true);
+    expect(await db.count("products")).toBe(1);
+    expect(await db.count("transactions")).toBe(1);
+
+    // Pulihkan cadangan kosong dengan mode ganti.
+    const h = await pulihkanCadangan(kosong.berkas, { mode: "ganti" });
+    expect(h.ok).toBe(true);
+    expect(await db.count("products")).toBe(0);
+    expect(await db.count("transactions")).toBe(0);
+    expect(await db.count("transaction_items")).toBe(0);
+    expect(await db.count("payments")).toBe(0);
   });
 });
 

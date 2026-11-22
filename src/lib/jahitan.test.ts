@@ -394,6 +394,53 @@ describe("simpanPesananJahit — nomor urut dari hub (F4, BU-19/21)", () => {
     const t = await db.get("transactions", h.pesanan.id);
     expect(t?.nomorUrutSementara).toBe(true);
   });
+
+  it("F9: tanpa token hub menolak (401) → sementara; dengan token → nomor resmi", async () => {
+    // Tiru server sesudah F7: /api/nomor-urut butuh x-sync-token.
+    const hubBertoken = ((_url: string, init?: { headers?: Record<string, string> }) => {
+      const token = init?.headers?.["x-sync-token"];
+      if (!token) {
+        return Promise.resolve(
+          new Response(JSON.stringify({ ok: false, pesan: "token tidak cocok" }), {
+            status: 401,
+            headers: { "content-type": "application/json" },
+          }),
+        );
+      }
+      return Promise.resolve(
+        new Response(JSON.stringify({ ok: true, bulan: "2026-11", nomor: 7 }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        }),
+      );
+    }) as unknown as typeof fetch;
+
+    // Tanpa token (perilaku lama sebelum F9): hub menolak → nomor lokal sementara.
+    const tanpa = await simpanPesananJahit(rencana(), {
+      rekening: [rekening],
+      waktu: new Date("2026-11-16T07:20:00.000Z"),
+      urlSync: "https://contoh/api/sync",
+      fetchImpl: hubBertoken,
+    });
+    expect(tanpa.ok).toBe(true);
+    if (!tanpa.ok) return;
+    expect(tanpa.pesanan.nomor).toBe("KC.00001-20261116");
+    const db = await getDB();
+    expect((await db.get("transactions", tanpa.pesanan.id))?.nomorUrutSementara).toBe(true);
+
+    // Dengan token: hub memberi nomor resmi, bukan sementara.
+    const dengan = await simpanPesananJahit(rencana({ namaPemesan: "Ibu Dewi" }), {
+      rekening: [rekening],
+      waktu: new Date("2026-11-16T07:20:00.000Z"),
+      urlSync: "https://contoh/api/sync",
+      token: "token-uji-f9",
+      fetchImpl: hubBertoken,
+    });
+    expect(dengan.ok).toBe(true);
+    if (!dengan.ok) return;
+    expect(dengan.pesanan.nomor).toBe("KC.00007-20261116");
+    expect((await db.get("transactions", dengan.pesanan.id))?.nomorUrutSementara).toBeUndefined();
+  });
 });
 
 describe("bazarId pesanan jahit (C7, tes klik 22 Nov 2026)", () => {

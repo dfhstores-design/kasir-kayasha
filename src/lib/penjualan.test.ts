@@ -419,3 +419,88 @@ describe("anti-dobel re-entry kertas (Fase 2C, BU-34)", () => {
     expect(transaksiDariKertas(t!.waktu, t!.createdAt)).toBe(true);
   });
 });
+
+describe("stok tepat sekali per penjualan & pembatalan (F5/F6, tes klik 22 Nov 2026)", () => {
+  beforeEach(resetDB);
+
+  async function stokGudang(id: string): Promise<number> {
+    return (await daftarProduk()).find((p) => p.id === id)?.stokGudang ?? -1;
+  }
+
+  it("F5: dua penjualan sama (kedua lewat 'Tetap Simpan') mengurangi gudang tepat 2x", async () => {
+    const blus = await produkBaru("Blus", 180000, 10);
+    const r = rencana({ items: [item(blus, 1)], namaPembeli: "Dewi" });
+
+    const satu = await simpanPenjualan(r, { rekening: [] });
+    expect(satu.ok).toBe(true);
+    expect(await stokGudang(blus.id)).toBe(9);
+
+    // Duplikat persis: pertama ditolak dengan duplikat:true (panel),
+    // lalu kasir menekan "Tetap Simpan" → izinkanDuplikat.
+    const duplikat = await simpanPenjualan(r, { rekening: [] });
+    expect(duplikat.ok).toBe(false);
+    if (duplikat.ok) return;
+    expect(duplikat.duplikat).toBe(true);
+    const tetap = await simpanPenjualan(r, { rekening: [], izinkanDuplikat: true });
+    expect(tetap.ok).toBe(true);
+    expect(await stokGudang(blus.id)).toBe(8);
+    expect(await daftarTransaksi()).toHaveLength(2);
+  });
+
+  it("F5: dua penjualan bazar mengurangi saldo bazar tepat 2x (gudang tidak berubah)", async () => {
+    const blus = await produkBaru("Blus", 180000, 20);
+    const b = await buatBazar("Pameran", null, null);
+    await alokasikanKeBazar(b.id, blus.id, 10);
+    const r = rencana({ items: [item(blus, 1)], bazarId: b.id, namaPembeli: "Dewi" });
+
+    expect((await simpanPenjualan(r, { rekening: [] })).ok).toBe(true);
+    expect(await saldoBazarProduk(b.id, blus.id)).toBe(9);
+    expect((await simpanPenjualan(r, { rekening: [], izinkanDuplikat: true })).ok).toBe(true);
+    expect(await saldoBazarProduk(b.id, blus.id)).toBe(8);
+    expect((await daftarProduk())[0]?.stokGudang).toBe(10);
+  });
+
+  it("F6: batal mengembalikan tepat yang dibatalkan; penjualan lain tidak tersentuh", async () => {
+    const { batalkanTransaksi } = await import("../db/pesananOperasi.ts");
+    const blus = await produkBaru("Blus", 180000, 10);
+    const kemeja = await produkBaru("Kemeja Linen", 150000, 8);
+
+    const satu = await simpanPenjualan(rencana({ items: [item(blus, 1), item(kemeja, 1)] }), { rekening: [] });
+    expect(satu.ok).toBe(true);
+    expect(await stokGudang(blus.id)).toBe(9);
+    expect(await stokGudang(kemeja.id)).toBe(7);
+
+    // Penjualan kedua (hanya kemeja) tetap jalan sesudahnya.
+    const dua = await simpanPenjualan(rencana({ items: [item(kemeja, 1)], namaPembeli: "Rina" }), { rekening: [] });
+    expect(dua.ok).toBe(true);
+    expect(await stokGudang(kemeja.id)).toBe(6);
+
+    // Batalkan penjualan pertama saja: Blus kembali 10, Kemeja kembali 7
+    // (hanya 1 unit dari penjualan pertama — bukan 8).
+    if (!satu.ok) return;
+    const batal = await batalkanTransaksi(satu.transaksi.id, "Pelanggan membatalkan");
+    expect(batal.ok).toBe(true);
+    expect(await stokGudang(blus.id)).toBe(10);
+    expect(await stokGudang(kemeja.id)).toBe(7);
+  });
+});
+
+describe("kasir toko tanpa bazar aktif jualan dari gudang (F14, BU-66)", () => {
+  beforeEach(resetDB);
+
+  it("bazarIdPenjualan kasir toko = null → penjualan tersimpan + stok gudang berkurang", async () => {
+    const { bazarIdPenjualan } = await import("./peran.ts");
+    const blus = await produkBaru("Blus", 180000, 10);
+
+    // Kasir toko, tidak ada bazar aktif: penjualan dicatat tanpa bazarId.
+    const bazarId = bazarIdPenjualan({ jenis: "toko" }, null);
+    expect(bazarId).toBeNull();
+    const h = await simpanPenjualan(rencana({ items: [item(blus, 2)], bazarId }), { rekening: [] });
+    expect(h.ok).toBe(true);
+    if (!h.ok) return;
+    // Yang tersimpan di DB harus bazarId null (penjualan butik, bukan bazar).
+    const { ambilTransaksi } = await import("../db/repositori.ts");
+    expect((await ambilTransaksi(h.transaksi.id))?.transaksi.bazarId).toBeNull();
+    expect((await daftarProduk())[0]?.stokGudang).toBe(8);
+  });
+});

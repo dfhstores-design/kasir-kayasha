@@ -64,6 +64,27 @@ describe("verifikasiKodeReset", () => {
     );
     expect(hasil).toEqual({ ok: false, pesan: "Kode salah. Sisa percobaan: 4." });
   });
+
+  it("F1: respons yang menggantung dibatalkan batas tunggu, bukan macet selamanya", async () => {
+    // Tiru fetch yang tidak pernah menjawab tapi menghormati signal —
+    // seperti fetch asli saat respons hilang di jalan.
+    const fetchGantung = ((_url: string, init?: { signal?: AbortSignal }) =>
+      new Promise((_selesai, tolak) => {
+        init?.signal?.addEventListener("abort", () => {
+          tolak(new DOMException("Sinyal dibatalkan", "AbortError"));
+        });
+      })) as unknown as typeof fetch;
+    const mulai = Date.now();
+    const hasil = await verifikasiKodeReset("admin", "123456", fetchGantung, 100);
+    const lewat = Date.now() - mulai;
+    expect(hasil.ok).toBe(false);
+    expect(hasil).toEqual({
+      ok: false,
+      pesan: "Server tidak menjawab. Coba lagi — bila kode dibilang sudah kedaluwarsa, minta kode baru ke Andri.",
+    });
+    // Jauh di bawah batas default 15 detik — layar tidak macet menit-menit.
+    expect(lewat).toBeLessThan(5000);
+  });
 });
 
 describe("hapusPinLokalSetelahReset", () => {

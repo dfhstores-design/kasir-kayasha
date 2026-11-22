@@ -23,6 +23,12 @@ interface Props {
   /** Buka resi satu penjualan (App menampilkan layar Resi). */
   onLihatResi: (transaksiId: string) => void;
   onKembali: () => void;
+  /**
+   * Dipanggil sesudah pembatalan berhasil (F6, tes klik 22 Nov 2026).
+   * App memakai ini untuk memuat ulang saldo bazar — tanpa ini, pemilih
+   * barang di App masih memakai saldo lama sesudah stok dikembalikan.
+   */
+  onBerubah?: () => void;
 }
 
 const BATAS_TAMPIL = 20;
@@ -34,7 +40,7 @@ function labelStatus(t: TransaksiRecord): string {
   return "Belum dibayar";
 }
 
-export default function RiwayatPenjualan({ onLihatResi, onKembali }: Props) {
+export default function RiwayatPenjualan({ onLihatResi, onKembali, onBerubah }: Props) {
   const [daftar, setDaftar] = useState<TransaksiRecord[] | null>(null);
   const [pesan, setPesan] = useState<string | null>(null);
   const [tampilSemua, setTampilSemua] = useState(false);
@@ -80,6 +86,7 @@ export default function RiwayatPenjualan({ onLihatResi, onKembali }: Props) {
     setAlasan("");
     setPesan("Penjualan dibatalkan — stok kembali, uang yang sudah diterima dicatat sebagai pengembalian.");
     await muat();
+    onBerubah?.();
   }
 
   if (daftar === null) {

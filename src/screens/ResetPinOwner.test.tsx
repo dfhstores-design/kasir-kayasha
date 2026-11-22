@@ -14,7 +14,7 @@ import { IDBFactory } from "fake-indexeddb";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import ResetPinOwner from "./ResetPinOwner.tsx";
 import { getDB, resetKoneksiDB } from "../db/schema.ts";
-import { SETTINGS_KOSONG, type SettingsRecord } from "../db/repositori.ts";
+import { SETTINGS_KOSONG, simpanSettings, type SettingsRecord } from "../db/repositori.ts";
 
 function resetDB() {
   (globalThis as unknown as { indexedDB: IDBFactory }).indexedDB = new IDBFactory();
@@ -27,10 +27,12 @@ describe("ResetPinOwner", () => {
 
   it("menampilkan daftar peran dengan status PIN dan reset dua langkah", async () => {
     const settings: SettingsRecord = { ...SETTINGS_KOSONG, pinHash: "sha256$salt$admin", pinKasirTokoHash: null };
+    // Status PIN dibaca segar dari DB (F3(b)) — tanam dulu di DB.
+    await simpanSettings(settings);
     const onReset = vi.fn(async () => {});
     render(<ResetPinOwner settings={settings} onReset={onReset} onKembali={() => {}} />);
 
-    expect(screen.getByText("PIN Admin")).toBeDefined();
+    expect(await screen.findByText("PIN Admin")).toBeDefined();
     expect(screen.getByText("PIN Kasir Toko")).toBeDefined();
 
     // PIN kasir toko belum diatur: tombolnya nonaktif.
@@ -74,5 +76,22 @@ describe("ResetPinOwner", () => {
     });
     render(<ResetPinOwner settings={SETTINGS_KOSONG} onReset={vi.fn(async () => {})} onKembali={() => {}} />);
     expect(await screen.findByText("PIN Kasir Bazar: Bazar Uji")).toBeDefined();
+  });
+
+  it("F3(b): prop settings yang basi kalah dengan bacaan segar dari DB", async () => {
+    // Prop bilang PIN admin belum diatur (basi), tapi DB sudah punya PIN.
+    await simpanSettings({ ...SETTINGS_KOSONG, pinHash: "sha256$salt$admin" });
+    render(
+      <ResetPinOwner
+        settings={SETTINGS_KOSONG}
+        onReset={vi.fn(async () => {})}
+        onKembali={() => {}}
+      />,
+    );
+    expect(await screen.findByText("PIN Admin")).toBeDefined();
+    // Status dari DB: PIN diatur, tombol Reset aktif.
+    const tombol = screen.getAllByRole("button", { name: "Reset PIN" }) as HTMLButtonElement[];
+    expect(tombol[0]!.disabled).toBe(false);
+    expect(screen.getByText("PIN diatur")).toBeDefined();
   });
 });

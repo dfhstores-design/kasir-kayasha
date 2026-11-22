@@ -323,18 +323,33 @@ async function terapkanTransaksi(db: DB, k: KirimanTransaksi, ctx: KonteksTarik)
     // Edit yang lebih baru dari perangkat lain (mis. ubahPesananJahit,
     // atau perbaikan nomor sementara F4): ambil isi terbaru, TAPI
     // pembayaran lokal tidak pernah dihapus.
+    //
+    // Nomor dokumen (F9, tes klik 22 Nov 2026): nomor resmi yang sudah
+    // FINAL di perangkat ini TIDAK BOLEH ditimpa nomor dari hub — nomor
+    // di resi bisa menunjuk ke pesanan lain bila berubah sesudah dibuat.
+    // Hanya pesanan yang memang ditandai sementara (dibuat offline,
+    // nomorUrutSementara) yang boleh menerima nomor resmi dari hub.
+    const nomorDariHub = lokal.nomorUrutSementara === true;
     gabung = {
       ...gabung,
       // Nomor dokumen ikut diperbarui bila hub membawa yang lebih baru
-      // (perbaikan nomor sementara F4) — nomor lama yang sementara
-      // diganti nomor resmi dari hub.
-      nomorResi: k.nomorResi,
-      ...(k.nomorUrutBulan !== undefined
-        ? { nomorUrutBulan: k.nomorUrutBulan }
-        : lokal.nomorUrutBulan !== undefined
-          ? { nomorUrutBulan: lokal.nomorUrutBulan }
-          : {}),
-      nomorUrutSementara: k.nomorUrutSementara === true,
+      // DAN nomor lokal masih sementara (perbaikan nomor sementara F4)
+      // — nomor final tidak pernah ditulis ulang dari hub.
+      ...(nomorDariHub
+        ? {
+            nomorResi: k.nomorResi,
+            ...(k.nomorUrutBulan !== undefined
+              ? { nomorUrutBulan: k.nomorUrutBulan }
+              : lokal.nomorUrutBulan !== undefined
+                ? { nomorUrutBulan: lokal.nomorUrutBulan }
+                : {}),
+            nomorUrutSementara: k.nomorUrutSementara === true,
+          }
+        : {
+            nomorResi: lokal.nomorResi,
+            ...(lokal.nomorUrutBulan !== undefined ? { nomorUrutBulan: lokal.nomorUrutBulan } : {}),
+            nomorUrutSementara: false,
+          }),
       namaPemesan: k.namaPemesan,
       kontak: k.kontak ?? lokal.kontak,
       catatanPesanan: k.catatanPesanan ?? lokal.catatanPesanan,

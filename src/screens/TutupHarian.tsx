@@ -54,6 +54,14 @@ export default function TutupHarian({ bazarId, label, peran }: Props) {
   const [pengembalianBatal, setPengembalianBatal] = useState(0);
   /** Jejak penutupan hari ini di lokasi ini (null = belum ditutup). */
   const [ditutup, setDitutup] = useState<TutupHarianRecord | null>(null);
+  /**
+   * F7 (tes klik 22 Nov 2026): sama seperti Ringkasan — muat yang gagal
+   * dulu ditampilkan sebagai angka nol ("Transaksi hari ini 0", "Uang
+   * masuk Rp 0") padahal datanya ada. Sekarang gagal muat menampilkan
+   * panel galat + "Coba lagi", bukan angka nol.
+   */
+  const [galatMuat, setGalatMuat] = useState<string | null>(null);
+  const [cobaMuat, setCobaMuat] = useState(0);
   /** Konfirmasi dua langkah di dalam aplikasi (C1). */
   const [mintaKonfirmasi, setMintaKonfirmasi] = useState(false);
   const [sibuk, setSibuk] = useState(false);
@@ -102,12 +110,17 @@ export default function TutupHarian({ bazarId, label, peran }: Props) {
       setPengembalianDp(harian.pengembalianDp);
       setPengembalianBatal(harian.pengembalianBatal);
       setDitutup(tutup);
+      setGalatMuat(null);
       setMemuat(false);
-    })().catch(() => setMemuat(false));
+    })().catch(() => {
+      if (!hidup) return;
+      setGalatMuat("Tutup harian tidak bisa dimuat.");
+      setMemuat(false);
+    });
     return () => {
       hidup = false;
     };
-  }, [bazarId, hari]);
+  }, [bazarId, hari, cobaMuat]);
 
   /** Langkah tutup: klik pertama membuka panel konfirmasi, klik kedua mencatat. */
   const tutup = async () => {
@@ -161,6 +174,29 @@ export default function TutupHarian({ bazarId, label, peran }: Props) {
     return (
       <div className="content">
         <p className="soft">Menghitung tutup harian…</p>
+      </div>
+    );
+  }
+
+  // F7: gagal muat ≠ hari tanpa transaksi. Tampilkan galat + "Coba lagi".
+  if (galatMuat) {
+    return (
+      <div className="content">
+        <div className="panel panel--warn" role="alert">
+          <strong>Tutup harian tidak bisa dimuat.</strong>
+          <p style={{ margin: "0.25rem 0 0.5rem" }}>Datanya tidak hilang — coba muat lagi.</p>
+          <button
+            type="button"
+            className="btn btn--primary"
+            onClick={() => {
+              setGalatMuat(null);
+              setMemuat(true);
+              setCobaMuat((n) => n + 1);
+            }}
+          >
+            Coba lagi
+          </button>
+        </div>
       </div>
     );
   }

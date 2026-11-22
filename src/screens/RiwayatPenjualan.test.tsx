@@ -122,6 +122,18 @@ describe("RiwayatPenjualan (C5)", () => {
     expect(screen.getByRole("button", { name: "Ya, Batalkan" }).hasAttribute("disabled")).toBe(true);
   });
 
+  it("F6: sesudah batal berhasil, onBerubah dipanggil agar App memuat ulang saldo", async () => {
+    await siapkanPenjualan();
+    const berubah = vi.fn();
+    render(<RiwayatPenjualan onLihatResi={vi.fn()} onKembali={vi.fn()} onBerubah={berubah} />);
+    expect(await screen.findByText("KYS-0001")).toBeTruthy();
+    fireEvent.click(screen.getAllByRole("button", { name: "Batalkan" })[0]!);
+    fireEvent.change(screen.getByLabelText("Alasan pembatalan"), { target: { value: "Salah input" } });
+    fireEvent.click(screen.getByRole("button", { name: "Ya, Batalkan" }));
+    await waitFor(() => expect(screen.getByText(/Dibatalkan/)).toBeTruthy());
+    expect(berubah).toHaveBeenCalledTimes(1);
+  });
+
   it("tampilkan pesan bila belum ada penjualan", async () => {
     render(<RiwayatPenjualan onLihatResi={vi.fn()} onKembali={vi.fn()} />);
     expect(await screen.findByText("Belum ada penjualan.")).toBeTruthy();

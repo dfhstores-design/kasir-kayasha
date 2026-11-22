@@ -250,4 +250,43 @@ describe("TutupBazar — rekonsiliasi & konfirmasi (Fase 2C, BU-34)", () => {
     // Pesanan yang dibatalkan tidak masuk daftar konfirmasi ulang.
     expect(screen.queryByText("Ibu Sari")).toBeNull();
   });
+
+  it("F10: bagian daftar pesanan selalu tampil, dengan penjelasan bila kosong", async () => {
+    const b = await siapkanBazarDenganPenjualan();
+
+    render(<TutupBazar bazar={b} onSelesai={vi.fn()} />);
+    expect(await screen.findByText("Pameran")).toBeTruthy();
+    // Judul bagian + penjelasan kosong harus ada meski tidak ada pesanan
+    // terbuka — dulu bagian ini hilang sama sekali (temuan F10).
+    expect(screen.getByText(/Pesanan yang belum selesai/)).toBeTruthy();
+    expect(screen.getByText("Tidak ada pesanan terbuka dari bazar ini.")).toBeTruthy();
+    expect(screen.getByText(/Hanya pesanan yang dicatat kasir bazar ini/)).toBeTruthy();
+  });
+
+  it("F10: pesanan butik (tanpa bazarId) tidak hilang diam-diam — bagian menjelaskan aturannya", async () => {
+    const b = await siapkanBazarDenganPenjualan();
+    // Skenario putaran 3: pesanan dicatat sebagai pesanan butik (kasir
+    // masuk sebagai kasir toko / lokasi hilang) lalu admin menutup bazar.
+    const h = await simpanPesananJahit(
+      {
+        namaPemesan: "Ibu Tina",
+        kontak: null,
+        items: [{ nama: "Gaun pesta", harga: 400000, kuantitas: 1, ukuran: null }],
+        perkiraanSelesai: null,
+        catatan: null,
+        biayaLain: [],
+      },
+      { rekening: [] },
+    );
+    if (!h.ok) throw new Error("gagal membuat pesanan");
+    expect((await terimaPembayaranKasir(h.pesanan.id, 100000, "tunai")).ok).toBe(true);
+
+    render(<TutupBazar bazar={b} onSelesai={vi.fn()} />);
+    expect(await screen.findByText("Pameran")).toBeTruthy();
+    // Pesanan butik memang tidak masuk daftar bazar (aturan C7), tapi
+    // bagiannya tetap tampil dengan penjelasan — bukan hilang.
+    expect(screen.queryByText("Ibu Tina")).toBeNull();
+    expect(screen.getByText(/Pesanan yang belum selesai/)).toBeTruthy();
+    expect(screen.getByText("Tidak ada pesanan terbuka dari bazar ini.")).toBeTruthy();
+  });
 });

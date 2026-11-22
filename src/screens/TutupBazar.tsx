@@ -225,9 +225,18 @@ export default function TutupBazar({ bazar, onSelesai }: Props) {
           </div>
         )}
 
-        {(pesananBelum?.length ?? 0) > 0 && (
+        {/*
+          F10 (tes klik 22 Nov 2026): bagian ini SELALU tampil. Dulu hanya
+          muncul bila ada pesanan terbuka — bila daftarnya kosong (mis.
+          pesanan dicatat sebagai pesanan butik karena kasir masuk sebagai
+          kasir toko, atau lokasi kasir hilang sesudah reload), admin
+          melihat layar tanpa daftar sama sekali dan menyangka fiturnya
+          hilang. Sekarang bagian kosong pun menampilkan penjelasan
+          aturannya, supaya jelas kenapa daftarnya kosong.
+        */}
+        <span className="label">Pesanan yang belum selesai / belum lunas — konfirmasi ulang</span>
+        {(pesananBelum?.length ?? 0) > 0 ? (
           <>
-            <span className="label">Pesanan yang belum selesai / belum lunas — konfirmasi ulang</span>
             {(pesananBelum ?? []).map((t) => (
               <div key={t.id} className="listrow">
                 <div style={{ flex: 1 }}>
@@ -250,6 +259,14 @@ export default function TutupBazar({ bazar, onSelesai }: Props) {
               <span>Pesanan di atas sudah dikonfirmasi (akan dikirim / diambil di butik).</span>
             </label>
           </>
+        ) : (
+          <div className="panel panel--ok">
+            <strong>Tidak ada pesanan terbuka dari bazar ini.</strong>
+            <p style={{ margin: "0.25rem 0 0" }}>
+              Hanya pesanan yang dicatat kasir bazar ini yang muncul di sini. Pesanan butik tidak
+              termasuk.
+            </p>
+          </div>
         )}
 
         {baris.length > 0 ? (

@@ -258,7 +258,7 @@ export async function cariDuplikatJahitan(
  */
 export async function simpanPesananJahit(
   rencana: RencanaJahitan,
-  konteks: { rekening: readonly Rekening[]; waktu?: Date; urlSync?: string; fetchImpl?: typeof fetch; izinkanDuplikat?: boolean },
+  konteks: { rekening: readonly Rekening[]; waktu?: Date; urlSync?: string; token?: string; fetchImpl?: typeof fetch; izinkanDuplikat?: boolean },
 ): Promise<HasilSimpanJahitan> {
   const cek = periksaRencanaJahitan(rencana);
   if (!cek.ok) return { ok: false, pesan: cek.pesan };
@@ -300,12 +300,20 @@ export async function simpanPesananJahit(
   // Nomor urut pesanan jahit (BU-19/21, diputuskan Tante 19 Nov 2026):
   // 5 digit, dihitung dalam BULAN yang sama (hanya jenisDokumen "jasa").
   // Saat online, nomor diminta ke hub (F4) supaya dua perangkat tidak
-  // mendapat nomor yang sama. Saat offline / hub tidak bisa dihubungi,
-  // dipakai hitungan lokal + ditandai sementara — sync akan meminta nomor
-  // resmi dari hub dan menulis ulang nomor ini begitu online lagi.
-  // Penjualan TIDAK PERNAH menunggu hub: gagal = nomor lokal.
+  // mendapat nomor yang sama. Token WAJIB ikut (F9, tes klik 22 Nov 2026):
+  // sejak F7 endpoint /api/nomor-urut menolak tanpa x-sync-token (401),
+  // dan pemanggilan lama tanpa token membuat SEMUA pesanan online jatuh
+  // ke nomor lokal sementara — lalu diperbaikiNomorSementara menulis
+  // ulang nomornya sesudah sync (KC.00004→KC.00002 dst). Token dibaca
+  // dari konteks (App) atau env build VITE_SYNC_TOKEN, sama seperti
+  // jalur sync lain (resetPin.ts, StatusSinkron.tsx). Saat offline / hub
+  // tidak bisa dihubungi, dipakai hitungan lokal + ditandai sementara —
+  // sync akan meminta nomor resmi dari hub dan menulis ulang nomor ini
+  // begitu online lagi. Penjualan TIDAK PERNAH menunggu hub: gagal =
+  // nomor lokal.
   const urlSync = konteks.urlSync ?? import.meta.env.VITE_SYNC_URL ?? "";
-  const nomorHub = await mintaNomorUrutBulan({ urlSync, bulan, fetchImpl: konteks.fetchImpl });
+  const token = konteks.token ?? import.meta.env.VITE_SYNC_TOKEN ?? "";
+  const nomorHub = await mintaNomorUrutBulan({ urlSync, token: token || undefined, bulan, fetchImpl: konteks.fetchImpl });
   const semua = await daftarTransaksi();
   const nomorSementara = nomorHub === null;
   // Bulan/hari dihitung dalam WIB (C9): potongan ISO adalah tanggal UTC.

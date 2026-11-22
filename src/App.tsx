@@ -52,7 +52,7 @@ import { terapkanTampilan } from "./lib/tampilan.ts";
 import { jalankanSeedDemo, migrasiAlamatLama, migrasiRekeningKedua } from "./db/seedDemo.ts";
 import type { OngkirMode } from "./lib/ongkir.ts";
 import type { StatusBayar } from "./lib/keranjang.ts";
-import { bolehAdmin, khususAdmin, labelLokasiKasir, type LokasiKasir, type Peran } from "./lib/peran.ts";
+import { bazarPenjualan, bolehAdmin, bolehJualBarang, khususAdmin, labelLokasiKasir, type LokasiKasir, type Peran } from "./lib/peran.ts";
 import { simpanPenjualan, type JenisBayar, type TransaksiTersimpan } from "./lib/penjualan.ts";
 import { bikinIsiKeranjang, type IsiKeranjang } from "./lib/isiKeranjang.ts";
 import { formatJam, tanggalHariIni, waktuDariTanggal } from "./lib/tanggal.ts";
@@ -123,6 +123,13 @@ export default function App() {
     return awal ? { nama: awal } : { nama: "beranda" };
   });
   const [settings, setSettings] = useState<SettingsRecord | null>(null);
+  /**
+   * Pengaturan sudah berhasil dibaca sekali (F3/F4, tes klik 22 Nov 2026).
+   * `settings === null` berarti "belum dimuat" — BUKAN "PIN belum diatur".
+   * Layar login (MasukAdmin) menunggu flag ini sebelum menyimpulkan apa
+   * pun soal PIN; bila false, ia menampilkan "Memuat…" + "Coba lagi".
+   */
+  const [settingsSiap, setSettingsSiap] = useState(false);
   const [storagePermanen, setStoragePermanen] = useState<boolean | null>(null);
 
   const [keranjang, setKeranjang] = useState<IsiKeranjang[]>([]);
@@ -182,9 +189,20 @@ export default function App() {
   }, []);
 
   const muat = useCallback(async () => {
+    // F3/F4, tes klik 22 Nov 2026: baca ulang yang GAGAL tidak boleh
+    // menolkan settings (dulu `.catch(() => setSettings(null))` membuat
+    // seluruh aplikasi mengira PIN belum diatur — masuk gratis sekali,
+    // lalu minta PIN yang tidak pernah diatur; dan AturPin menelan simpan
+    // PIN diam-diam). Sekarang: gagal = pertahankan nilai terakhir yang
+    // bagus; settingsSiap hanya true bila baca berhasil.
     ambilSettings()
-      .then(setSettings)
-      .catch(() => setSettings(null));
+      .then((s) => {
+        setSettings(s);
+        setSettingsSiap(true);
+      })
+      .catch(() => {
+        // Sengaja diam: nilai lama tetap berlaku.
+      });
     const b = await bazarAktif();
     setBazar(b ?? null);
     setSaldoBazar(b ? await saldoSemuaBazar(b.id) : new Map());
@@ -206,7 +224,27 @@ export default function App() {
         const daftarBiayaBazar = b ? await daftarBiaya(b.id).catch(() => []) : [];
         const jumlahAktif = await daftarBazarAktif().catch(() => [] as BazarRecord[]);
         if (!hidup) return;
-        setSettings(s);
+        // F3/F4: baca settings yang gagal = belum dimuat, bukan "belum
+        // diatur" — jangan set null. Bila gagal, coba sekali lagi
+        // sesudah 1,5 detik (baca IndexedDB yang telat); layar login
+        // menampilkan "Memuat…" + "Coba lagi" sampai berhasil.
+        if (s) {
+          setSettings(s);
+          setSettingsSiap(true);
+        } else {
+          window.setTimeout(() => {
+            if (!hidup) return;
+            ambilSettings()
+              .then((s2) => {
+                if (!hidup) return;
+                setSettings(s2);
+                setSettingsSiap(true);
+              })
+              .catch(() => {
+                // Tetap belum siap: layar login menawarkan "Coba lagi".
+              });
+          }, 1500);
+        }
         setBazar(b ?? null);
         setSaldoBazar(saldo);
         setBiaya(daftarBiayaBazar);
@@ -306,15 +344,24 @@ export default function App() {
     setLayar({ nama: "beranda" });
   }, [layar, keranjang.length]);
 
+  /**
+   * Bazar yang dipakai penjualan barang (F14, BU-66): kasir toko selalu
+   * menjual dari gudang (null), peran lain memakai bazar aktif. Satu
+   * turunan ini yang dipakai pemilih barang, keranjang, simpan, dan
+   * parkir — supaya stok yang ditampilkan dan stok yang dikurangi
+   * selalu dari sumber yang sama.
+   */
+  const bazarJual = bazarPenjualan(lokasiKasir, bazar);
+
   /** Stok tersedia untuk satu barang: saldo bazar bila bazar aktif, selain itu gudang. */
   const stokTersedia = useCallback(
-    (p: ProdukRecord) => (bazar ? (saldoBazar.get(p.id) ?? 0) : p.stokGudang),
-    [bazar, saldoBazar],
+    (p: ProdukRecord) => (bazarJual ? (saldoBazar.get(p.id) ?? 0) : p.stokGudang),
+    [bazarJual, saldoBazar],
   );
 
   const tambahKeKeranjang = useCallback(
     (p: ProdukRecord, kuantitas = 1) => {
-      const batas = bazar ? (saldoBazar.get(p.id) ?? 0) : p.stokGudang;
+      const batas = bazarJual ? (saldoBazar.get(p.id) ?? 0) : p.stokGudang;
       setKeranjang((daftar) => {
         const ada = daftar.find((k) => k.produkId === p.id);
         if (ada) {
@@ -325,7 +372,7 @@ export default function App() {
         return [...daftar, { ...baris, stokTersedia: batas }];
       });
     },
-    [bazar, saldoBazar],
+    [bazarJual, saldoBazar],
   );
 
   const simpanTransaksiSekarang = useCallback(async () => {
@@ -363,7 +410,7 @@ export default function App() {
       jenisBayar: nilaiKeranjang.jenisBayar,
       statusBayar: nilaiKeranjang.statusBayar,
       dibayarSekarang: nilaiKeranjang.dibayarSekarang,
-      bazarId: bazar?.id ?? null,
+      bazarId: bazarJual?.id ?? null,
       // (a, tes klik 22 Nov 2026): nama pembeli yang diketik di keranjang
       // ikut disimpan — dulu hanya dipakai saat memarkir, penjualan
       // langsung selalu tercatat tanpa nama ("Pembeli Umum").
@@ -396,7 +443,7 @@ export default function App() {
     setTanggalTransaksi(tanggalHariIni());
     await muat();
     setLayar({ nama: "tersimpan", transaksi: hasil.transaksi });
-  }, [keranjang, nilaiKeranjang, settings, bazar, muat, tanggalTransaksi, mintaKonfirmasiDuplikat, namaPembeli]);
+  }, [keranjang, nilaiKeranjang, settings, bazarJual, muat, tanggalTransaksi, mintaKonfirmasiDuplikat, namaPembeli]);
 
   /** Memarkir keranjang sekarang; butuh nama pembeli (maks 3 parkir). */
   const parkirSekarang = useCallback(async () => {
@@ -418,7 +465,7 @@ export default function App() {
       ongkirMode: nilaiKeranjang.ongkirMode,
       ongkirNominal: nilaiKeranjang.ongkirNominal,
       jenisBayar: nilaiKeranjang.jenisBayar,
-      bazarId: bazar?.id ?? null,
+      bazarId: bazarJual?.id ?? null,
     });
     if (!h.ok) {
       setPesanSimpan(`Sudah ada ${MAKS_PARKIR_TAMPIL} transaksi tertahan. Selesaikan salah satu dulu.`);
@@ -429,7 +476,7 @@ export default function App() {
     setNamaPembeli("");
     await muatParkir();
     setLayar({ nama: "pilih-barang" });
-  }, [namaPembeli, keranjang, nilaiKeranjang, bazar, muatParkir]);
+  }, [namaPembeli, keranjang, nilaiKeranjang, bazarJual, muatParkir]);
 
   const lanjutkanParkir = useCallback(
     async (id: string) => {
@@ -609,8 +656,9 @@ export default function App() {
               setLayar({ nama: "masuk-admin" });
               return;
             }
-            // Kasir hanya menjual bila ada bazar aktif.
-            if (!bolehAdmin(peran) && nama === "pilih-barang" && !bazar) {
+            // Kasir hanya menjual bila boleh jualan (F14): kasir toko
+            // selalu boleh (dari gudang); kasir bazar perlu bazar aktif.
+            if (!bolehAdmin(peran) && nama === "pilih-barang" && !bolehJualBarang(peran, lokasiKasir, bazar !== null)) {
               setLayar({ nama: "beranda" });
               return;
             }
@@ -778,6 +826,7 @@ export default function App() {
         <RiwayatPenjualan
           onLihatResi={(id) => setLayar({ nama: "resi", transaksiId: id })}
           onKembali={() => setLayar({ nama: "beranda" })}
+          onBerubah={() => void muat()}
         />
       )}
 
@@ -823,7 +872,10 @@ export default function App() {
             pinAda={!!settings?.pinHash}
             hashLain={[settings?.pinOwnerHash ?? null, settings?.pinKasirTokoHash ?? null]}
             onSimpan={async (hash) => {
-              if (!settings) return;
+              // F4: tanpa guard `if (!settings) return` — guard itu menelan
+              // simpan diam-diam saat settings App belum dimuat, sementara
+              // AturPin menampilkan "PIN tersimpan". simpanPin membaca
+              // settings segar sendiri dan melempar bila gagal tertulis.
               await simpanPin("admin", hash);
               const s = await ambilSettings();
               setSettings(s);
@@ -840,7 +892,7 @@ export default function App() {
             pinAda={!!settings?.pinOwnerHash}
             hashLain={[settings?.pinHash ?? null, settings?.pinKasirTokoHash ?? null]}
             onSimpan={async (hash) => {
-              if (!settings) return;
+              // F4: tanpa guard diam-diam (lihat onSimpan admin di atas).
               await simpanPin("owner", hash);
               const s = await ambilSettings();
               setSettings(s);
@@ -857,7 +909,7 @@ export default function App() {
             pinAda={!!settings?.pinKasirTokoHash}
             hashLain={[settings?.pinHash ?? null, settings?.pinOwnerHash ?? null]}
             onSimpan={async (hash) => {
-              if (!settings) return;
+              // F4: tanpa guard diam-diam (lihat onSimpan admin di atas).
               await simpanPin("kasir_toko", hash);
               const s = await ambilSettings();
               setSettings(s);
@@ -981,9 +1033,10 @@ export default function App() {
           segarkan={segarkanJahitan}
           onPesananBaru={() => setLayar({ nama: "wizard-jahit" })}
           onPenjualan={
-            // Penjaga yang sama dengan buka("pilih-barang") di Beranda: kasir hanya
-            // menjual bila ada bazar aktif. Null = tombol Penjualan nonaktif.
-            bolehAdmin(peran) || bazar
+            // Penjaga yang sama dengan buka("pilih-barang") di Beranda (F14):
+            // kasir toko selalu boleh jualan (dari gudang); kasir bazar
+            // perlu bazar aktif. Null = tombol Penjualan nonaktif.
+            bolehJualBarang(peran, lokasiKasir, bazar !== null)
               ? () => {
                   setLayar({ nama: "pilih-barang" });
                 }
@@ -996,6 +1049,8 @@ export default function App() {
         <MasukAdmin
           peran="admin"
           pinHash={settings?.pinHash ?? null}
+          memuat={!settingsSiap}
+          onMuatUlang={() => void muat()}
           onMasukAdmin={() => {
             setPeran("admin");
             setLayar({ nama: "beranda" });
@@ -1009,6 +1064,8 @@ export default function App() {
         <MasukAdmin
           peran="owner"
           pinHash={settings?.pinOwnerHash ?? null}
+          memuat={!settingsSiap}
+          onMuatUlang={() => void muat()}
           onMasukAdmin={() => {
             setPeran("owner");
             setLayar({ nama: "beranda" });
@@ -1024,8 +1081,21 @@ export default function App() {
           onVerifikasi={async (kode) => {
             const hasil = await verifikasiKodeReset(layar.peran, kode);
             if (!hasil.ok) return hasil;
-            await hapusPinLokalSetelahReset(layar.peran);
-            await muat();
+            // F1, tes klik 22 Nov 2026: pembersihan lokal sesudah sukses
+            // server WAJIB best-effort — bila hapus lokal / muat ulang
+            // gagal, verifikasi tidak boleh tampil gagal/macet. Hub sudah
+            // menghapus PIN (sumber kebenaran); tarik sync berikutnya
+            // membersihkan PIN lokal juga.
+            try {
+              await hapusPinLokalSetelahReset(layar.peran);
+            } catch {
+              // Abaikan: tarik sync akan membersihkan PIN lokal.
+            }
+            try {
+              await muat();
+            } catch {
+              // Abaikan: layar sukses tetap tampil.
+            }
             return { ok: true as const };
           }}
           onBerhasil={() => setLayar({ nama: layar.kembaliKe })}

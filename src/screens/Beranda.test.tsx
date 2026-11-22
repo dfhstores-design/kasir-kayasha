@@ -11,7 +11,7 @@
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { IDBFactory } from "fake-indexeddb";
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import Beranda from "./Beranda.tsx";
 import { resetKoneksiDB, type BazarRecord } from "../db/schema.ts";
 
@@ -198,5 +198,53 @@ describe("Beranda — Fase 2A (role & PIN, BU-32/34)", () => {
     );
     expect(screen.getByRole("button", { name: "Tutup Harian" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Riwayat Sinkron" })).toBeTruthy();
+  });
+});
+
+describe("Beranda — F14 kasir toko (BU-66)", () => {
+  beforeEach(resetDB);
+  afterEach(cleanup);
+
+  function renderBerandaF14(peran: "kasir", lokasiKasir: { jenis: "toko" } | { jenis: "bazar"; bazarId: string; nama: string } | null, bazarAktif: BazarRecord | null) {
+    const buka = vi.fn();
+    render(
+      <Beranda
+        settings={null}
+        storagePermanen={null}
+        bazar={bazarAktif}
+        jumlahBazarAktif={bazarAktif ? 1 : 0}
+        memuatAwal={false}
+        peran={peran}
+        lokasiKasir={lokasiKasir}
+        onMintaAdmin={() => {}}
+        onKeluarAdmin={() => {}}
+        onBiayaBazar={() => {}}
+        buka={buka}
+      />,
+    );
+    return buka;
+  }
+
+  it("kasir toko tanpa bazar aktif: Penjualan AKTIF dari stok gudang", () => {
+    const buka = renderBerandaF14("kasir", { jenis: "toko" }, null);
+    const tombol = screen.getByRole("button", { name: "Penjualan" });
+    expect(tombol.hasAttribute("disabled")).toBe(false);
+    // Bukan panel peringatan "minta admin membuka bazar".
+    expect(screen.queryByText(/Minta admin membuka bazar/)).toBeNull();
+    expect(screen.getByText(/penjualan memakai stok gudang/)).toBeTruthy();
+    fireEvent.click(tombol);
+    expect(buka).toHaveBeenCalledWith("pilih-barang");
+  });
+
+  it("kasir toko dengan bazar aktif: Penjualan tetap aktif", () => {
+    renderBerandaF14("kasir", { jenis: "toko" }, bazar("Pameran"));
+    expect(screen.getByRole("button", { name: "Penjualan" }).hasAttribute("disabled")).toBe(false);
+  });
+
+  it("kasir bazar tanpa bazar aktif: Penjualan NONAKTIF + alasan tampil", () => {
+    renderBerandaF14("kasir", { jenis: "bazar", bazarId: "b1", nama: "Bazar A" }, null);
+    expect(screen.getByRole("button", { name: "Penjualan" }).hasAttribute("disabled")).toBe(true);
+    expect(screen.getByText(/Belum ada bazar aktif/)).toBeTruthy();
+    expect(screen.getByText(/Kasir bazar hanya mencatat transaksi saat ada bazar aktif/)).toBeTruthy();
   });
 });

@@ -132,6 +132,16 @@ export async function batalkanPesananKasir(id: UUID, alasan: string): Promise<Ha
 
   const db = await getDB();
   const tx = db.transaction(["transactions", "journal", "payments"], "readwrite");
+
+  // Penjaga di DALAM transaksi tulis (F6, tes klik 22 Nov 2026) — sama
+  // seperti batalkanTransaksi: panggilan batal kedua yang bersamaan harus
+  // gagal tanpa menulis baris pengembalian DP kedua.
+  const tDiDalamTx = await tx.objectStore("transactions").get(id);
+  if (!tDiDalamTx || tDiDalamTx.statusPesanan === "dibatalkan" || tDiDalamTx.dibatalkanPada) {
+    await tx.done;
+    return { ok: false, pesan: "Pesanan sudah dibatalkan." };
+  }
+
   await tx.objectStore("transactions").put({
     ...t,
     statusPesanan: "dibatalkan",

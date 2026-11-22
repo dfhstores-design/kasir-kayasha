@@ -343,4 +343,51 @@ describe("F8/BU-63: DP pesanan yang dibatalkan DIKEMBALIKAN ke pelanggan", () =>
     // Stok gudang kembali 5 (2 terjual dibatalkan).
     expect((await daftarProduk())[0]?.stokGudang).toBe(5);
   });
+
+  it("F6: batal ganda bersamaan (double-tap) hanya mengembalikan stok sekali", async () => {
+    const blus = await produkBaru("Blus Linen", 180000, 10);
+    const jual = await simpanPenjualan(rencanaJual(blus, 1), { rekening: [] });
+    expect(jual.ok).toBe(true);
+    if (!jual.ok) return;
+    const id = jual.transaksi.id;
+    expect((await daftarProduk())[0]?.stokGudang).toBe(9);
+
+    // Dua panggilan batal bersamaan (mis. tombol ditekan dua kali):
+    // hanya satu yang boleh berhasil — yang kedua harus ditolak karena
+    // transaksi sudah dibatalkan. Tanpa penjaga di dalam transaksi tulis,
+    // keduanya lolos dan stok kembali 2x (9→11, temuan F6).
+    const [a, b] = await Promise.all([
+      batalkanTransaksi(id, "Pelanggan membatalkan"),
+      batalkanTransaksi(id, "Pelanggan membatalkan lagi"),
+    ]);
+    const berhasil = [a, b].filter((h) => h.ok);
+    expect(berhasil).toHaveLength(1);
+    expect((await daftarProduk())[0]?.stokGudang).toBe(10);
+    const lengkap = await ambilTransaksi(id);
+    const kembali = (lengkap?.pembayaran ?? []).filter((p) => p.nominal < 0);
+    expect(kembali).toHaveLength(1);
+    expect(kembali[0]?.nominal).toBe(-180000);
+  });
+
+  it("F6: batal ganda pesanan jahit ber-DP hanya mengembalikan DP sekali", async () => {
+    const h = await simpanPesananJahit(rencana(), { rekening: [rekening] });
+    expect(h.ok).toBe(true);
+    if (!h.ok) return;
+    const id = h.pesanan.id;
+    expect((await terimaPembayaranKasir(id, 150000, "tunai")).ok).toBe(true);
+
+    const [a, b] = await Promise.all([
+      batalkanPesananKasir(id, "Pelanggan membatalkan"),
+      batalkanPesananKasir(id, "Pelanggan membatalkan lagi"),
+    ]);
+    const berhasil = [a, b].filter((h2) => h2.ok);
+    expect(berhasil).toHaveLength(1);
+    const lengkap = await ambilTransaksi(id);
+    const kembali = (lengkap?.pembayaran ?? []).filter((p) => p.nominal < 0);
+    expect(kembali).toHaveLength(1);
+    expect(kembali[0]?.nominal).toBe(-150000);
+    const db = await (await import("../db/schema.ts")).getDB();
+    const jurnalBatal = (await db.getAll("journal")).filter((j) => j.dokumenId === id && j.kategori === "pembatalan");
+    expect(jurnalBatal).toHaveLength(1);
+  });
 });

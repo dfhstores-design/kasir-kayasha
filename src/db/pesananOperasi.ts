@@ -181,6 +181,19 @@ export async function batalkanTransaksi(id: UUID, alasan: string): Promise<Hasil
   const db = await getDB();
   const tx = db.transaction(["transactions", "products", "bazar_items", "journal", "payments"], "readwrite");
 
+  // Penjaga di DALAM transaksi tulis (F6, tes klik 22 Nov 2026): dua
+  // panggilan batal bersamaan (mis. tombol ditekan dua kali) sama-sama
+  // lolos pemeriksaan status di luar transaksi, lalu masing-masing
+  // mengembalikan stok + menulis baris pengembalian — Blus 9→11. Periksa
+  // ulang di sini: transaksi tulis kedua mengantre sesudah yang pertama
+  // commit, jadi panggilan kedua melihat status "dibatalkan" dan gagal
+  // tanpa menulis apa pun.
+  const tDiDalamTx = await tx.objectStore("transactions").get(id);
+  if (!tDiDalamTx || tDiDalamTx.statusPesanan === "dibatalkan" || tDiDalamTx.dibatalkanPada) {
+    await tx.done;
+    return { ok: false, pesan: "Transaksi sudah dibatalkan." };
+  }
+
   if (sudahKeluarStok) {
     // Kembalikan stok ke sumber asalnya.
     const items = lengkap.item.filter((i) => i.produkId);

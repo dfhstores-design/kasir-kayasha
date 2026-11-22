@@ -37,10 +37,19 @@ export default function LupaPin({ peranLabel, onVerifikasi, onBerhasil, onBatal 
       return;
     }
     setSibuk(true);
-    const hasil = await onVerifikasi(kode);
-    setSibuk(false);
-    if (hasil.ok) setBerhasil(true);
-    else setGalat(hasil.pesan);
+    // F1, tes klik 22 Nov 2026: tanpa try/finally, bila onVerifikasi
+    // menolak (mis. respons hilang), tombol macet di "Memeriksa…"
+    // selamanya tanpa pesan dan tanpa jalan coba lagi. Sekarang sibuk
+    // SELALU direset dan galat selalu ditampilkan.
+    try {
+      const hasil = await onVerifikasi(kode);
+      if (hasil.ok) setBerhasil(true);
+      else setGalat(hasil.pesan);
+    } catch {
+      setGalat("Kode tidak bisa diperiksa. Periksa internet, lalu coba lagi.");
+    } finally {
+      setSibuk(false);
+    }
   }
 
   if (berhasil) {

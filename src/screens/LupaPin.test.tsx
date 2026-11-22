@@ -55,4 +55,16 @@ describe("LupaPin", () => {
     expect(screen.getByText(/Minta kode reset ke Andri lewat WA/)).toBeDefined();
     expect(screen.getByText(/Reset ini butuh internet/)).toBeDefined();
   });
+
+  it("F1: verifikasi yang menolak tidak membuat tombol macet di 'Memeriksa…'", async () => {
+    renderLayar(async () => {
+      throw new Error("respons hilang");
+    });
+    fireEvent.change(screen.getByLabelText("Kode reset dari Andri"), { target: { value: "123456" } });
+    fireEvent.click(screen.getByRole("button", { name: "Periksa Kode" }));
+    expect(await screen.findByText(/Kode tidak bisa diperiksa/)).toBeDefined();
+    // Tombol kembali ke "Periksa Kode" dan bisa ditekan lagi — tidak macet.
+    const tombol = screen.getByRole("button", { name: "Periksa Kode" }) as HTMLButtonElement;
+    expect(tombol.disabled).toBe(false);
+  });
 });
