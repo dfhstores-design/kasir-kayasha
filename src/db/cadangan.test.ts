@@ -4,11 +4,13 @@ import {
   blobKeBase64,
   buatCadangan,
   buatCsvTransaksi,
+  koneksiTertutup,
   kutipCsv,
   periksaCadangan,
   pulihkanCadangan,
   sepertiBlob,
   VERSI_CADANGAN,
+  type BerkasCadangan,
 } from "./cadangan.ts";
 import { ambilSettings, ambilTutupHarian, SETTINGS_KOSONG, simpanProduk, simpanSettings, simpanTutupHarian } from "./repositori.ts";
 import { getDB, resetKoneksiDB, type ProdukRecord } from "./schema.ts";
@@ -367,6 +369,102 @@ describe("pulihkanCadangan — tutup harian ikut dicadangkan (F16, tes klik puta
     expect(await db.count("tutupHarian")).toBe(1);
     expect((await ambilTutupHarian("2026-11-22", null))?.jumlahTransaksi).toBe(4);
     expect(await db.count("logSinkron")).toBe(1);
+  });
+});
+
+describe("pulihkanCadangan — koneksi tertutup lalu pulih sendiri (F17, tes klik putaran 5, 22 Nov 2026)", () => {
+  it("koneksiTertutup hanya mengenali error koneksi tertutup", () => {
+    expect(koneksiTertutup(new DOMException("The database connection is closing", "InvalidStateError"))).toBe(true);
+    expect(
+      koneksiTertutup(
+        new Error("Failed to execute 'transaction' on 'IDBDatabase': The database connection is closing."),
+      ),
+    ).toBe(true);
+    expect(koneksiTertutup(new DOMException("transaksi tidak aktif", "TransactionInactiveError"))).toBe(false);
+    expect(koneksiTertutup(new DOMException("kunci hilang", "DataError"))).toBe(false);
+    expect(koneksiTertutup(new Error("Pemulihan gagal."))).toBe(false);
+    expect(koneksiTertutup(null)).toBe(false);
+  });
+
+  it("mode ganti + koneksi mati sebelum mulai: restore berhasil tanpa reload halaman", async () => {
+    resetKoneksiDB();
+    const db = await getDB();
+    // Bersihkan dulu supaya cadangan kosong di bawah memang kosong.
+    for (const store of ["settings", "products", "transactions", "transaction_items", "payments"] as const) {
+      await db.clear(store);
+    }
+
+    // Cadangan kosong (semua store kosong).
+    const kosong = await buatCadangan();
+    expect(kosong.ok).toBe(true);
+    if (!kosong.ok) return;
+
+    // Isi data: 1 barang.
+    await simpanProduk(produk("Blus F17", 180000, 10));
+    expect(await db.count("products")).toBe(1);
+
+    // Matikan koneksi yang di-cache — seperti yang terjadi di browser pada F17.
+    db.close();
+
+    // Restore harus berhasil tanpa reload: koneksi dibuka ulang secara
+    // internal dan percobaan diulang sekali.
+    const h = await pulihkanCadangan(kosong.berkas, { mode: "ganti" });
+    expect(h.ok).toBe(true);
+
+    resetKoneksiDB();
+    const dbBaru = await getDB();
+    expect(await dbBaru.count("products")).toBe(0);
+  });
+
+  it("mode gabung + koneksi mati: data nyata tetap utuh (jalur clone Senin)", async () => {
+    resetKoneksiDB();
+    const db = await getDB();
+    await db.clear("settings");
+    await db.clear("products");
+
+    // Cadangan berisi data nyata (seperti cadangan Tante saat clone).
+    const cadangan: BerkasCadangan = {
+      aplikasi: "Kasir Kayesa",
+      versiFormat: VERSI_CADANGAN,
+      versiDatabase: 6,
+      dibuatPada: new Date().toISOString(),
+      jumlah: { settings: 1, products: 1 },
+      data: {
+        settings: [{ ...SETTINGS_KOSONG, namaButik: "Kayesa" }],
+        products: [produk("Kebaya Tante", 450000, 3)],
+      },
+    };
+
+    // Matikan koneksi yang di-cache sebelum restore jalan.
+    db.close();
+
+    const h = await pulihkanCadangan(cadangan, { mode: "gabung" });
+    expect(h.ok).toBe(true);
+
+    resetKoneksiDB();
+    const dbBaru = await getDB();
+    expect(await dbBaru.count("products")).toBe(1);
+    expect((await ambilSettings()).namaButik).toBe("Kayesa");
+  });
+
+  it("gagal karena data rusak tetap dilaporkan jujur (tidak diulang, tidak sukses palsu)", async () => {
+    resetKoneksiDB();
+    const db = await getDB();
+    await db.clear("products");
+
+    // Baris produk tanpa `id` (keyPath) → put melempar DataError.
+    const rusak: BerkasCadangan = {
+      aplikasi: "Kasir Kayesa",
+      versiFormat: VERSI_CADANGAN,
+      versiDatabase: 6,
+      dibuatPada: new Date().toISOString(),
+      jumlah: { products: 1 },
+      data: { products: [{ nama: "Tanpa ID", hargaJual: 1000, stokGudang: 1 }] },
+    };
+
+    const h = await pulihkanCadangan(rusak, { mode: "gabung" });
+    expect(h.ok).toBe(false);
+    expect(await db.count("products")).toBe(0);
   });
 });
 

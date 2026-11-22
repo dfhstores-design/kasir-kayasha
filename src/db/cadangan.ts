@@ -11,7 +11,7 @@
  * Versi format dicatat supaya pemulihan dari cadangan lama bisa ditolak dengan jelas,
  * bukan menghasilkan data rusak diam-diam.
  */
-import { getDB, DB_VERSION, type KasirDB } from "./schema.ts";
+import { getDB, resetKoneksiDB, DB_VERSION, type KasirDB } from "./schema.ts";
 import { tanggalWIB } from "../lib/tanggal.ts";
 
 export const VERSI_CADANGAN = 1;
@@ -272,18 +272,25 @@ export interface OpsiPulihkan {
 export type HasilPulihkan = { ok: true; dipulihkan: Record<string, number> } | { ok: false; pesan: string };
 
 /**
- * Menulis isi cadangan ke IndexedDB dalam SATU transaksi per store.
- * Bila satu store gagal, error dilempar dan UI menampilkan pesan — tidak setengah jadi.
+ * Apakah error ini berarti koneksi IndexedDB sudah tertutup (F17, tes klik
+ * putaran 5, 22 Nov 2026)? Chrome melempar DOMException InvalidStateError
+ * "The database connection is closing" saat transaksi dibuka di koneksi
+ * yang sedang ditutup; fake-indexeddb melempar InvalidStateError dengan
+ * pesan berbeda — yang dicek adalah NAMA error, bukan pesannya.
+ * Error lain (data rusak, kunci hilang, kuota) TIDAK dianggap koneksi
+ * tertutup: mengulanginya tidak ada gunanya.
  */
-export async function pulihkanCadangan(cadangan: BerkasCadangan, opsi: OpsiPulihkan): Promise<HasilPulihkan> {
-  // Cadangan lama bertuliskan "Kasir Kayesha" — tetap diterima.
-  if (cadangan.aplikasi !== "Kasir Kayesa" && cadangan.aplikasi !== "Kasir Kayesha") {
-    return { ok: false, pesan: "Berkas ini bukan cadangan Kasir Kayesa." };
-  }
-  if (cadangan.versiFormat > VERSI_CADANGAN) {
-    return { ok: false, pesan: "Cadangan dibuat oleh aplikasi versi lebih baru." };
-  }
+export function koneksiTertutup(e: unknown): boolean {
+  if (e instanceof DOMException && e.name === "InvalidStateError") return true;
+  return e instanceof Error && /connection is closing/i.test(e.message);
+}
 
+/**
+ * Menulis isi cadangan ke IndexedDB dalam SATU transaksi per store.
+ * Bila satu store gagal, error dilempar dan pemanggil yang memutuskan
+ * (coba ulang bila koneksi tertutup, laporkan bila bukan).
+ */
+async function jalankanPulihkan(cadangan: BerkasCadangan, opsi: OpsiPulihkan): Promise<Record<string, number>> {
   const db = await getDB();
   const dipulihkan: Record<string, number> = {};
 
@@ -306,48 +313,86 @@ export async function pulihkanCadangan(cadangan: BerkasCadangan, opsi: OpsiPulih
     "tutupHarian",
   ];
 
-  try {
-    // F16: pada mode "ganti", state sync internal ikut dihapus (tidak pernah
-    // diekspor — lihat STORE_SYNC_INTERNAL). Tanpa ini, antrean kirim yang
-    // tersisa akan menghidupkan lagi data yang baru dihapus.
-    if (opsi.mode === "ganti") {
-      for (const store of STORE_SYNC_INTERNAL) {
-        const txInternal = db.transaction(store, "readwrite");
-        await txInternal.store.clear();
-        await txInternal.done;
-      }
+  // F16: pada mode "ganti", state sync internal ikut dihapus (tidak pernah
+  // diekspor — lihat STORE_SYNC_INTERNAL). Tanpa ini, antrean kirim yang
+  // tersisa akan menghidupkan lagi data yang baru dihapus.
+  if (opsi.mode === "ganti") {
+    for (const store of STORE_SYNC_INTERNAL) {
+      const txInternal = db.transaction(store, "readwrite");
+      await txInternal.store.clear();
+      await txInternal.done;
     }
-
-    for (const store of urutan) {
-      const baris = Array.isArray(cadangan.data[store]) ? (cadangan.data[store] as unknown[]) : [];
-      if (baris.length === 0 && opsi.mode === "gabung") continue;
-
-      const tx = db.transaction(store as keyof KasirDB & NamaStore, "readwrite");
-      if (opsi.mode === "ganti") await tx.store.clear();
-
-      let n = 0;
-      for (const rec of baris) {
-        if (!rec || typeof rec !== "object") continue;
-        const obj = { ...(rec as Record<string, unknown>) };
-
-        if (store === "product_photos" && typeof obj.blob === "string") {
-          obj.blob = base64KeBlob(obj.blob, String(obj.tipe ?? "image/webp"));
-        }
-        if (store === "settings" && typeof obj.logo === "string") {
-          obj.logo = base64KeBlob(obj.logo, "image/webp");
-        }
-
-        await tx.store.put(obj as never);
-        n++;
-      }
-      await tx.done;
-      dipulihkan[store] = n;
-    }
-  } catch (e) {
-    return { ok: false, pesan: e instanceof Error ? e.message : "Pemulihan gagal." };
   }
 
-  return { ok: true, dipulihkan };
+  for (const store of urutan) {
+    const baris = Array.isArray(cadangan.data[store]) ? (cadangan.data[store] as unknown[]) : [];
+    if (baris.length === 0 && opsi.mode === "gabung") continue;
+
+    const tx = db.transaction(store as keyof KasirDB & NamaStore, "readwrite");
+    if (opsi.mode === "ganti") await tx.store.clear();
+
+    let n = 0;
+    for (const rec of baris) {
+      if (!rec || typeof rec !== "object") continue;
+      const obj = { ...(rec as Record<string, unknown>) };
+
+      if (store === "product_photos" && typeof obj.blob === "string") {
+        obj.blob = base64KeBlob(obj.blob, String(obj.tipe ?? "image/webp"));
+      }
+      if (store === "settings" && typeof obj.logo === "string") {
+        obj.logo = base64KeBlob(obj.logo, "image/webp");
+      }
+
+      await tx.store.put(obj as never);
+      n++;
+    }
+    await tx.done;
+    dipulihkan[store] = n;
+  }
+
+  return dipulihkan;
+}
+
+/**
+ * Menulis isi cadangan ke IndexedDB. Bila satu store gagal, UI menampilkan
+ * pesan — tidak setengah jadi tanpa kabar.
+ *
+ * F17 (tes klik putaran 5, 22 Nov 2026): restore gagal di percobaan pertama
+ * dengan "The database connection is closing" — koneksi yang di-cache sudah
+ * tertutup (siklus hidup halaman) dan aplikasi memakainya terus sampai
+ * halaman dimuat ulang. Karena itu, bila gagal karena koneksi tertutup,
+ * koneksi dibuang, dibuka yang segar, dan restore diulang SEKALI dari awal
+ * (aman diulang: mode "ganti" menghapus lalu menulis ulang — put menimpa
+ * kunci yang sama; mode "gabung" hanya menimpa baris yang sama).
+ * Bila percobaan kedua tetap gagal, kegagalan dilaporkan jujur — tidak
+ * pernah ada sukses palsu.
+ */
+export async function pulihkanCadangan(cadangan: BerkasCadangan, opsi: OpsiPulihkan): Promise<HasilPulihkan> {
+  // Cadangan lama bertuliskan "Kasir Kayesha" — tetap diterima.
+  if (cadangan.aplikasi !== "Kasir Kayesa" && cadangan.aplikasi !== "Kasir Kayesha") {
+    return { ok: false, pesan: "Berkas ini bukan cadangan Kasir Kayesa." };
+  }
+  if (cadangan.versiFormat > VERSI_CADANGAN) {
+    return { ok: false, pesan: "Cadangan dibuat oleh aplikasi versi lebih baru." };
+  }
+
+  const pesanGalat = (e: unknown): string => (e instanceof Error ? e.message : "Pemulihan gagal.");
+
+  try {
+    const dipulihkan = await jalankanPulihkan(cadangan, opsi);
+    return { ok: true, dipulihkan };
+  } catch (e) {
+    if (!koneksiTertutup(e)) {
+      return { ok: false, pesan: pesanGalat(e) };
+    }
+    resetKoneksiDB();
+    try {
+      const dipulihkan = await jalankanPulihkan(cadangan, opsi);
+      return { ok: true, dipulihkan };
+    } catch (e2) {
+      return { ok: false, pesan: pesanGalat(e2) };
+    }
+  }
 }
 
 /* ------------------------------------------------------------- CSV */

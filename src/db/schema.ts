@@ -695,6 +695,14 @@ export function getDB(): Promise<IDBPDatabase<KasirDB>> {
       blocked() {
         console.warn("Kasir Kayesa: pembaruan database tertahan — tutup tab lain lalu muat ulang.");
       },
+      terminated() {
+        // F17 (tes klik putaran 5, 22 Nov 2026): bila browser menutup
+        // koneksi (mis. siklus hidup halaman), buang janji koneksi yang
+        // tersimpan supaya getDB() berikutnya membuka koneksi segar.
+        // Tanpa ini, koneksi mati dipakai terus dan setiap transaksi
+        // melempar InvalidStateError sampai halaman dimuat ulang.
+        dbPromise = null;
+      },
     });
   }
   return dbPromise;
