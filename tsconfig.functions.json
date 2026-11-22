@@ -19,5 +19,5 @@
     "noUncheckedSideEffectImports": true,
     "exactOptionalPropertyTypes": true
   },
-  "include": ["functions", "src/sync/logika.ts"]
+  "include": ["functions", "src/sync/logika.ts", "src/sync/resetKode.ts"]
 }

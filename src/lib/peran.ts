@@ -23,6 +23,7 @@ export const LAYAR_KHUSUS_ADMIN = [
   "pengaturan",
   "biaya-bazar",
   "atur-pin",
+  "reset-pin-owner",
   "cadangan",
   "sinkronisasi",
 ] as const;

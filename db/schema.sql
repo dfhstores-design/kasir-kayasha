@@ -223,6 +223,24 @@ CREATE TABLE IF NOT EXISTS penomoran (
   terakhir INTEGER NOT NULL DEFAULT 0
 );
 
+-- ---------------------------------------------------------------- kode_reset_pin (BU-65)
+--
+-- Kode reset PIN sekali pakai (keputusan Andri 22 Nov 2026). Satu baris per
+-- kode yang dibuat Muse untuk Andri. HANYA hash SHA-256 kode yang disimpan —
+-- kode polos tidak pernah ditulis ke database, log, atau chat.
+-- `peran` = admin | owner | kasir_toko | bazar:<id bazar>.
+-- Kode berlaku 1 jam sejak dibuat; sekali pakai; 5 kali salah = mati.
+CREATE TABLE IF NOT EXISTS kode_reset_pin (
+  id               TEXT PRIMARY KEY,
+  peran            TEXT NOT NULL,
+  hash_kode        TEXT NOT NULL,
+  dibuat_pada      TEXT NOT NULL,
+  kedaluwarsa_pada TEXT NOT NULL,
+  dipakai_pada     TEXT,
+  percobaan_gagal  INTEGER NOT NULL DEFAULT 0,
+  perangkat        TEXT
+);
+
 -- ---------------------------------------------------------------- migrasi F1 (biaya bazar tersinkron)
 --
 -- Tabel `bazar_biaya` di atas dibuat otomatis di database BARU. Database yang
@@ -236,3 +254,9 @@ CREATE TABLE IF NOT EXISTS penomoran (
 -- IF NOT EXISTS). Kolom baru di tabel LAMA perlu ALTER satu kali:
 --   ALTER TABLE transactions ADD COLUMN nomor_urut_sementara INTEGER;
 -- Jangan jalankan ALTER dua kali pada kolom yang sama (SQLite menolak).
+
+-- ---------------------------------------------------------------- migrasi BU-65 (kode reset PIN)
+--
+-- Tabel `kode_reset_pin` di atas dibuat otomatis di database BARU.
+-- Database yang SUDAH ADA cukup menjalankan ulang berkas ini (CREATE TABLE
+-- IF NOT EXISTS).

@@ -241,9 +241,14 @@ export default function Beranda({ settings, storagePermanen, bazar, jumlahBazarA
             </>
           )}
           {peran === "owner" && (
-            <button type="button" className="btn btn--ghost btn--small" onClick={() => buka("atur-pin-owner")}>
-              Atur PIN Owner
-            </button>
+            <>
+              <button type="button" className="btn btn--ghost btn--small" onClick={() => buka("atur-pin-owner")}>
+                Atur PIN Owner
+              </button>
+              <button type="button" className="btn btn--ghost btn--small" onClick={() => buka("reset-pin-owner")}>
+                Reset PIN Peran Lain
+              </button>
+            </>
           )}
           <p className="soft" style={{ margin: 0 }}>
             Masuk sebagai {peran === "owner" ? "owner" : "admin"}.

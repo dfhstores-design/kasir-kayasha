@@ -12,6 +12,8 @@ import TutupBazar from "./screens/TutupBazar.tsx";
 import TutupHarian from "./screens/TutupHarian.tsx";
 import MasukAdmin from "./screens/MasukAdmin.tsx";
 import MasukKasir from "./screens/MasukKasir.tsx";
+import LupaPin from "./screens/LupaPin.tsx";
+import ResetPinOwner from "./screens/ResetPinOwner.tsx";
 import BiayaBazar from "./screens/BiayaBazar.tsx";
 import Ringkasan from "./screens/Ringkasan.tsx";
 import { AksesAdminSaja } from "./screens/AksesAdmin.tsx";
@@ -56,6 +58,8 @@ import { bikinIsiKeranjang, type IsiKeranjang } from "./lib/isiKeranjang.ts";
 import { formatJam, tanggalHariIni, waktuDariTanggal } from "./lib/tanggal.ts";
 import { simpanPesananJahit, ubahPesananJahit } from "./lib/jahitan.ts";
 import { simpanPin } from "./sync/mesin.ts";
+import { hapusPinLokalSetelahReset, verifikasiKodeReset } from "./sync/resetPin.ts";
+import type { PeranResetPin } from "./sync/resetKode.ts";
 import { layarAwalDariUrl } from "./lib/modeInput.ts";
 
 export type Layar =
@@ -79,6 +83,8 @@ export type Layar =
   | { nama: "atur-pin" }
   | { nama: "atur-pin-owner" }
   | { nama: "atur-pin-kasir-toko" }
+  | { nama: "lupa-pin"; peran: PeranResetPin; label: string; kembaliKe: "masuk-admin" | "masuk-owner" | "masuk-kasir" }
+  | { nama: "reset-pin-owner" }
   | { nama: "daftar-jahit" }
   | { nama: "wizard-jahit"; editId?: string }
   | { nama: "detail-jahit"; id: string }
@@ -294,6 +300,8 @@ export default function App() {
       return setLayar({ nama: "daftar-jahit" });
     }
     if (n === "kasir-detail") return setLayar({ nama: "detail-jahit", id: layar.id });
+    if (n === "lupa-pin") return setLayar({ nama: layar.kembaliKe });
+    if (n === "reset-pin-owner") return setLayar({ nama: "beranda" });
     setBarangBaruDisimpan(null);
     setLayar({ nama: "beranda" });
   }, [layar, keranjang.length]);
@@ -988,6 +996,7 @@ export default function App() {
             setLayar({ nama: "beranda" });
           }}
           onBatal={() => setLayar({ nama: "beranda" })}
+          onLupaPin={() => setLayar({ nama: "lupa-pin", peran: "admin", label: "admin", kembaliKe: "masuk-admin" })}
         />
       )}
 
@@ -1000,8 +1009,38 @@ export default function App() {
             setLayar({ nama: "beranda" });
           }}
           onBatal={() => setLayar({ nama: "beranda" })}
+          onLupaPin={() => setLayar({ nama: "lupa-pin", peran: "owner", label: "owner", kembaliKe: "masuk-owner" })}
         />
       )}
+
+      {layar.nama === "lupa-pin" && (
+        <LupaPin
+          peranLabel={layar.label}
+          onVerifikasi={async (kode) => {
+            const hasil = await verifikasiKodeReset(layar.peran, kode);
+            if (!hasil.ok) return hasil;
+            await hapusPinLokalSetelahReset(layar.peran);
+            await muat();
+            return { ok: true as const };
+          }}
+          onBerhasil={() => setLayar({ nama: layar.kembaliKe })}
+          onBatal={() => setLayar({ nama: layar.kembaliKe })}
+        />
+      )}
+
+      {layar.nama === "reset-pin-owner" &&
+        (peran === "owner" ? (
+          <ResetPinOwner
+            settings={settings}
+            onReset={async (peranReset: PeranResetPin) => {
+              await hapusPinLokalSetelahReset(peranReset, true);
+              await muat();
+            }}
+            onKembali={() => setLayar({ nama: "beranda" })}
+          />
+        ) : (
+          <AksesAdminSaja bazarAktifAda={!!bazar} onMintaAdmin={() => setLayar({ nama: "masuk-owner" })} />
+        ))}
 
       {layar.nama === "masuk-kasir" && (
         <MasukKasir
@@ -1015,6 +1054,7 @@ export default function App() {
             setLayar({ nama: "beranda" });
           }}
           onBatal={() => setLayar({ nama: "beranda" })}
+          onLupaPin={(peran, label) => setLayar({ nama: "lupa-pin", peran, label, kembaliKe: "masuk-kasir" })}
         />
       )}
 

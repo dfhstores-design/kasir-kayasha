@@ -9,6 +9,8 @@ interface Props {
   pinHash: string | null;
   onMasukAdmin: () => void;
   onBatal: () => void;
+  /** Membuka layar "Lupa PIN" (BU-65): reset dengan kode dari Andri. */
+  onLupaPin: () => void;
 }
 
 /**
@@ -18,7 +20,7 @@ interface Props {
  * peran tetap boleh masuk SEKALI untuk mengatur PIN — tanpa ini aplikasi akan
  * terkunci selamanya di mode kasir.
  */
-export default function MasukAdmin({ peran, pinHash, onMasukAdmin, onBatal }: Props) {
+export default function MasukAdmin({ peran, pinHash, onMasukAdmin, onBatal, onLupaPin }: Props) {
   const [pin, setPin] = useState("");
   const [galat, setGalat] = useState<string | null>(null);
   const [percobaan, setPercobaan] = useState(0);
@@ -131,6 +133,9 @@ export default function MasukAdmin({ peran, pinHash, onMasukAdmin, onBatal }: Pr
         </button>
         <button type="button" className="btn btn--ghost btn--small" onClick={onBatal}>
           Tetap sebagai kasir
+        </button>
+        <button type="button" className="btn btn--ghost btn--small" onClick={onLupaPin}>
+          Lupa PIN
         </button>
       </div>
     </>

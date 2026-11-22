@@ -542,7 +542,11 @@ async function simpanBiayaBazar(db: DBCloud, k: KirimanBiayaBazar, sekarang: str
  * (baris tetap ada, kiriman tetap diakui diterima). Hash di sini hanya
  * diteruskan apa adanya — hub tidak pernah melihat PIN teks biasa.
  */
-async function simpanPin(db: DBCloud, k: KirimanPin, sekarang: string): Promise<void> {
+/**
+ * Diekspor untuk reset PIN (BU-65): endpoint pakai-kode juga menghapus PIN
+ * peran itu di hub, memakai jalur yang sama dengan kiriman PIN biasa.
+ */
+export async function simpanPin(db: DBCloud, k: KirimanPin, sekarang: string): Promise<void> {
   await db
     .prepare(
       `INSERT INTO pin_sync (peran, hash, diubah_pada, perangkat)

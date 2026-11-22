@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { ambilSettings, daftarBazarAktif, type BazarRecord } from "../db/repositori.ts";
 import { batasPercobaan, cocokPin, MAKS_PERCOBAAN_PIN } from "../lib/pin.ts";
 import type { LokasiKasir } from "../lib/peran.ts";
+import type { PeranResetPin } from "../sync/resetKode.ts";
 
 interface Props {
   /** Lokasi kasir yang sedang aktif di perangkat ini (bila ada). */
@@ -9,6 +10,8 @@ interface Props {
   onMasuk: (lokasi: LokasiKasir) => void;
   onKeluarLokasi: () => void;
   onBatal: () => void;
+  /** Membuka layar "Lupa PIN" (BU-65) untuk lokasi yang dipilih. */
+  onLupaPin: (peran: PeranResetPin, label: string) => void;
 }
 
 interface PilihanLokasi {
@@ -29,7 +32,7 @@ interface PilihanLokasi {
  * pola yang sama dengan bootstrap PIN admin — dan layar mengingatkan
  * supaya admin mengatur PIN lokasi itu.
  */
-export default function MasukKasir({ lokasiAktif, onMasuk, onKeluarLokasi, onBatal }: Props) {
+export default function MasukKasir({ lokasiAktif, onMasuk, onKeluarLokasi, onBatal, onLupaPin }: Props) {
   const [pilihan, setPilihan] = useState<PilihanLokasi[] | null>(null);
   const [terpilih, setTerpilih] = useState<string | null>(null);
   const [pin, setPin] = useState("");
@@ -194,6 +197,18 @@ export default function MasukKasir({ lokasiAktif, onMasuk, onKeluarLokasi, onBat
         <button type="button" className="btn btn--ghost btn--small" onClick={onBatal}>
           Kembali
         </button>
+        {lokasiTerpilih?.pinHash && (
+          <button
+            type="button"
+            className="btn btn--ghost btn--small"
+            onClick={() => {
+              if (lokasiTerpilih.lokasi.jenis === "toko") onLupaPin("kasir_toko", "kasir toko");
+              else onLupaPin(`bazar:${lokasiTerpilih.lokasi.bazarId}`, `kasir bazar ${lokasiTerpilih.lokasi.nama}`);
+            }}
+          >
+            Lupa PIN
+          </button>
+        )}
       </div>
     </>
   );
