@@ -241,7 +241,9 @@ describe("TutupBazar — rekonsiliasi & konfirmasi (Fase 2C, BU-34)", () => {
     expect((await batalkanTransaksi(h.pesanan.id, "Pelanggan batal")).ok).toBe(true);
 
     render(<TutupBazar bazar={b} onSelesai={vi.fn()} />);
-    expect(await screen.findByText("Pengembalian DP")).toBeTruthy();
+    // (b): label kini "Pengembalian DP (pesanan jahit)" — dipisah dari
+    // pengembalian penjualan batal.
+    expect(await screen.findByText("Pengembalian DP (pesanan jahit)")).toBeTruthy();
     // Baris pengembalian menampilkan "− Rp 100.000" (berbeda dari baris
     // Tunai "Rp 100.000" milik penjualan di bazar yang sama).
     expect(await screen.findByText("− Rp 100.000")).toBeTruthy();

@@ -190,7 +190,9 @@ describe("simpanPenjualan", () => {
   it("nomor resi berurutan untuk transaksi berikutnya", async () => {
     const blus = await produkBaru("Blus", 100000, 10);
     await simpanPenjualan(rencana({ items: [item(blus, 1)] }), { rekening: [] });
-    const kedua = await simpanPenjualan(rencana({ items: [item(blus, 1)] }), { rekening: [] });
+    // Penjualan kedua dibedakan jumlahnya (C4: yang persis sama di hari yang
+    // sama kini ditolak sebagai duplikat — penomoran diuji dengan yang beda).
+    const kedua = await simpanPenjualan(rencana({ items: [item(blus, 2)] }), { rekening: [] });
     expect(kedua.ok && kedua.transaksi.nomorResi).toBe("KYS-0002");
   });
 
@@ -211,7 +213,9 @@ describe("simpanPenjualan", () => {
       { rekening: [] },
     );
     expect(jahit.ok).toBe(true);
-    const kedua = await simpanPenjualan(rencana({ items: [item(blus, 1)] }), { rekening: [] });
+    // Penjualan kedua dibedakan jumlahnya (C4: yang persis sama di hari yang
+    // sama kini ditolak sebagai duplikat).
+    const kedua = await simpanPenjualan(rencana({ items: [item(blus, 2)] }), { rekening: [] });
     // Sebelum perbaikan: KYS-0003 (jumlah semua transaksi + 1, pesanan
     // jahit ikut dihitung). Sesudah: KYS-0002.
     expect(kedua.ok && kedua.transaksi.nomorResi).toBe("KYS-0002");
@@ -233,7 +237,7 @@ describe("simpanPenjualan", () => {
       },
       { rekening: [] },
     );
-    const kedua = await simpanPenjualan(rencana({ items: [item(blus, 1)] }), { rekening: [] });
+    const kedua = await simpanPenjualan(rencana({ items: [item(blus, 2)] }), { rekening: [] });
     expect(kedua.ok && kedua.transaksi.nomorUrutHari).toBe(2);
   });
 
@@ -357,11 +361,48 @@ describe("anti-dobel re-entry kertas (Fase 2C, BU-34)", () => {
     expect(kedua.duplikat).toBe(true);
   });
 
-  it("penjualan hari ini TIDAK dicek duplikat (dua pelanggan boleh beli barang yang sama)", async () => {
-    const blus = await produkBaru("Blus", 100000, 10);
-    const r = rencana({ items: [item(blus, 1)] });
+  it("penjualan hari ini yang sama persis DICEK duplikat (C4, tes klik 22 Nov 2026)", async () => {
+    // Skenario tes klik: pembeli Dewi, Blus x1 Rp180.000 Tunai, dua kali di
+    // hari yang sama — dulu langsung tersimpan sebagai KYS-0002 tanpa panel,
+    // karena pengecekan hanya jalan untuk tanggal yang dimundurkan.
+    const blus = await produkBaru("Blus", 180000, 10);
+    const r = rencana({ items: [item(blus, 1)], namaPembeli: "Dewi" });
     expect((await simpanPenjualan(r, { rekening: [] })).ok).toBe(true);
-    expect((await simpanPenjualan(r, { rekening: [] })).ok).toBe(true);
+    const kedua = await simpanPenjualan(r, { rekening: [] });
+    expect(kedua.ok).toBe(false);
+    if (kedua.ok) return;
+    expect(kedua.duplikat).toBe(true);
+    // Kasir yang yakin tetap boleh menyimpan.
+    expect((await simpanPenjualan(r, { rekening: [], izinkanDuplikat: true })).ok).toBe(true);
+  });
+
+  it("bukan duplikat: pembeli beda membeli barang yang sama di hari yang sama", async () => {
+    const blus = await produkBaru("Blus", 180000, 10);
+    expect(
+      (await simpanPenjualan(rencana({ items: [item(blus, 1)], namaPembeli: "Dewi" }), { rekening: [] })).ok,
+    ).toBe(true);
+    // Pembeli lain, barang + total + hari sama — bukan dobel.
+    expect(
+      (await simpanPenjualan(rencana({ items: [item(blus, 1)], namaPembeli: "Sari" }), { rekening: [] })).ok,
+    ).toBe(true);
+  });
+
+  it("nama pembeli tersimpan di transaksi (a, tes klik 22 Nov 2026)", async () => {
+    const blus = await produkBaru("Blus", 180000, 10);
+    const h = await simpanPenjualan(rencana({ items: [item(blus, 1)], namaPembeli: "Dewi" }), { rekening: [] });
+    expect(h.ok).toBe(true);
+    if (!h.ok) return;
+    const { ambilTransaksi } = await import("../db/repositori.ts");
+    expect((await ambilTransaksi(h.transaksi.id))?.transaksi.namaPemesan).toBe("Dewi");
+  });
+
+  it("tanpa nama pembeli, transaksi tetap tersimpan sebagai pembeli umum", async () => {
+    const blus = await produkBaru("Blus", 180000, 10);
+    const h = await simpanPenjualan(rencana({ items: [item(blus, 1)] }), { rekening: [] });
+    expect(h.ok).toBe(true);
+    if (!h.ok) return;
+    const { ambilTransaksi } = await import("../db/repositori.ts");
+    expect((await ambilTransaksi(h.transaksi.id))?.transaksi.namaPemesan).toBeNull();
   });
 
   it("transaksi kertas: createdAt tetap hari dimasukkan, waktu tanggal asli (penanda dari kertas)", async () => {

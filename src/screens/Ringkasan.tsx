@@ -6,8 +6,8 @@ import {
   ambilSettings,
   ambilTransaksi,
   daftarBiaya as ambilBiaya,
-  daftarBazar,
   daftarPembayaran,
+  daftarSemuaBiaya,
   daftarTransaksi,
   itemBazar,
   type BazarRecord,
@@ -97,6 +97,60 @@ export function batasiRiwayat<T>(daftar: readonly T[], tampilkanSemua: boolean):
   return tampilkanSemua ? [...daftar] : daftar.slice(0, BATAS_RIWAYAT_AWAL);
 }
 
+export interface DataRingkasan {
+  /** Transaksi yang dihitung di agregat (bazar itu saja, atau semua bila mode umum). */
+  trx: TransaksiRecord[];
+  semuaTrx: TransaksiRecord[];
+  biaya: BiayaBazarRecord[];
+  bayarPerTrx: Map<string, PembayaranRecord[]>;
+  selisih: number;
+  /** "bazar" = layar bazar tertentu; "umum" = ringkasan semua lokasi. */
+  mode: "bazar" | "umum";
+}
+
+/**
+ * Muat data Ringkasan (d, tes klik 22 Nov 2026).
+ *
+ * AKAR MASALAH (d): bila tidak ada bazar aktif, kode lama jatuh ke bazar
+ * SELESAI terakhir dan agregat (omzet/uang masuk harian & total) hanya
+ * menghitung transaksi bazar itu. Penjualan toko (bazarId null) tidak
+ * pernah masuk angka — Ringkasan bisa menampilkan Rp0 padahal ada
+ * penjualan hari itu. Sekarang: tanpa bazar aktif, mode umum memakai
+ * SEMUA transaksi dan SEMUA biaya, jadi angka harian selalu mencerminkan
+ * seluruh penjualan hari itu (toko + semua bazar). Angka bazar tertentu
+ * tetap terlihat di layar Tutup Bazar / kartu bazar.
+ */
+export async function muatDataRingkasan(bazar: BazarRecord | null): Promise<DataRingkasan> {
+  const semua = await daftarTransaksi();
+  const semuaBayar = await daftarPembayaran();
+  const bayarPerTrx = new Map<string, PembayaranRecord[]>();
+  for (const p of semuaBayar) {
+    const daftar = bayarPerTrx.get(p.transaksiId) ?? [];
+    daftar.push(p);
+    bayarPerTrx.set(p.transaksiId, daftar);
+  }
+  if (!bazar) {
+    return {
+      trx: semua,
+      semuaTrx: semua,
+      biaya: await daftarSemuaBiaya(),
+      bayarPerTrx,
+      selisih: 0,
+      mode: "umum",
+    };
+  }
+  const biayaBazar = await ambilBiaya(bazar.id);
+  const items = await itemBazar(bazar.id);
+  return {
+    trx: semua.filter((t) => t.bazarId === bazar.id),
+    semuaTrx: semua,
+    biaya: biayaBazar,
+    bayarPerTrx,
+    selisih: items.reduce((n, i) => n + Math.abs(i.selisih ?? 0), 0),
+    mode: "bazar",
+  };
+}
+
 /**
  * Ringkasan harian & akhir bazar (ROLE-BIAYA-RINGKASAN.md bagian 5).
  * Admin saja (dijaga di App).
@@ -123,23 +177,13 @@ export default function Ringkasan({ bazar }: Props) {
   useEffect(() => {
     let hidup = true;
     (async () => {
-      const semua = await daftarTransaksi();
-      const bz = bazar ?? (await daftarBazar()).find((b) => b.status === "selesai") ?? null;
-      const biayaBazar = bz ? await ambilBiaya(bz.id) : [];
-      const items = bz ? await itemBazar(bz.id) : [];
-      const semuaBayar = await daftarPembayaran();
+      const data = await muatDataRingkasan(bazar);
       if (!hidup) return;
-      setSemuaTrx(semua);
-      setTrx(bz ? semua.filter((t) => t.bazarId === bz.id) : []);
-      setBiaya(biayaBazar);
-      const petaBayar = new Map<string, PembayaranRecord[]>();
-      for (const p of semuaBayar) {
-        const daftar = petaBayar.get(p.transaksiId) ?? [];
-        daftar.push(p);
-        petaBayar.set(p.transaksiId, daftar);
-      }
-      setBayarPerTrx(petaBayar);
-      setSelisih(items.reduce((n, i) => n + Math.abs(i.selisih ?? 0), 0));
+      setSemuaTrx(data.semuaTrx);
+      setTrx(data.trx);
+      setBiaya(data.biaya);
+      setBayarPerTrx(data.bayarPerTrx);
+      setSelisih(data.selisih);
       setMemuat(false);
     })().catch(() => setMemuat(false));
     return () => {
@@ -203,6 +247,9 @@ export default function Ringkasan({ bazar }: Props) {
       jenisBayar: t.jenisBayar,
       dibatalkan: t.dibatalkanPada !== null,
       waktu: t.waktu,
+      // (b): jenis dokumen dipakai memisah pengembalian DP jahit vs
+      // pengembalian penjualan batal.
+      jenisDokumen: t.jenisDokumen,
       // F2: uang masuk & per-metode dihitung dari baris pembayaran ini,
       // bukan dari total + jenisBayar transaksi.
       pembayaran: (bayarPerTrx.get(t.id) ?? []).map((p) => ({
@@ -272,10 +319,16 @@ export default function Ringkasan({ bazar }: Props) {
           <span>QRIS</span>
           <span>{formatRupiah(harian.qris)}</span>
         </div>
-        {harian.pengembalian > 0 && (
+        {harian.pengembalianDp > 0 && (
           <div className="ringkas soft">
-            <span>Pengembalian DP hari itu</span>
-            <span>− {formatRupiah(harian.pengembalian)}</span>
+            <span>Pengembalian DP (pesanan jahit) hari itu</span>
+            <span>− {formatRupiah(harian.pengembalianDp)}</span>
+          </div>
+        )}
+        {harian.pengembalianBatal > 0 && (
+          <div className="ringkas soft">
+            <span>Pengembalian penjualan batal hari itu</span>
+            <span>− {formatRupiah(harian.pengembalianBatal)}</span>
           </div>
         )}
         <div className="hr" style={{ height: 1, background: "var(--line)", margin: "0.5rem 0" }} />
@@ -299,26 +352,32 @@ export default function Ringkasan({ bazar }: Props) {
           <span className="money">{total.jumlahTransaksi}</span>
         </div>
         <div className="ringkas">
-          <span>Omzet bazar</span>
+          <span>{bazar ? "Omzet bazar" : "Omzet total"}</span>
           <span className="money">{formatRupiah(total.omzet)}</span>
         </div>
         <div className="ringkas">
           <span>Uang masuk</span>
           <span className="money">{formatRupiah(total.uangMasuk)}</span>
         </div>
-        {total.pengembalian > 0 && (
+        {total.pengembalianDp > 0 && (
           <div className="ringkas soft">
-            <span>Pengembalian DP</span>
-            <span>− {formatRupiah(total.pengembalian)}</span>
+            <span>Pengembalian DP (pesanan jahit)</span>
+            <span>− {formatRupiah(total.pengembalianDp)}</span>
+          </div>
+        )}
+        {total.pengembalianBatal > 0 && (
+          <div className="ringkas soft">
+            <span>Pengembalian penjualan batal</span>
+            <span>− {formatRupiah(total.pengembalianBatal)}</span>
           </div>
         )}
         <div className="ringkas">
-          <span>Biaya bazar</span>
+          <span>{bazar ? "Biaya bazar" : "Biaya total"}</span>
           <span className="money">− {formatRupiah(total.totalBiaya)}</span>
         </div>
         <div className="hr" style={{ height: 1, background: "var(--line)", margin: "0.5rem 0" }} />
         <div className="ringkas">
-          <strong>LABA BAZAR</strong>
+          <strong>{bazar ? "LABA BAZAR" : "LABA"}</strong>
           <strong
             className="total"
             style={{ fontSize: "1.5rem", color: total.laba < 0 ? "var(--danger)" : "var(--ink)" }}

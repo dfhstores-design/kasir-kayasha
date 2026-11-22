@@ -147,6 +147,17 @@ export default function Beranda({ settings, storagePermanen, bazar, jumlahBazarA
             <button type="button" className="tile" onClick={() => buka("pengaturan")}>
               Pengaturan
             </button>
+            {/* (d, tes klik 22 Nov 2026): dua tile ini dulu hanya ada di
+                mode kasir (Tutup Harian) atau tidak ada sama sekali di
+                Beranda (Riwayat Sinkron, hanya lewat Pengaturan) — admin
+                yang baru menutup bazar tidak menemukannya lagi. Sekarang
+                selalu tampil untuk admin, apa pun status bazar. */}
+            <button type="button" className="tile" onClick={() => buka("tutup-harian")}>
+              Tutup Harian
+            </button>
+            <button type="button" className="tile" onClick={() => buka("sinkronisasi")}>
+              Riwayat Sinkron
+            </button>
           </>
         ) : (
           <>

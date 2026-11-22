@@ -364,6 +364,10 @@ export default function App() {
       statusBayar: nilaiKeranjang.statusBayar,
       dibayarSekarang: nilaiKeranjang.dibayarSekarang,
       bazarId: bazar?.id ?? null,
+      // (a, tes klik 22 Nov 2026): nama pembeli yang diketik di keranjang
+      // ikut disimpan — dulu hanya dipakai saat memarkir, penjualan
+      // langsung selalu tercatat tanpa nama ("Pembeli Umum").
+      namaPembeli: namaPembeli.trim() || undefined,
     };
     let hasil = await simpanPenjualan(rencana, {
       rekening: settings?.rekening ?? [],
@@ -392,7 +396,7 @@ export default function App() {
     setTanggalTransaksi(tanggalHariIni());
     await muat();
     setLayar({ nama: "tersimpan", transaksi: hasil.transaksi });
-  }, [keranjang, nilaiKeranjang, settings, bazar, muat, tanggalTransaksi, mintaKonfirmasiDuplikat]);
+  }, [keranjang, nilaiKeranjang, settings, bazar, muat, tanggalTransaksi, mintaKonfirmasiDuplikat, namaPembeli]);
 
   /** Memarkir keranjang sekarang; butuh nama pembeli (maks 3 parkir). */
   const parkirSekarang = useCallback(async () => {
@@ -766,6 +770,7 @@ export default function App() {
               : (bazar?.id ?? null)
           }
           label={lokasiKasir ? labelLokasiKasir(lokasiKasir) : (bazar?.nama ?? "Toko")}
+          peran={peran}
         />
       )}
 

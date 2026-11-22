@@ -481,6 +481,20 @@ describe("anti-dobel re-entry kertas pesanan jahit (Fase 2C, BU-34)", () => {
     expect(kedua.duplikat).toBe(true);
   });
 
+  it("pesanan hari ini yang sama persis DICEK duplikat (C4, tes klik 22 Nov 2026)", async () => {
+    // Dulu gerbang `hariTransaksi < tanggalHariIni()` membuat pesanan hari
+    // ini tidak pernah dicek — duplikat persis langsung tersimpan.
+    const r = rencana();
+    const pertama = await simpanPesananJahit(r, { rekening: [rekening] });
+    expect(pertama.ok).toBe(true);
+    const kedua = await simpanPesananJahit(r, { rekening: [rekening] });
+    expect(kedua.ok).toBe(false);
+    if (kedua.ok) return;
+    expect(kedua.duplikat).toBe(true);
+    const ketiga = await simpanPesananJahit(r, { rekening: [rekening], izinkanDuplikat: true });
+    expect(ketiga.ok).toBe(true);
+  });
+
   it("bukan duplikat: pemesan beda memesan barang yang sama di hari yang sama", async () => {
     const kemarin = new Date(Date.now() - 86400000);
     const a = await simpanPesananJahit(rencana(), { rekening: [rekening], waktu: kemarin });

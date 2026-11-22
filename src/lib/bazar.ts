@@ -5,7 +5,7 @@
  */
 import type { Rupiah } from "./money.ts";
 import { tanggalWIB } from "./tanggal.ts";
-import type { KategoriBiaya } from "../db/schema.ts";
+import type { JenisDokumen, KategoriBiaya } from "../db/schema.ts";
 
 export interface BiayaRingkas {
   kategori: KategoriBiaya;
@@ -54,6 +54,14 @@ export interface TransaksiRingkas {
   jenisBayar: MetodeBayar;
   dibatalkan: boolean;
   waktu: string;
+  /**
+   * Jenis dokumen — dipakai memisah pengembalian (b, tes klik 22 Nov 2026):
+   * "jasa" = pengembalian DP pesanan jahit, "penjualan"/"pesanan" =
+   * pengembalian penjualan yang dibatalkan. Bila tidak diisi (pemanggil
+   * lama), semua pengembalian masuk `pengembalianBatal` supaya total tetap
+   * benar — jangan pernah hilang dari hitungan.
+   */
+  jenisDokumen?: JenisDokumen;
   /** Semua pembayaran yang sudah diterima untuk transaksi ini. */
   pembayaran: readonly PembayaranRingkas[];
 }
@@ -76,6 +84,16 @@ export interface RingkasanKeuangan {
    *  (diterima lalu dikembalikan = net 0) — baris ini hanya penjelasnya,
    *  supaya kasir/owner melihat kenapa uang masuk berkurang. */
   pengembalian: Rupiah;
+  /**
+   * Pecahan `pengembalian` (b, tes klik 22 Nov 2026) — dulu satu label
+   * "Pengembalian DP" mencampur dua hal yang berbeda sehingga kasir
+   * bingung: pengembalian DP pesanan jahit yang dibatalkan
+   * (`pengembalianDp`, jenisDokumen "jasa") dan pengembalian penjualan
+   * barang yang dibatalkan (`pengembalianBatal`, "penjualan"/"pesanan").
+   * Selalu: pengembalianDp + pengembalianBatal = pengembalian.
+   */
+  pengembalianDp: Rupiah;
+  pengembalianBatal: Rupiah;
   totalBiaya: Rupiah;
   /** omzet − totalBiaya. Boleh negatif. */
   laba: Rupiah;
@@ -118,10 +136,19 @@ export function hitungRingkasanKeuangan(
   let qris = 0;
   let tanpaMetode = 0;
   let pengembalian = 0;
+  let pengembalianDp = 0;
+  let pengembalianBatal = 0;
 
-  const tambahBayar = (p: PembayaranRingkas) => {
+  const tambahBayar = (p: PembayaranRingkas, jenisDokumen?: JenisDokumen) => {
     uangMasuk += p.nominal;
-    if (p.nominal < 0) pengembalian += -p.nominal;
+    if (p.nominal < 0) {
+      pengembalian += -p.nominal;
+      // (b): baris negatif di pesanan jahit = pengembalian DP; di penjualan
+      // barang = pengembalian penjualan batal. Tanpa jenisDokumen (pemanggil
+      // lama) masuk pengembalianBatal supaya total tidak berubah.
+      if (jenisDokumen === "jasa") pengembalianDp += -p.nominal;
+      else pengembalianBatal += -p.nominal;
+    }
     switch (p.metode) {
       case "tunai":
         tunai += p.nominal;
@@ -148,11 +175,11 @@ export function hitungRingkasanKeuangan(
         omzet += t.total;
       }
       for (const p of t.pembayaran) {
-        if (padaHari(p.waktu)) tambahBayar(p);
+        if (padaHari(p.waktu)) tambahBayar(p, t.jenisDokumen);
       }
     } else if (adaPengembalian) {
       for (const p of t.pembayaran) {
-        if (padaHari(p.waktu)) tambahBayar(p);
+        if (padaHari(p.waktu)) tambahBayar(p, t.jenisDokumen);
       }
     }
   }
@@ -173,6 +200,8 @@ export function hitungRingkasanKeuangan(
     qris,
     tanpaMetode,
     pengembalian,
+    pengembalianDp,
+    pengembalianBatal,
     totalBiaya,
     // Laba boleh negatif dan tidak boleh dibulatkan ke nol.
     laba: omzet - totalBiaya,

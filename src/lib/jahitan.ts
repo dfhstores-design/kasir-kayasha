@@ -226,11 +226,11 @@ export function kunciItemJahitan(items: readonly ItemJahitanInput[]): string {
 
 /**
  * Cari pesanan jahit yang sama persis di satu hari: tanggal + pemesan + total
- * + isi sama. Dipakai sebagai PERINGATAN sebelum menyimpan pesanan kertas
- * (Fase 2C) — sama seperti cariDuplikatPenjualan: diperingatkan, tetap boleh
- * menyimpan. Nama pemesan ikut dibandingkan: dua pelanggan berbeda yang
- * memesan barang yang sama di hari yang sama BUKAN dobel. Pesanan yang
- * dibatalkan tidak dihitung.
+ * + isi sama. Dipakai sebagai PERINGATAN sebelum menyimpan (Fase 2C, re-entry
+ * kertas; C4: dicek juga untuk pesanan hari ini) — sama seperti
+ * cariDuplikatPenjualan: diperingatkan, tetap boleh menyimpan. Nama pemesan
+ * ikut dibandingkan: dua pelanggan berbeda yang memesan barang yang sama di
+ * hari yang sama BUKAN dobel. Pesanan yang dibatalkan tidak dihitung.
  */
 export async function cariDuplikatJahitan(
   hari: string,
@@ -267,10 +267,14 @@ export async function simpanPesananJahit(
   const iso = waktu.toISOString();
   // Hari transaksi dalam WIB (C9): potongan ISO adalah tanggal UTC.
   const hariTransaksi = tanggalWIB(waktu);
-  // Anti-dobel re-entry kertas (Fase 2C, sama seperti simpanPenjualan):
-  // dicek SEBELUM meminta nomor ke hub, supaya nomor KC tidak terbuang bila
+  // Anti-dobel (Fase 2C re-entry kertas; C4, tes klik 22 Nov 2026):
+  // dicek untuk SEMUA tanggal, bukan hanya transaksi kertas yang
+  // dimundurkan — dulu gerbang `hariTransaksi < tanggalHariIni()`
+  // membuat pesanan hari ini tidak pernah dicek, jadi duplikat persis
+  // di hari yang sama langsung tersimpan tanpa panel.
+  // Dicek SEBELUM meminta nomor ke hub, supaya nomor KC tidak terbuang bila
   // kasir membatalkan sesudah peringatan duplikat.
-  if (!konteks.izinkanDuplikat && hariTransaksi < tanggalHariIni()) {
+  if (!konteks.izinkanDuplikat) {
     const duplikat = await cariDuplikatJahitan(
       hariTransaksi,
       rencana.namaPemesan,

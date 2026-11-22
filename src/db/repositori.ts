@@ -6,7 +6,7 @@
  * - transaksi + item + pembayaran + pengurangan stok ditulis dalam SATU transaksi DB
  * - tidak ada operasi hapus permanen untuk transaksi
  */
-import { getDB, type BazarItemRecord, type BazarRecord, type BiayaBazarRecord, type KategoriBiaya, type FotoRecord, type KeranjangTertahanRecord, type PembayaranRecord, type ProdukRecord, type SettingsRecord, type TransaksiRecord, type ItemTransaksiRecord, type UUID } from "./schema.ts";
+import { getDB, type BazarItemRecord, type BazarRecord, type BiayaBazarRecord, type KategoriBiaya, type FotoRecord, type KeranjangTertahanRecord, type PembayaranRecord, type ProdukRecord, type SettingsRecord, type TransaksiRecord, type ItemTransaksiRecord, type TutupHarianRecord, type UUID } from "./schema.ts";
 import { hitungSaldoBazar } from "../lib/stok.ts";
 import { hitungRingkasanKeuangan, metodeBayarSah } from "../lib/bazar.ts";
 import { pesanStok, validasiSumberStok, type SumberStok } from "../lib/sumberStok.ts";
@@ -300,6 +300,9 @@ export interface RingkasanBazar {
   qris: Rupiah;
   /** Total DP yang dikembalikan karena pembatalan (F8/BU-63), angka positif. */
   pengembalian: Rupiah;
+  /** Pecahan pengembalian (b, tes klik 22 Nov 2026): DP pesanan jahit vs penjualan batal. */
+  pengembalianDp: Rupiah;
+  pengembalianBatal: Rupiah;
   jumlahBarang: number;
 }
 
@@ -326,6 +329,7 @@ export async function ringkasanBazar(bazarId: UUID): Promise<RingkasanBazar> {
       jenisBayar: metodeBayarSah(t.jenisBayar),
       dibatalkan: t.dibatalkanPada !== null,
       waktu: t.waktu,
+      jenisDokumen: t.jenisDokumen,
       pembayaran: (bayarPerTrx.get(t.id) ?? []).map((p) => ({
         nominal: p.nominal,
         metode: metodeBayarSah(p.metode),
@@ -344,8 +348,35 @@ export async function ringkasanBazar(bazarId: UUID): Promise<RingkasanBazar> {
     transfer: keuangan.transfer,
     qris: keuangan.qris,
     pengembalian: keuangan.pengembalian,
+    pengembalianDp: keuangan.pengembalianDp,
+    pengembalianBatal: keuangan.pengembalianBatal,
     jumlahBarang: items.length,
   };
+}
+
+/** Semua biaya bazar (semua bazar) — dipakai Ringkasan mode umum (d). */
+export async function daftarSemuaBiaya(): Promise<BiayaBazarRecord[]> {
+  const db = await getDB();
+  return db.getAll("bazar_biaya");
+}
+
+/**
+ * Catatan penutupan harian kasir (c, tes klik 22 Nov 2026): simpan satu
+ * record penutupan (tanggal WIB + lokasi). Bila hari itu sudah pernah
+ * ditutup di lokasi yang sama, record lama ditimpa dengan yang terbaru —
+ * penutupan ulang memakai angka terbaru, bukan membuat duplikat.
+ */
+export async function simpanTutupHarian(r: TutupHarianRecord): Promise<void> {
+  const db = await getDB();
+  const lama = await ambilTutupHarian(r.tanggal, r.bazarId);
+  await db.put("tutupHarian", lama ? { ...r, id: lama.id } : r);
+}
+
+/** Catatan penutupan satu hari di satu lokasi, bila sudah ditutup. */
+export async function ambilTutupHarian(tanggal: string, bazarId: UUID | null): Promise<TutupHarianRecord | null> {
+  const db = await getDB();
+  const semua = await db.getAllFromIndex("tutupHarian", "by-tanggal", tanggal);
+  return semua.find((r) => r.bazarId === bazarId) ?? null;
 }
 
 async function db_transaksiBazar(bazarId: UUID): Promise<TransaksiRecord[]> {

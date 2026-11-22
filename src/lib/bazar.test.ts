@@ -227,6 +227,53 @@ describe("F8/BU-63: pengembalian DP pesanan yang dibatalkan", () => {
   });
 });
 
+describe("(b, tes klik 22 Nov 2026): pengembalian dipisah DP jahit vs penjualan batal", () => {
+  it("pesanan jahit batal → pengembalianDp; penjualan batal → pengembalianBatal; jumlahnya tetap pengembalian", () => {
+    // Skenario tes klik: penjualan batal KYS-0002 Rp180.000 (tanpa DP) +
+    // pengembalian DP Sari Rp150.000 — dulu tercampur jadi satu baris
+    // "Pengembalian DP −Rp330.000".
+    const jahitBatal: TransaksiRingkas = {
+      total: 400000,
+      jenisBayar: "tunai",
+      dibatalkan: true,
+      waktu: "2026-11-22T10:00:00.000Z",
+      jenisDokumen: "jasa",
+      pembayaran: [
+        { nominal: 150000, metode: "tunai", waktu: "2026-11-22T10:00:00.000Z" },
+        { nominal: -150000, metode: "tunai", waktu: "2026-11-22T11:00:00.000Z" },
+      ],
+    };
+    const jualBatal: TransaksiRingkas = {
+      total: 180000,
+      jenisBayar: "tunai",
+      dibatalkan: true,
+      waktu: "2026-11-22T10:00:00.000Z",
+      jenisDokumen: "penjualan",
+      pembayaran: [
+        { nominal: 180000, metode: "tunai", waktu: "2026-11-22T10:00:00.000Z" },
+        { nominal: -180000, metode: "tunai", waktu: "2026-11-22T11:00:00.000Z" },
+      ],
+    };
+    const r = hitungRingkasanKeuangan([jahitBatal, jualBatal], [], "2026-11-22");
+    expect(r.pengembalian).toBe(330000);
+    expect(r.pengembalianDp).toBe(150000);
+    expect(r.pengembalianBatal).toBe(180000);
+    expect(r.pengembalianDp + r.pengembalianBatal).toBe(r.pengembalian);
+    // Uang masuk bersih tetap 0 (diterima lalu dikembalikan).
+    expect(r.uangMasuk).toBe(0);
+  });
+
+  it("tanpa jenisDokumen (pemanggil lama), pengembalian masuk pengembalianBatal supaya total tetap benar", () => {
+    const r = hitungRingkasanKeuangan(
+      [t(350000, "tunai", [p(150000, "tunai"), p(-150000, "tunai")], true)],
+      [],
+    );
+    expect(r.pengembalian).toBe(150000);
+    expect(r.pengembalianDp).toBe(0);
+    expect(r.pengembalianBatal).toBe(150000);
+  });
+});
+
 describe("filter harian", () => {
   it("transaksiPadaHari hanya hari tersebut", () => {
     const daftar = [

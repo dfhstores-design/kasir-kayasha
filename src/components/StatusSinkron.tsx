@@ -53,9 +53,21 @@ export default function StatusSinkron() {
     };
 
     void jalan();
+    // (e, tes klik 22 Nov 2026): dulu sync hanya jalan saat komponen ini
+    // dipasang (buka Beranda) + coba ulang bila gagal. Putaran yang
+    // berhasil ("siap") tidak pernah mengulang — data baru yang masuk
+    // antrean sesudahnya diam di HP sampai Beranda dibuka ulang. Sekarang
+    // ada pengulangan berkala tiap 60 detik selama Beranda terbuka, jadi
+    // antrean terkirim sendiri saat online tanpa perlu menekan apa pun.
+    // Interval dibuat ulang tiap putaran (dibersihkan di cleanup) supaya
+    // tidak menumpuk.
+    const berkala = setInterval(() => {
+      setCoba((n) => n + 1);
+    }, 60000);
     return () => {
       hidup = false;
       if (tunda) clearTimeout(tunda);
+      clearInterval(berkala);
     };
   }, [coba]);
 

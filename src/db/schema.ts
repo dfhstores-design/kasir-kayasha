@@ -39,7 +39,7 @@ export const DB_NAME_LAMA = "kasir-kayesha";
  * (snapshot terakhir yang diketahui hub, untuk gabung 3-arah data master).
  * Tidak ada baris lama yang diubah atau dihapus.
  */
-export const DB_VERSION = 5;
+export const DB_VERSION = 6;
 
 export type UUID = string;
 
@@ -428,6 +428,40 @@ export interface BayanganRecord {
   diubahPada: string;
 }
 
+/**
+ * Catatan penutupan harian kasir (c, tes klik 22 Nov 2026).
+ *
+ * Tutup Harian sebelumnya hanya ringkasan baca saja — tidak ada tombol
+ * tutup/konfirmasi dan tidak ada jejak bahwa hari itu sudah ditutup.
+ * Satu record per lokasi per hari (tanggal WIB + bazarId): tanggal,
+ * kasir/peran, ringkasan hari itu, dan waktu penutupan. Dicatat lokal di
+ * perangkat kasir (belum disinkronkan ke hub — Tahap 2 tidak punya jenis
+ * record sync untuk ini); jejak yang sama juga ditulis ke logSinkron
+ * (jenis "info", dibaca owner) supaya penutupan terlihat di layar
+ * Riwayat Sinkron.
+ */
+export interface TutupHarianRecord {
+  id: UUID;
+  /** Tanggal yang ditutup, "YYYY-MM-DD" dalam WIB. */
+  tanggal: string;
+  /** null = toko/gudang, selain itu id bazar. */
+  bazarId: UUID | null;
+  /** Label lokasi saat ditutup, mis. "Toko" atau "Bazar Plaza Senayan". */
+  label: string;
+  /** Peran yang menutup: kasir biasa, atau admin yang membuka layar ini. */
+  peran: "kasir" | "admin" | "owner";
+  jumlahTransaksi: number;
+  uangMasuk: number;
+  tunai: number;
+  transfer: number;
+  qris: number;
+  pengembalian: number;
+  pengembalianDp: number;
+  pengembalianBatal: number;
+  /** Waktu ISO saat tombol tutup ditekan. */
+  ditutupPada: string;
+}
+
 export interface KasirDB extends DBSchema {
   settings: { key: "utama"; value: SettingsRecord };
   products: {
@@ -504,6 +538,11 @@ export interface KasirDB extends DBSchema {
     key: string;
     value: BayanganRecord;
     indexes: { "by-jenis": string };
+  };
+  tutupHarian: {
+    key: UUID;
+    value: TutupHarianRecord;
+    indexes: { "by-tanggal": string };
   };
 }
 
@@ -600,6 +639,14 @@ export function getDB(): Promise<IDBPDatabase<KasirDB>> {
         if (!db.objectStoreNames.contains("bayangan")) {
           const s = db.createObjectStore("bayangan", { keyPath: "id" });
           s.createIndex("by-jenis", "jenis");
+        }
+
+        // Store baru (c, tes klik 22 Nov 2026; v6): catatan penutupan
+        // harian kasir. Hanya dibuat bila belum ada; tidak ada data lama
+        // yang disentuh.
+        if (!db.objectStoreNames.contains("tutupHarian")) {
+          const s = db.createObjectStore("tutupHarian", { keyPath: "id" });
+          s.createIndex("by-tanggal", "tanggal");
         }
 
         // Migrasi ringan v2 -> v3: isi kolom baru di transactions tanpa merusak data lama.

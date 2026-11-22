@@ -169,4 +169,34 @@ describe("Beranda — Fase 2A (role & PIN, BU-32/34)", () => {
     expect(screen.getByRole("button", { name: "Atur PIN Owner" })).toBeTruthy();
     expect(screen.queryByText("Atur PIN Admin")).toBeNull();
   });
+
+  it("(d) admin selalu melihat Tutup Harian + Riwayat Sinkron, tanpa atau dengan bazar aktif", () => {
+    // Tanpa bazar aktif (bazar={null} di renderBeranda): dulu kedua tile
+    // tidak ada di Beranda admin — Tutup Harian hanya di mode kasir,
+    // Riwayat Sinkron hanya lewat Pengaturan.
+    renderBeranda("admin");
+    expect(screen.getByRole("button", { name: "Tutup Harian" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Riwayat Sinkron" })).toBeTruthy();
+    cleanup();
+
+    // Dengan bazar aktif pun tile tetap tampil (bukan hanya sesudah bazar dibuka).
+    const b = bazar("Pameran");
+    render(
+      <Beranda
+        settings={null}
+        storagePermanen={null}
+        bazar={b}
+        jumlahBazarAktif={1}
+        memuatAwal={false}
+        peran="admin"
+        lokasiKasir={null}
+        onMintaAdmin={() => {}}
+        onKeluarAdmin={() => {}}
+        onBiayaBazar={() => {}}
+        buka={vi.fn()}
+      />,
+    );
+    expect(screen.getByRole("button", { name: "Tutup Harian" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Riwayat Sinkron" })).toBeTruthy();
+  });
 });

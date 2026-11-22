@@ -1,12 +1,19 @@
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
+import { IDBFactory } from "fake-indexeddb";
 import {
   BATAS_RIWAYAT_AWAL,
   batasiRiwayat,
   labelJenisDokumen,
   labelMetodeBayar,
+  muatDataRingkasan,
   ringkasItem,
   urutRiwayatBaruDulu,
 } from "./Ringkasan.tsx";
+import { alokasikanKeBazar, buatBazar, simpanProduk, type ProdukRecord } from "../db/repositori.ts";
+import { getDB, resetKoneksiDB } from "../db/schema.ts";
+import { hitungRingkasanKeuangan, metodeBayarSah } from "../lib/bazar.ts";
+import { simpanPenjualan } from "../lib/penjualan.ts";
+import { tanggalHariIni } from "../lib/tanggal.ts";
 
 describe("labelJenisDokumen", () => {
   it("memberi label Indonesia untuk tiap jenis dokumen", () => {
@@ -84,5 +91,119 @@ describe("batasiRiwayat", () => {
 
   it("tampilkan semua mengembalikan seluruh daftar", () => {
     expect(batasiRiwayat(daftar, true)).toHaveLength(25);
+  });
+});
+
+/**
+ * (d, tes klik 22 Nov 2026): mode umum Ringkasan harus menghitung SEMUA
+ * transaksi — skenario profil baru: 5 penjualan hari ini (4 toko + 1 bazar),
+ * bazar lalu ditutup. Dulu agregat hanya menghitung transaksi bazar selesai
+ * terakhir, jadi penjualan toko tidak masuk angka.
+ */
+describe("muatDataRingkasan — mode umum (d)", () => {
+  beforeEach(() => {
+    (globalThis as unknown as { indexedDB: IDBFactory }).indexedDB = new IDBFactory();
+    resetKoneksiDB();
+  });
+
+  async function produkBaru(nama: string, hargaJual: number): Promise<ProdukRecord> {
+    const now = new Date().toISOString();
+    const p: ProdukRecord = {
+      id: crypto.randomUUID(),
+      nama,
+      kode: null,
+      hargaJual,
+      stokGudang: 50,
+      catatan: null,
+      arsip: false,
+      createdAt: now,
+      updatedAt: now,
+    };
+    await simpanProduk(p);
+    return p;
+  }
+
+  it("tanpa bazar aktif, agregat menghitung 5 penjualan (toko + bazar) di hari itu", async () => {
+    const blus = await produkBaru("Blus", 180000);
+    const rok = await produkBaru("Rok", 150000);
+    const kemeja = await produkBaru("Kemeja", 200000);
+    const celana = await produkBaru("Celana", 120000);
+    const gaun = await produkBaru("Gaun", 500000);
+    const b = await buatBazar("Bazar Uji", null, null);
+    // Penjualan bazar butuh alokasi stok dulu.
+    await alokasikanKeBazar(b.id, gaun.id, 10);
+    const jual = async (p: ProdukRecord, bazarId: string | null) => {
+      const h = await simpanPenjualan(
+        {
+          items: [{ produkId: p.id, nama: p.nama, hargaSatuan: p.hargaJual, kuantitas: 1, diskonPerUnit: 0 }],
+          diskonTotal: 0,
+          ongkir: { mode: "ambil_sendiri", nominal: 0 },
+          jenisBayar: "tunai",
+          statusBayar: "lunas",
+          dibayarSekarang: 0,
+          bazarId,
+        },
+        { rekening: [] },
+      );
+      expect(h.ok).toBe(true);
+    };
+    // 4 penjualan toko + 1 penjualan bazar, semuanya hari ini.
+    await jual(blus, null);
+    await jual(rok, null);
+    await jual(kemeja, null);
+    await jual(celana, null);
+    await jual(gaun, b.id);
+    // Bazar lalu ditutup (status selesai) — seperti di tes klik.
+    const db = await getDB();
+    await db.put("bazars", { ...b, status: "selesai", ditutupPada: new Date().toISOString() });
+
+    const data = await muatDataRingkasan(null);
+    expect(data.mode).toBe("umum");
+    expect(data.trx).toHaveLength(5);
+
+    const keRingkas = data.trx.map((t) => ({
+      total: t.total,
+      jenisBayar: t.jenisBayar,
+      dibatalkan: t.dibatalkanPada !== null,
+      waktu: t.waktu,
+      pembayaran: (data.bayarPerTrx.get(t.id) ?? []).map((p) => ({
+        nominal: p.nominal,
+        metode: metodeBayarSah(p.metode),
+        waktu: p.waktu,
+      })),
+    }));
+    const harian = hitungRingkasanKeuangan(keRingkas, [], tanggalHariIni());
+    expect(harian.jumlahTransaksi).toBe(5);
+    expect(harian.omzet).toBe(180000 + 150000 + 200000 + 120000 + 500000);
+    expect(harian.uangMasuk).toBe(180000 + 150000 + 200000 + 120000 + 500000);
+  });
+
+  it("dengan bazar aktif, agregat tetap hanya bazar itu", async () => {
+    const blus = await produkBaru("Blus", 180000);
+    const gaun = await produkBaru("Gaun", 500000);
+    const b = await buatBazar("Bazar Uji", null, null);
+    await alokasikanKeBazar(b.id, gaun.id, 10);
+    const jual = async (p: ProdukRecord, bazarId: string | null) => {
+      const h = await simpanPenjualan(
+        {
+          items: [{ produkId: p.id, nama: p.nama, hargaSatuan: p.hargaJual, kuantitas: 1, diskonPerUnit: 0 }],
+          diskonTotal: 0,
+          ongkir: { mode: "ambil_sendiri", nominal: 0 },
+          jenisBayar: "tunai",
+          statusBayar: "lunas",
+          dibayarSekarang: 0,
+          bazarId,
+        },
+        { rekening: [] },
+      );
+      expect(h.ok).toBe(true);
+    };
+    await jual(blus, null);
+    await jual(gaun, b.id);
+
+    const data = await muatDataRingkasan(b);
+    expect(data.mode).toBe("bazar");
+    expect(data.trx).toHaveLength(1);
+    expect(data.trx[0]?.bazarId).toBe(b.id);
   });
 });

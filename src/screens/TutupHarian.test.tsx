@@ -4,10 +4,11 @@
  */
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { IDBFactory } from "fake-indexeddb";
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import TutupHarian from "./TutupHarian.tsx";
 import {
   alokasikanKeBazar,
+  ambilTutupHarian,
   buatBazar,
   simpanProduk,
   simpanTransaksi,
@@ -99,7 +100,7 @@ describe("TutupHarian — uang tunai di tangan kasir (Fase 2C, BU-34)", () => {
     const jualToko = trxJual(crypto.randomUUID(), null, 999000, "tunai");
     await simpanTransaksi(jualToko.trx, [], [jualToko.bayar], sumberStokUntuk([{ produkId: p.id, kuantitas: 1 }], null));
 
-    render(<TutupHarian bazarId={b.id} label="Pameran" />);
+    render(<TutupHarian bazarId={b.id} label="Pameran" peran="kasir" />);
     expect(await screen.findByText("Tutup Harian — Pameran")).toBeTruthy();
     expect(await screen.findByText("Uang tunai di tangan")).toBeTruthy();
     // "Rp 150.000" muncul 2x: uang masuk hari ini + uang tunai di tangan.
@@ -126,16 +127,95 @@ describe("TutupHarian — uang tunai di tangan kasir (Fase 2C, BU-34)", () => {
       sumberStokUntuk([{ produkId: p.id, kuantitas: 1 }], b.id),
     );
 
-    render(<TutupHarian bazarId={b.id} label="Pameran" />);
+    render(<TutupHarian bazarId={b.id} label="Pameran" peran="kasir" />);
     expect(await screen.findByText("Rp 200.000")).toBeTruthy();
     expect(await screen.findByText("Rp 300.000")).toBeTruthy();
     expect(await screen.findByText("Rp 500.000")).toBeTruthy();
   });
 
   it("tanpa transaksi hari ini menampilkan angka nol", async () => {
-    render(<TutupHarian bazarId={null} label="Toko" />);
+    render(<TutupHarian bazarId={null} label="Toko" peran="kasir" />);
     expect(await screen.findByText("Tutup Harian — Toko")).toBeTruthy();
     // Uang masuk, tunai, transfer, QRIS semuanya Rp 0.
     expect(screen.getAllByText("Rp 0")).toHaveLength(4);
+  });
+
+  it("(b) pengembalian dipisah: DP pesanan jahit vs penjualan batal", async () => {
+    const p = await produkBaru("Blus", 40);
+    const now = new Date();
+    // Pesanan jahit batal: DP tunai 150rb dikembalikan.
+    const jahit = trxJual(crypto.randomUUID(), null, 400000, "tunai");
+    await simpanTransaksi(
+      { ...jahit.trx, jenisDokumen: "jasa" as const, dibatalkanPada: now.toISOString() },
+      [],
+      [
+        { id: crypto.randomUUID(), transaksiId: jahit.trx.id, nominal: 150000, waktu: now.toISOString(), metode: "tunai" as const, catatan: null },
+        { id: crypto.randomUUID(), transaksiId: jahit.trx.id, nominal: -150000, waktu: now.toISOString(), metode: "tunai" as const, catatan: null },
+      ],
+      sumberStokUntuk([{ produkId: p.id, kuantitas: 1 }], null),
+    );
+    // Penjualan barang batal: 180rb dikembalikan.
+    const jual = trxJual(crypto.randomUUID(), null, 180000, "tunai");
+    await simpanTransaksi(
+      { ...jual.trx, dibatalkanPada: now.toISOString() },
+      [],
+      [
+        { id: crypto.randomUUID(), transaksiId: jual.trx.id, nominal: 180000, waktu: now.toISOString(), metode: "tunai" as const, catatan: null },
+        { id: crypto.randomUUID(), transaksiId: jual.trx.id, nominal: -180000, waktu: now.toISOString(), metode: "tunai" as const, catatan: null },
+      ],
+      sumberStokUntuk([{ produkId: p.id, kuantitas: 1 }], null),
+    );
+
+    render(<TutupHarian bazarId={null} label="Toko" peran="kasir" />);
+    expect(await screen.findByText("Pengembalian DP (pesanan jahit) hari ini")).toBeTruthy();
+    expect(await screen.findByText("Pengembalian penjualan batal hari ini")).toBeTruthy();
+    expect(await screen.findByText("− Rp 150.000")).toBeTruthy();
+    expect(await screen.findByText("− Rp 180.000")).toBeTruthy();
+    // Tidak ada lagi satu label "Pengembalian DP hari ini" yang mencampur keduanya.
+    expect(screen.queryByText("Pengembalian DP hari ini")).toBeNull();
+  });
+
+  it("(c) tombol Tutup Harian mencatat penutupan + tampil lagi saat dibuka ulang", async () => {
+    const p = await produkBaru("Blus", 40);
+    const jual = trxJual(crypto.randomUUID(), null, 150000, "tunai");
+    await simpanTransaksi(jual.trx, [], [jual.bayar], sumberStokUntuk([{ produkId: p.id, kuantitas: 1 }], null));
+
+    const { unmount } = render(<TutupHarian bazarId={null} label="Toko" peran="kasir" />);
+    expect(await screen.findByText("Tutup Harian — Toko")).toBeTruthy();
+    // Klik pertama membuka konfirmasi dua langkah (bukan window.confirm).
+    fireEvent.click(screen.getByRole("button", { name: "Tutup Harian" }));
+    expect(await screen.findByText(/Tutup harian Toko hari ini?/)).toBeTruthy();
+    // Klik kedua yang mencatat.
+    fireEvent.click(screen.getByRole("button", { name: "Ya, Tutup Harian" }));
+    await waitFor(() => expect(screen.getByText(/Sudah ditutup pukul/)).toBeTruthy());
+    expect(screen.getByRole("button", { name: "Sudah Ditutup Hari Ini" }).hasAttribute("disabled")).toBe(true);
+
+    // Record tersimpan: tanggal hari ini (WIB), lokasi toko, ringkasan hari itu.
+    const { tanggalHariIni } = await import("../lib/tanggal.ts");
+    const record = await ambilTutupHarian(tanggalHariIni(), null);
+    expect(record).not.toBeNull();
+    expect(record?.label).toBe("Toko");
+    expect(record?.peran).toBe("kasir");
+    expect(record?.jumlahTransaksi).toBe(1);
+    expect(record?.uangMasuk).toBe(150000);
+    expect(record?.tunai).toBe(150000);
+
+    // Buka ulang: jejak penutupan tampil lagi tanpa menekan apa pun.
+    unmount();
+    render(<TutupHarian bazarId={null} label="Toko" peran="kasir" />);
+    expect(await screen.findByText(/Sudah ditutup pukul/)).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Sudah Ditutup Hari Ini" }).hasAttribute("disabled")).toBe(true);
+  });
+
+  it("(c) batal di panel konfirmasi tidak mencatat penutupan", async () => {
+    render(<TutupHarian bazarId={null} label="Toko" peran="kasir" />);
+    expect(await screen.findByText("Tutup Harian — Toko")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Tutup Harian" }));
+    expect(await screen.findByText(/Tutup harian Toko hari ini?/)).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Batal" }));
+    await waitFor(() => expect(screen.queryByText(/Tutup harian Toko hari ini?/)).toBeNull());
+    const { tanggalHariIni } = await import("../lib/tanggal.ts");
+    expect(await ambilTutupHarian(tanggalHariIni(), null)).toBeNull();
+    expect(screen.getByRole("button", { name: "Tutup Harian" }).hasAttribute("disabled")).toBe(false);
   });
 });

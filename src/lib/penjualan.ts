@@ -12,7 +12,7 @@
  */
 import type { Rupiah } from "./money.ts";
 import type { Ongkir } from "./ongkir.ts";
-import { tanggalHariIni, tanggalWIB } from "./tanggal.ts";
+import { tanggalWIB } from "./tanggal.ts";
 import { hitungKeranjang, hitungPembayaran, type BarisKeranjang, type StatusBayar } from "./keranjang.ts";
 import { sapaanDariWaktu, type Sapaan } from "./sapaan.ts";
 import { sumberStokUntuk } from "./sumberStok.ts";
@@ -56,6 +56,16 @@ export interface RencanaPenjualan {
   /** Nominal yang benar-benar diterima sekarang (hanya untuk DP/belum dibayar). */
   dibayarSekarang: Rupiah;
   bazarId: UUID | null;
+  /**
+   * Nama pembeli yang diketik kasir di keranjang (a, tes klik 22 Nov 2026):
+   * disimpan ke transaksi supaya tampil di resi & riwayat, bukan
+   * "Pembeli Umum". Boleh kosong — pembeli umum tetap sah.
+   * Juga dipakai pemeriksaan duplikat: pembeli yang beda (keduanya
+   * terisi) membeli barang yang sama di hari yang sama BUKAN dobel.
+   * (exactOptionalPropertyTypes: eksplisit `| undefined` supaya pemanggil
+   * boleh mengisi `namaPembeli: namaPembeli.trim() || undefined`.)
+   */
+  namaPembeli?: string | undefined;
 }
 
 export type HasilRencana =
@@ -157,22 +167,36 @@ export function kunciItemPenjualan(
 
 /**
  * Cari penjualan yang sama persis di satu hari: tanggal + total + isi sama.
- * Dipakai sebagai PERINGATAN sebelum menyimpan transaksi kertas (Fase 2C) —
- * kasir yang memasukkan bon yang sama dua kali akan diperingatkan, tapi
- * tetap boleh menyimpan bila memang ada dua penjualan yang sama persis.
- * Transaksi yang dibatalkan tidak dihitung (bukan dobel, sudah tidak berlaku).
+ * Dipakai sebagai PERINGATAN sebelum menyimpan (Fase 2C, re-entry kertas;
+ * C4, tes klik 22 Nov 2026: dicek juga untuk penjualan hari ini, bukan
+ * hanya transaksi kertas yang dimundurkan — penjualan kedua yang sama
+ * persis di hari yang sama harus memunculkan panel, bukan langsung
+ * tersimpan). Kasir yang memasukkan bon yang sama dua kali akan
+ * diperingatkan, tapi tetap boleh menyimpan bila memang ada dua penjualan
+ * yang sama persis. Transaksi yang dibatalkan tidak dihitung (bukan dobel,
+ * sudah tidak berlaku).
+ *
+ * Nama pembeli ikut dibandingkan BILA keduanya terisi (sama seperti
+ * cariDuplikatJahitan): dua pelanggan berbeda yang membeli barang yang
+ * sama di hari yang sama BUKAN dobel. Bila salah satu sisi kosong (data
+ * lama sebelum nama pembeli disimpan, atau pembeli umum), nama dianggap
+ * cocok — tidak bisa dibuktikan beda.
  */
 export async function cariDuplikatPenjualan(
   hari: string,
   total: Rupiah,
   kunci: string,
+  namaPembeli?: string,
 ): Promise<TransaksiRecord | null> {
+  const namaBaru = (namaPembeli ?? "").trim().toLowerCase();
   const semua = await daftarTransaksi();
   for (const t of semua) {
     if (t.jenisDokumen !== "penjualan" || t.dibatalkanPada !== null) continue;
     // Tanggal transaksi dibandingkan dalam WIB (C9): stempel ISO yang
     // dipotong `slice(0, 10)` adalah tanggal UTC.
     if (tanggalWIB(t.waktu) !== hari || t.total !== total) continue;
+    const namaLama = (t.namaPemesan ?? "").trim().toLowerCase();
+    if (namaBaru && namaLama && namaBaru !== namaLama) continue;
     const lengkap = await ambilTransaksi(t.id);
     if (!lengkap) continue;
     const kunciLama = kunciItemPenjualan(
@@ -226,11 +250,18 @@ export type HasilSimpan =
  * menekan "Simpan" dua kali tidak akan membuat dua transaksi asalkan pemanggil
  * memakai id yang sama (UI menonaktifkan tombol saat menyimpan).
  *
- * Anti-dobel re-entry kertas (Fase 2C): bila `waktu` dimundurkan (tanggal
- * transaksi di masa lalu) dan sudah ada penjualan yang sama persis di hari
- * itu (total + isi sama), simpan DITOLAK dengan `duplikat: true` — pemanggil
- * (App) menanyakan konfirmasi ke kasir, dan bila kasir yakin, memanggil
- * ulang dengan `izinkanDuplikat: true`.
+ * Anti-dobel (Fase 2C re-entry kertas; C4, tes klik 22 Nov 2026): bila sudah
+ * ada penjualan yang sama persis di hari itu (total + isi sama, dan nama
+ * pembeli sama bila keduanya terisi), simpan DITOLAK dengan `duplikat: true`
+ * — pemanggil (App) menanyakan konfirmasi ke kasir, dan bila kasir yakin,
+ * memanggil ulang dengan `izinkanDuplikat: true`.
+ *
+ * AKAR MASALAH C4: pengecekan ini dulu hanya jalan bila `hari <
+ * tanggalHariIni()` — hanya untuk transaksi kertas yang dimundurkan.
+ * Penjualan hari ini (hari == hari ini, jalur biasa dari keranjang) TIDAK
+ * PERNAH dicek, jadi duplikat persis di hari yang sama langsung tersimpan
+ * tanpa panel. Sekarang dicek untuk semua tanggal (kemarin, hari ini, dan
+ * tanggal kertas lain); tanggal besok sudah ditolak App sebelum sampai sini.
  */
 export async function simpanPenjualan(
   rencana: RencanaPenjualan,
@@ -250,8 +281,13 @@ export async function simpanPenjualan(
   // transaksi ini. Selisih waktu vs createdAt sekaligus menjadi penanda
   // "dari kertas" (lihat transaksiDariKertas di lib/tanggal.ts).
 
-  if (!konteks.izinkanDuplikat && hari < tanggalHariIni()) {
-    const duplikat = await cariDuplikatPenjualan(hari, cek.total, kunciItemPenjualan(rencana.items));
+  if (!konteks.izinkanDuplikat) {
+    const duplikat = await cariDuplikatPenjualan(
+      hari,
+      cek.total,
+      kunciItemPenjualan(rencana.items),
+      rencana.namaPembeli,
+    );
     if (duplikat) {
       return {
         ok: false,
@@ -302,7 +338,9 @@ export async function simpanPenjualan(
     pelangganId: null,
     statusPesanan: "selesai",
     bazarId: rencana.bazarId,
-    namaPemesan: null,
+    // (a, tes klik 22 Nov 2026): nama pembeli yang diketik kasir disimpan
+    // di sini — dulu selalu null ("Pembeli Umum" di resi & riwayat).
+    namaPemesan: rencana.namaPembeli?.trim() ? rencana.namaPembeli.trim().slice(0, 20) : null,
     kontak: null,
     perkiraanSiap: null,
     alamat: null,

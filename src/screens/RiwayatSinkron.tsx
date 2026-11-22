@@ -4,6 +4,7 @@ import {
   bacaTerakhirBerhasil,
   bacaTerakhirTarik,
   daftarAntrean,
+  sinkronkan,
   type AntreanTampil,
 } from "../sync/mesin.ts";
 import type { LogSinkronRecord } from "../db/schema.ts";
@@ -27,16 +28,56 @@ interface Props {
  * Layar ini hanya membaca — tidak mengubah apa pun.
  */
 export default function RiwayatSinkron({ peran }: Props) {
+  // Alamat endpoint sinkronisasi — dibaca tiap render (bukan sekali saat
+  // modul dimuat) supaya tes bisa memasang URL lewat stubEnv.
+  // Kosong = sinkronisasi tidak aktif di build ini.
+  const URL_SYNC = import.meta.env.VITE_SYNC_URL ?? "";
   const [antrean, setAntrean] = useState<AntreanTampil[] | null>(null);
   const [terakhirKirim, setTerakhirKirim] = useState<string | null>(null);
   const [terakhirTarik, setTerakhirTarik] = useState<string | null>(null);
   const [log, setLog] = useState<LogSinkronRecord[] | null>(null);
+  /** Hasil kirim manual terakhir (null = belum pernah menekan). */
+  const [hasilKirim, setHasilKirim] = useState<string | null>(null);
+  const [mengirim, setMengirim] = useState(false);
 
   const muat = async () => {
     setAntrean(await daftarAntrean());
     setTerakhirKirim(await bacaTerakhirBerhasil());
     setTerakhirTarik(await bacaTerakhirTarik());
     if (peran === "owner") setLog(await bacaLogSinkron());
+  };
+
+  /**
+   * Kirim sekarang (e, tes klik 22 Nov 2026): dulu layar ini hanya membaca
+   * — tombol "Segarkan" hanya memuat ulang tampilan, tidak mengirim apa
+   * pun, dan sync hanya jalan dari Beranda. Bila antrean macet ("Belum
+   * pernah" terkirim), tidak ada jalan keluar dari layar ini. Sekarang
+   * tombol ini benar-benar menjalankan satu putaran sinkronisasi (kirim
+   * lalu tarik) dan menampilkan hasilnya dengan jujur — termasuk bila
+   * gagal (pesan kesalahannya ditampilkan, bukan ditelan diam-diam).
+   */
+  const kirimSekarang = async () => {
+    if (!URL_SYNC || mengirim) return;
+    setMengirim(true);
+    setHasilKirim(null);
+    try {
+      const token = import.meta.env.VITE_SYNC_TOKEN;
+      const hasil = await sinkronkan(token ? { url: URL_SYNC, token } : { url: URL_SYNC });
+      if (hasil.status === "siap") {
+        setHasilKirim("Semua data sudah terkirim.");
+      } else if (hasil.status === "menunggu") {
+        setHasilKirim(`Masih ada ${hasil.antrean} data menunggu dikirim. Dicoba lagi otomatis.`);
+      } else if (hasil.status === "mati") {
+        setHasilKirim("Sinkronisasi belum diatur di aplikasi ini.");
+      } else {
+        setHasilKirim(hasil.pesan ?? "Belum terkirim, tersimpan di HP dulu.");
+      }
+    } catch {
+      setHasilKirim("Belum terkirim, tersimpan di HP dulu.");
+    } finally {
+      await muat();
+      setMengirim(false);
+    }
   };
 
   useEffect(() => {
@@ -122,6 +163,25 @@ export default function RiwayatSinkron({ peran }: Props) {
       <button type="button" className="btn" onClick={() => void muat()}>
         Segarkan
       </button>
+      <button
+        type="button"
+        className="btn btn--primary"
+        onClick={() => void kirimSekarang()}
+        disabled={!URL_SYNC || mengirim}
+        style={{ marginLeft: "0.5rem" }}
+      >
+        {mengirim ? "Mengirim…" : "Kirim Sekarang"}
+      </button>
+      {!URL_SYNC && (
+        <p className="soft" style={{ margin: "0.5rem 0 0" }}>
+          Sinkronisasi belum diatur di aplikasi ini — data hanya tersimpan di HP.
+        </p>
+      )}
+      {hasilKirim && (
+        <div className="panel panel--ok" role="status" style={{ marginTop: "0.5rem" }}>
+          {hasilKirim}
+        </div>
+      )}
     </div>
   );
 }

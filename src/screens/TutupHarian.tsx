@@ -1,14 +1,25 @@
 import { useEffect, useState } from "react";
-import { daftarPembayaran, daftarTransaksi } from "../db/repositori.ts";
+import {
+  ambilTutupHarian,
+  buatId,
+  daftarPembayaran,
+  daftarTransaksi,
+  simpanTutupHarian,
+} from "../db/repositori.ts";
+import { getDB, type TutupHarianRecord } from "../db/schema.ts";
 import { hitungRingkasanKeuangan, metodeBayarSah } from "../lib/bazar.ts";
 import { formatRupiah } from "../lib/money.ts";
-import { formatTanggal, tanggalHariIni } from "../lib/tanggal.ts";
+import type { Peran } from "../lib/peran.ts";
+import { formatJam, formatTanggal, tanggalHariIni } from "../lib/tanggal.ts";
+import { catatLogSinkron } from "../sync/tarik.ts";
 
 interface Props {
   /** Bazar kasir ini (null = toko/gudang). */
   bazarId: string | null;
   /** Label lokasi yang tampil di judul, mis. "Bazar Plaza Senayan" atau "Toko". */
   label: string;
+  /** Peran yang membuka layar — dicatat di jejak penutupan. */
+  peran: Peran;
 }
 
 /**
@@ -19,22 +30,45 @@ interface Props {
  * laba, biaya, atau riwayat (itu tetap di layar Ringkasan khusus admin).
  * Angka dihitung dari baris pembayaran (F2), bukan total pesanan: DP tunai +
  * pelunasan transfer dihitung terpisah per metode.
+ *
+ * (c, tes klik 22 Nov 2026): layar ini dulu hanya ringkasan baca saja —
+ * tidak ada tombol tutup/konfirmasi dan tidak ada jejak penutupan. Sekarang
+ * ada satu tombol besar "Tutup Harian": ditekan → konfirmasi dua langkah
+ * di dalam aplikasi (bukan window.confirm, pelajaran C1) → hari itu
+ * tercatat ditutup (tanggal + kasir + ringkasan, di store tutupHarian dan
+ * di logSinkron untuk owner). Sesudah ditutup, layar menampilkan jejak
+ * penutupannya; buka lagi besok untuk hari berikutnya.
+ *
+ * (b, tes klik 22 Nov 2026): pengembalian dipisah dua baris — "Pengembalian
+ * DP (pesanan jahit)" dan "Pengembalian penjualan batal" — supaya tidak
+ * tercampur di bawah satu label "DP".
  */
-export default function TutupHarian({ bazarId, label }: Props) {
+export default function TutupHarian({ bazarId, label, peran }: Props) {
   const [memuat, setMemuat] = useState(true);
   const [jumlahTransaksi, setJumlahTransaksi] = useState(0);
   const [uangMasuk, setUangMasuk] = useState(0);
   const [tunai, setTunai] = useState(0);
   const [transfer, setTransfer] = useState(0);
   const [qris, setQris] = useState(0);
-  const [pengembalian, setPengembalian] = useState(0);
+  const [pengembalianDp, setPengembalianDp] = useState(0);
+  const [pengembalianBatal, setPengembalianBatal] = useState(0);
+  /** Jejak penutupan hari ini di lokasi ini (null = belum ditutup). */
+  const [ditutup, setDitutup] = useState<TutupHarianRecord | null>(null);
+  /** Konfirmasi dua langkah di dalam aplikasi (C1). */
+  const [mintaKonfirmasi, setMintaKonfirmasi] = useState(false);
+  const [sibuk, setSibuk] = useState(false);
+  const [pesan, setPesan] = useState<string | null>(null);
 
   const hari = tanggalHariIni();
 
   useEffect(() => {
     let hidup = true;
     (async () => {
-      const [semuaTrx, semuaBayar] = await Promise.all([daftarTransaksi(), daftarPembayaran()]);
+      const [semuaTrx, semuaBayar, tutup] = await Promise.all([
+        daftarTransaksi(),
+        daftarPembayaran(),
+        ambilTutupHarian(hari, bazarId),
+      ]);
       const bayarPerTrx = new Map<string, typeof semuaBayar>();
       for (const p of semuaBayar) {
         const daftar = bayarPerTrx.get(p.transaksiId) ?? [];
@@ -49,6 +83,7 @@ export default function TutupHarian({ bazarId, label }: Props) {
             jenisBayar: metodeBayarSah(t.jenisBayar),
             dibatalkan: t.dibatalkanPada !== null,
             waktu: t.waktu,
+            jenisDokumen: t.jenisDokumen,
             pembayaran: (bayarPerTrx.get(t.id) ?? []).map((p) => ({
               nominal: p.nominal,
               metode: metodeBayarSah(p.metode),
@@ -64,13 +99,63 @@ export default function TutupHarian({ bazarId, label }: Props) {
       setTunai(harian.tunai);
       setTransfer(harian.transfer);
       setQris(harian.qris);
-      setPengembalian(harian.pengembalian);
+      setPengembalianDp(harian.pengembalianDp);
+      setPengembalianBatal(harian.pengembalianBatal);
+      setDitutup(tutup);
       setMemuat(false);
     })().catch(() => setMemuat(false));
     return () => {
       hidup = false;
     };
   }, [bazarId, hari]);
+
+  /** Langkah tutup: klik pertama membuka panel konfirmasi, klik kedua mencatat. */
+  const tutup = async () => {
+    if (!mintaKonfirmasi) {
+      setPesan(null);
+      setMintaKonfirmasi(true);
+      return;
+    }
+    setMintaKonfirmasi(false);
+    setSibuk(true);
+    setPesan(null);
+    try {
+      const record: TutupHarianRecord = {
+        id: buatId(),
+        tanggal: hari,
+        bazarId,
+        label,
+        peran,
+        jumlahTransaksi,
+        uangMasuk,
+        tunai,
+        transfer,
+        qris,
+        pengembalian: pengembalianDp + pengembalianBatal,
+        pengembalianDp,
+        pengembalianBatal,
+        ditutupPada: new Date().toISOString(),
+      };
+      await simpanTutupHarian(record);
+      // Jejak di log sinkron (jenis "info", dibaca owner di Riwayat Sinkron).
+      try {
+        const db = await getDB();
+        await catatLogSinkron(db, {
+          jenis: "info",
+          judul: `Tutup harian ${label} ${formatTanggal(hari)}`,
+          rincian: `Ditutup ${peran}, ${jumlahTransaksi} transaksi, uang masuk ${formatRupiah(uangMasuk)} (tunai ${formatRupiah(tunai)}).`,
+        });
+      } catch {
+        // Log gagal ditulis: penutupan lokal sudah sah — log hanyalah catatan.
+      }
+      setDitutup(record);
+      setPesan("Tutup harian sudah dicatat.");
+    } catch {
+      setPesan("Tutup harian belum tercatat. Coba lagi.");
+    } finally {
+      setSibuk(false);
+    }
+  };
 
   if (memuat) {
     return (
@@ -91,6 +176,22 @@ export default function TutupHarian({ bazarId, label }: Props) {
         </p>
       </div>
 
+      {ditutup && (
+        <div className="panel panel--ok" role="status">
+          <strong>Sudah ditutup pukul {formatJam(ditutup.ditutupPada)}.</strong>
+          <p style={{ margin: "0.25rem 0 0" }}>
+            {ditutup.jumlahTransaksi} transaksi, uang masuk {formatRupiah(ditutup.uangMasuk)} (tunai{" "}
+            {formatRupiah(ditutup.tunai)}).
+          </p>
+        </div>
+      )}
+
+      {pesan && !ditutup && (
+        <div className="panel panel--warn" role="alert">
+          {pesan}
+        </div>
+      )}
+
       <div className="card">
         <div className="ringkas">
           <span>Transaksi hari ini</span>
@@ -100,10 +201,16 @@ export default function TutupHarian({ bazarId, label }: Props) {
           <span>Uang masuk hari ini</span>
           <span className="money">{formatRupiah(uangMasuk)}</span>
         </div>
-        {pengembalian > 0 && (
+        {pengembalianDp > 0 && (
           <div className="ringkas soft">
-            <span>Pengembalian DP hari ini</span>
-            <span>− {formatRupiah(pengembalian)}</span>
+            <span>Pengembalian DP (pesanan jahit) hari ini</span>
+            <span>− {formatRupiah(pengembalianDp)}</span>
+          </div>
+        )}
+        {pengembalianBatal > 0 && (
+          <div className="ringkas soft">
+            <span>Pengembalian penjualan batal hari ini</span>
+            <span>− {formatRupiah(pengembalianBatal)}</span>
           </div>
         )}
         <div className="hr" style={{ height: 1, background: "var(--line)", margin: "0.5rem 0" }} />
@@ -127,6 +234,40 @@ export default function TutupHarian({ bazarId, label }: Props) {
         Hitung uang tunai fisik dengan angka di atas. Angka dihitung dari pembayaran yang sudah
         diterima — pesanan yang baru DP dihitung sebesar DP-nya.
       </p>
+
+      {mintaKonfirmasi && (
+        <div className="panel panel--warn" role="alert">
+          <strong>Tutup harian {label} hari ini?</strong>
+          <p style={{ margin: "0.25rem 0 0" }}>
+            {jumlahTransaksi} transaksi, uang masuk {formatRupiah(uangMasuk)} (tunai {formatRupiah(tunai)}).
+            Sesudah ditutup, ringkasan hari ini tetap bisa dilihat.
+          </p>
+          <div style={{ display: "flex", gap: "0.5rem", marginTop: "0.75rem" }}>
+            <button type="button" className="btn btn--primary" onClick={tutup} disabled={sibuk}>
+              {sibuk ? "Mencatat…" : "Ya, Tutup Harian"}
+            </button>
+            <button
+              type="button"
+              className="btn"
+              onClick={() => setMintaKonfirmasi(false)}
+              disabled={sibuk}
+            >
+              Batal
+            </button>
+          </div>
+        </div>
+      )}
+
+      <div className="bottombar">
+        <button
+          type="button"
+          className="btn btn--primary"
+          onClick={tutup}
+          disabled={sibuk || !!ditutup}
+        >
+          {ditutup ? "Sudah Ditutup Hari Ini" : sibuk ? "Mencatat…" : "Tutup Harian"}
+        </button>
+      </div>
     </div>
   );
 }

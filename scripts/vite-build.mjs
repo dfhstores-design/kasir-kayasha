@@ -33,6 +33,30 @@ if (existsSync(logoB64)) {
 const tmp = join(process.cwd(), ".tmp-esbuild");
 mkdirSync(tmp, { recursive: true });
 
+// Penjaga sync (e, tes klik 22 Nov 2026): build trial yang tidak dibekali
+// VITE_SYNC_URL / VITE_SYNC_TOKEN diam-diam mematikan sinkronisasi —
+// aplikasi jalan normal tapi antrean tidak pernah terkirim ("Belum pernah").
+// Karena itu build GAGAL dengan pesan jelas bila hanya salah satu dari
+// keduanya yang diisi (pasangan tidak lengkap = token/URL salah pasang),
+// dan memberi peringatan keras bila keduanya kosong (sync mati — hanya
+// benar untuk build produksi sebelum rollout sync, atau build lokal).
+// NILAI variabel tidak pernah dicetak — hanya ada/tidaknya.
+const adaUrl = !!process.env.VITE_SYNC_URL;
+const adaToken = !!process.env.VITE_SYNC_TOKEN;
+if (adaUrl !== adaToken) {
+  console.error(
+    "ERROR: VITE_SYNC_URL dan VITE_SYNC_TOKEN harus diisi berdua atau dikosongkan berdua. " +
+      `URL: ${adaUrl ? "ada" : "kosong"}, token: ${adaToken ? "ada" : "kosong"}. ` +
+      "Build dibatalkan supaya aplikasi tanpa sync tidak ter-deploy diam-diam.",
+  );
+  process.exit(2);
+}
+if (!adaUrl) {
+  console.warn("PERINGATAN: build tanpa VITE_SYNC_URL/VITE_SYNC_TOKEN — sinkronisasi MATI di aplikasi ini.");
+} else {
+  console.log("Sync aktif di build ini (URL + token terisi).");
+}
+
 const hasil = spawnSync(process.execPath, [join("node_modules", "vite", "bin", "vite.js"), "build"], {
   stdio: "inherit",
   env: { ...process.env, TMP: tmp, TEMP: tmp, ESBUILD_TMPDIR: tmp },

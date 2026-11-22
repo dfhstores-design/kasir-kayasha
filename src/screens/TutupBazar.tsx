@@ -192,10 +192,17 @@ export default function TutupBazar({ bazar, onSelesai }: Props) {
             <span>QRIS</span>
             <span>{formatRupiah(ringkas.qris)}</span>
           </div>
-          {ringkas.pengembalian > 0 && (
+          {/* (b): pengembalian dipisah — DP pesanan jahit vs penjualan batal. */}
+          {ringkas.pengembalianDp > 0 && (
             <div className="ringkas soft">
-              <span>Pengembalian DP</span>
-              <span>− {formatRupiah(ringkas.pengembalian)}</span>
+              <span>Pengembalian DP (pesanan jahit)</span>
+              <span>− {formatRupiah(ringkas.pengembalianDp)}</span>
+            </div>
+          )}
+          {ringkas.pengembalianBatal > 0 && (
+            <div className="ringkas soft">
+              <span>Pengembalian penjualan batal</span>
+              <span>− {formatRupiah(ringkas.pengembalianBatal)}</span>
             </div>
           )}
           <div className="ringkas">
